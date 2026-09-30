@@ -6,7 +6,7 @@
 Foundation 1 — Domain Types + Schemas
 ```
 
-Status: **In Progress**
+Status: **Complete**
 
 Phase 0 remains complete and locked through the six source-of-truth documents:
 
@@ -17,25 +17,24 @@ Phase 0 remains complete and locked through the six source-of-truth documents:
 - `ROADMAP.md`
 - `DEV_STATUS.md`
 
-F1.1 established the project/tooling foundation. F1.2 provides the smallest stable Core domain vocabulary and branded ID types. F1.3 provides the canonical `Concept` schema. F1.4 provides runtime-validatable `Course`, `World`, and `Lesson` hierarchy contracts. F1.5 provides the polymorphic `LearningActivity` contract. F1.6 now provides the reusable `MissionTemplate` contract and JSON-safe extension configuration boundary.
+F1.1 established the project/tooling foundation. F1.2 provides the smallest stable Core domain vocabulary and branded ID types. F1.3 provides the canonical `Concept` schema. F1.4 provides runtime-validatable `Course`, `World`, and `Lesson` hierarchy contracts. F1.5 provides the polymorphic `LearningActivity` contract. F1.6 provides the reusable `MissionTemplate` contract and JSON-safe extension configuration boundary. F1.7 provides the concrete generated `MissionInstance` snapshot with explicit learner/runtime/grading/world data boundaries. F1.8 provides the minimal strict `ContentPackManifest` contract for pack identity, schema versioning, course references, and pack dependencies. F1.9 provides the raw `AttemptRecord` evidence snapshot and minimal renderer-neutral `WorldEvent` envelope. F1.10 completes Foundation 1 with a coherent neutral fixture family, public-barrel integration checks, branded output checks, invalid-boundary regressions, JSON round-trip checks, and a domain dependency/type audit.
 
 ## Current Task
 
 ```text
-F1.6 — MissionTemplate schema
+F1.10 — Schema fixtures and validation
 ```
 
 Status: **Complete**
 
 Scope completed:
 
-- added reusable `JsonValue` / `JsonObject` domain types and runtime schemas for JSON-compatible extension data;
-- added strict `MissionTemplateSchema` with branded IDs, positive integer versioning, concept/stage arrays, optional starter code/hints/restrictions, and nested extension bindings;
-- kept `generator`, `grader`, `runtime`, and optional `visualization` as cohesive strict nested bindings with optional JSON-object configs;
-- rejected non-JSON config data including non-finite numbers, `undefined`, functions, symbols, `BigInt`, `Date`, `Map`, `Set`, class instances, and cyclic structures;
-- retained local-only validation: unresolved referenced IDs remain parseable and plugin-specific config validation stays deferred;
-- kept MissionInstance-only data such as seed, difficulty, instance IDs, generated setup/state, and reference-solution data out of `MissionTemplate`;
-- added focused runtime and compile-time tests without adding packages.
+- added a test-only neutral coherent fixture family covering `Concept`, `Course`, `World`, `Lesson`, `LearningActivity`, `MissionTemplate`, `MissionInstance`, `ContentPackManifest`, `AttemptRecord`, and `WorldEvent`;
+- added an integration gate that imports Foundation 1 contracts through the public `src/core/domain` barrel and checks branded schema output typing;
+- added representative invalid fixtures for strict object boundaries, malformed branded IDs, mission/non-mission activity shape, JSON-safe extension config, learner/grader data separation, positive schema versions, AttemptRecord evidence fields, and renderer-neutral WorldEvent roots;
+- added JSON serialize/parse round-trip checks for the major persisted/config contracts;
+- audited `src/core/domain` for forbidden outward dependencies, explicit authored `any`, and broad public `unknown` config escapes while preserving the existing tooling smoke test;
+- added no packages, Foundation 2 behavior, production CS116 content, registry/validator behavior, Concept Graph logic, or runtime/UI integrations.
 
 ## Completed
 
@@ -84,19 +83,39 @@ Scope completed:
 - [x] F1.6 — MissionTemplate schema completed.
 - [x] `MissionTemplateSchema` added with strict nested generator/grader/runtime/visualization bindings and branded references.
 - [x] reusable JSON domain types/schemas added for extension configuration and restrictions.
+- [x] F1.7 — MissionInstance schema completed.
+- [x] `MissionInstanceSchema` added with branded generation identity and strict learner/runtime/grading/world payload boundaries.
+- [x] instance seed storage locked to a required non-blank string while deterministic RNG interpretation remains deferred.
+- [x] F1.8 — ContentPack manifest schema completed.
+- [x] `ContentPackManifestSchema` added as a strict minimal manifest with branded course/dependency references.
+- [x] ContentPack version strings remain non-blank and format-agnostic while manifest `schemaVersion` is a positive integer.
+- [x] F1.9 — AttemptRecord and WorldEvent schemas completed.
+- [x] `AttemptRecordSchema` added as strict raw evidence for exactly one Submit snapshot, including deterministic reproduction fields and canonical hint evidence.
+- [x] `WorldEventSchema` added as a strict renderer-neutral semantic type + JSON payload envelope.
+- [x] `HintLevel` and branded `WorldEventType` added as the only new primitive vocabulary required by F1.9.
+- [x] F1.10 — Schema fixtures and Foundation 1 validation completed.
+- [x] neutral Foundation 1 fixture family covers every major schema from Concept through WorldEvent.
+- [x] public barrel integration, branded output typing, representative invalid-boundary regression, and JSON round-trip checks added.
+- [x] domain dependency/type audit completed with no forbidden outward imports, authored `any`, or broad public `unknown` config boundary.
 
 ## In Progress
 
-- Foundation 1 is active.
-- F1.7 MissionInstance schema has not started.
+- Foundation 1 is complete.
+- Foundation 2 has not started.
+
+## Next Planned Phase
+
+```text
+Foundation 2 — Content Registry + Validator
+```
 
 ## Next Planned Task
 
 ```text
-F1.7 — MissionInstance schema
+F2.1 — In-memory Content Registry
 ```
 
-Define only the locked `MissionInstance` contract specified by `ROADMAP.md`. F1.7 has not started as part of F1.6.
+Begin Foundation 2 with the in-memory Content Registry task defined by `ROADMAP.md`. No F2.1 implementation was started during F1.10.
 
 ## Architecture Locks
 
@@ -207,6 +226,31 @@ These decisions are source-of-truth constraints until deliberately revised:
     - extension `config` data and `restrictions` must be JSON-serializable objects; non-finite numbers and non-JSON runtime values are rejected.
     - the generic template schema validates JSON structure only; plugin-specific config validation remains deferred to the owning extension implementation.
 
+24. **MissionInstance data is partitioned by ownership and visibility**
+    - generated instance data is partitioned into `learner`, `runtime`, `grading`, and `world` payloads with strict structural containers.
+    - `grading` is an architectural visibility boundary intended to prevent accidental answer leakage; it is not a client-side security boundary.
+    - persisted seeds are required non-blank strings; hashing/RNG interpretation and derived-seed behavior remain deferred to generation infrastructure.
+    - `MissionInstance` stores generated/effective instance data and references `templateId` + `templateVersion` instead of duplicating MissionTemplate extension bindings or template-only ownership.
+
+25. **ContentPack manifests stay minimal and locally validatable**
+    - pack `version` is a required non-blank string; SemVer enforcement and update semantics are deferred.
+    - manifest `schemaVersion` is a finite positive integer starting at 1.
+    - a pack references presentation content through ordered `courseIds: CourseId[]` rather than embedding Course definitions.
+    - pack dependencies are ordered `ContentPackId[]` references in v1; version constraints, resolution, cycle detection, and loading order are deferred.
+    - unresolved references, duplicate references, and self-dependency remain locally parseable; the manifest carries no opaque metadata bag or embedded content definition arrays.
+
+26. **Attempt evidence and world events remain minimal semantic contracts**
+    - one `AttemptRecord` represents exactly one Submit evidence snapshot; both passed and failed submissions produce their own append-only records.
+    - deterministic mission reproduction evidence retains `missionTemplateId`, `missionTemplateVersion`, `difficulty`, and `seed`; there is no mutable aggregate `submitCount`.
+    - `HintLevel` is exactly `H1`, `H2`, `H3`, and `H4`; ordering/uniqueness/progression behavior remains outside the schema.
+    - `WorldEvent` contains only a branded semantic `type` plus required JSON-object `payload`; unregistered event types may parse locally.
+    - preview versus authoritative delivery belongs to future mission-pipeline/bridge context rather than WorldEvent data; event-log metadata and renderer commands remain deferred.
+
+27. **Foundation 1 contracts are complete; cross-object semantics remain deferred**
+    - Foundation 1 now provides the canonical domain values/IDs and schemas for `Concept`, `Course`, `World`, `Lesson`, `LearningActivity`, `MissionTemplate`, `MissionInstance`, `ContentPackManifest`, `AttemptRecord`, and `WorldEvent`, plus JSON-safe `JsonObject` / `JsonValue` payload boundaries.
+    - Foundation 1 schemas validate local structure and branded output types only; cross-reference resolution, duplicate-ID validation across objects, Concept Graph algorithms, extension registries, and the Content Validator belong to later foundations.
+    - Foundation 1 validation uses neutral test fixtures only; production CS116 content remains outside Core domain contracts.
+
 ## Known Risks
 
 ### Pyodide startup and recovery latency
@@ -244,6 +288,66 @@ These decisions are intentionally deferred until implementation evidence is avai
 None of these blocks **Foundation 1 — Domain Types + Schemas**.
 
 ## Validation Status
+
+F1.10 validation:
+
+- [x] `npm.cmd run typecheck` — passed with public-barrel imports and branded output type checks;
+- [x] `npm.cmd run test:run` — passed: 12 test files, 211 tests;
+- [x] `npm.cmd run build` — passed with Vite production build;
+- [x] `git diff --check` — passed; only working-tree LF→CRLF warnings were reported;
+- [x] coherent neutral fixtures parse through `Concept`, `Course`, `World`, `Lesson`, both mission-backed and non-mission `LearningActivity` variants, `MissionTemplate`, `MissionInstance`, `ContentPackManifest`, `AttemptRecord`, and `WorldEvent`;
+- [x] Foundation 1 contracts are exercised through the public `src/core/domain` barrel and retain branded output types for representative IDs and `WorldEventType`;
+- [x] representative invalid fixtures protect strict object boundaries, malformed IDs, mission-template activity rules, JSON-safe extension configs, learner/grader separation, positive schema versions, AttemptRecord evidence shape, and renderer-neutral WorldEvent roots;
+- [x] `MissionTemplate`, `MissionInstance`, `ContentPackManifest`, `AttemptRecord`, and `WorldEvent` survive JSON serialize/parse round trips;
+- [x] `src/core/domain` imports only Zod and relative Core domain modules; no imports from content, features, visualization, app, React, Phaser, Monaco, Pyodide, or IndexedDB were found;
+- [x] no explicit authored `any` was found in `src/core/domain`; public persisted/config payload boundaries use `JsonObject` / `JsonValue` rather than broad `unknown` escapes;
+- [x] `tests/tooling.smoke.test.ts` remains present;
+- [x] no new package was installed and `package.json` / `package-lock.json` have no F1.10 changes;
+- [x] cross-reference validation, duplicate-ID validation, Concept Graph logic, extension registries, Content Validator behavior, production CS116 content, React, Phaser, Monaco, Pyodide, and IndexedDB were not added.
+
+F1.9 validation:
+
+- [x] `npm.cmd run typecheck` — passed, including branded AttemptRecord/activity/template/concept/event types and canonical Difficulty/HintLevel checks;
+- [x] `npm.cmd run test:run` — passed: 11 test files, 206 tests;
+- [x] `npm.cmd run build` — passed with Vite production build;
+- [x] minimal and full `AttemptRecord` fixtures parse with required deterministic reproduction evidence, optional offset-aware `startedAt`, required offset-aware `submittedAt`, counters, hints, and optional JSON grader summary;
+- [x] timestamps reject arbitrary strings and timezone-less datetimes while accepting `Z` and explicit-offset ISO datetimes; no chronological cross-field comparison was added;
+- [x] submission/template versions and submission indices require finite positive integers; run/runtime-error counters require finite non-negative integers;
+- [x] `HintLevel` is exactly H1/H2/H3/H4; empty, duplicate, and supplied-order hint arrays remain structurally valid;
+- [x] `submitCount`, raw submitted source, session identity, and mission-instance identity are absent from AttemptRecord;
+- [x] `WorldEvent` requires branded non-blank type plus JSON-object payload, rejects unexpected root fields, and permits structurally valid unregistered event types;
+- [x] preview/authoritative flags, event-log fields, renderer commands, World Event Bridge behavior, mastery logic, and persistence were not added;
+- [x] no new package was installed and `package.json` / `package-lock.json` have no F1.9 dependency changes;
+- [x] F1.9 domain/test code has no dependency on content, features, visualization implementation, React, Phaser, Monaco, Pyodide, or IndexedDB.
+
+F1.8 validation:
+
+- [x] `npm.cmd run typecheck` — passed, including branded ContentPack/Course references and compile-time cross-domain ID misuse checks;
+- [x] `npm.cmd run test:run` — passed: 9 test files, 167 tests;
+- [x] `npm.cmd run build` — passed with Vite production build;
+- [x] minimal and full `ContentPackManifest` fixtures parse with the locked field set and preserve supplied array order;
+- [x] pack `version` accepts arbitrary non-blank strings without SemVer enforcement;
+- [x] `schemaVersion` requires a finite positive integer;
+- [x] unresolved course/dependency references, duplicate references, self-dependency, and empty arrays remain locally parseable;
+- [x] unexpected top-level properties and misspelled schema fields are rejected;
+- [x] no dependency version ranges/resolution, cycle detection, loading order, metadata bag, embedded content definitions, or production CS116 pack was added;
+- [x] no new package was installed and `package.json` / `package-lock.json` have no F1.8 dependency changes;
+- [x] F1.8 domain/test code has no dependency on content, features, visualization implementation, React, Phaser, Monaco, Pyodide, or IndexedDB.
+
+F1.7 validation:
+
+- [x] `npm.cmd run typecheck` — passed, including branded MissionInstance/template/concept references, canonical `Difficulty`, and learner payload boundary type checks;
+- [x] `npm.cmd run test:run` — passed: 8 test files, 141 tests;
+- [x] `npm.cmd run build` — passed with Vite production build;
+- [x] minimal and full `MissionInstance` fixtures parse with learner/runtime/grading/world data partitioning;
+- [x] seed accepts arbitrary non-blank strings and rejects blank or numeric values without interpreting RNG semantics;
+- [x] `templateVersion` requires a finite positive integer and unresolved template/concept references remain locally parseable;
+- [x] all structural containers reject unexpected keys while their generic JSON payload objects remain extensible;
+- [x] learner data, visible tests, runtime setup data, grading data, and world initial state reuse the F1.6 JSON-object contract;
+- [x] representative MissionTemplate-only fields and a top-level `hiddenTests` field are rejected from MissionInstance;
+- [x] no cross-validation against MissionTemplate, generator/RNG logic, runtime/grader implementation, or production CS116 instance was added;
+- [x] no new package was installed;
+- [x] F1.7 domain/test code has no dependency on content, features, visualization implementation, React, Phaser, Monaco, Pyodide, or IndexedDB.
 
 F1.6 validation:
 

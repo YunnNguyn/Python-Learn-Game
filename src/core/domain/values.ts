@@ -69,3 +69,12 @@ export const Difficulty = {
 } as const;
 
 export type Difficulty = (typeof Difficulty)[keyof typeof Difficulty];
+
+export const HintLevel = {
+  H1: "H1",
+  H2: "H2",
+  H3: "H3",
+  H4: "H4",
+} as const;
+
+export type HintLevel = (typeof HintLevel)[keyof typeof HintLevel];

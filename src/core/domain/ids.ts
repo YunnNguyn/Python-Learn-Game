@@ -23,3 +23,4 @@ export type HintSetId = DomainId<"HintSetId">;
 export type VisualizationModuleId = DomainId<"VisualizationModuleId">;
 
 export type AttemptRecordId = DomainId<"AttemptRecordId">;
+export type WorldEventType = DomainId<"WorldEventType">;
