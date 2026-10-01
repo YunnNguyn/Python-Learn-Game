@@ -3,10 +3,10 @@
 ## Current Phase
 
 ```text
-Foundation 3 — Concept Graph + Activity Registry
+Foundation 4 — Mission Template / Instance + Seeded RNG
 ```
 
-Status: **Complete / locked**
+Status: **Complete / Locked**
 
 Phase 0 remains complete and locked through the six source-of-truth documents:
 
@@ -17,26 +17,49 @@ Phase 0 remains complete and locked through the six source-of-truth documents:
 - `ROADMAP.md`
 - `DEV_STATUS.md`
 
-Foundation 1 is complete and locked. F1.1 established the project/tooling foundation. F1.2 provides the smallest stable Core domain vocabulary and branded ID types. F1.3 provides the canonical `Concept` schema. F1.4 provides runtime-validatable `Course`, `World`, and `Lesson` hierarchy contracts. F1.5 provides the polymorphic `LearningActivity` contract. F1.6 provides the reusable `MissionTemplate` contract and JSON-safe extension configuration boundary. F1.7 provides the concrete generated `MissionInstance` snapshot with explicit learner/runtime/grading/world data boundaries. F1.8 provides the minimal strict `ContentPackManifest` contract for pack identity, schema versioning, course references, and pack dependencies. F1.9 provides the raw `AttemptRecord` evidence snapshot and minimal renderer-neutral `WorldEvent` envelope. F1.10 completes Foundation 1 with a coherent neutral fixture family, public-barrel integration checks, branded output checks, invalid-boundary regressions, JSON round-trip checks, and a domain dependency/type audit. F2.1 starts Foundation 2 with a small instantiable in-memory `ContentRegistry` for static content definitions only. F2.2 adds pure pre-registration duplicate-ID validation over the seven static content categories. F2.3 adds pure pre-registration validation for the locked static content reference families. F2.4 adds lightweight branded-ID capability validation for MissionTemplate extension references without introducing implementation registries. F2.5 adds explicit ContentPack schema-compatibility validation using a caller-supplied supported-version set. F2.6 completes Foundation 2 with one pure `validateContent` preflight entry point that composes all four validation passes with explicit capability/schema context before registration. F3.1 starts Foundation 3 with a framework-independent Concept Graph snapshot derived only from registered `Concept.prerequisites`. F3.2 adds deterministic cyclic strongly-connected-component analysis over that snapshot without changing graph construction. F3.3 adds direct prerequisite snapshots plus deterministic nearest-first prerequisite traversal over `ConceptGraph`. F3.4 adds a derived specialized `ActivityRegistry` snapshot for activity ID, Concept, stage, and type lookup while preserving `ContentRegistry` as the canonical registration owner. F3.5 completes Foundation 3 with the exact seven production CS116 NumPy concepts, their minimal acyclic prerequisite graph, and seven content-local vertical-slice activity skeletons that reserve stable activity planning metadata without creating executable LearningActivity or MissionTemplate definitions.
+Foundation 1 is complete and locked. F1.1 established the project/tooling foundation. F1.2 provides the smallest stable Core domain vocabulary and branded ID types. F1.3 provides the canonical `Concept` schema. F1.4 provides runtime-validatable `Course`, `World`, and `Lesson` hierarchy contracts. F1.5 provides the polymorphic `LearningActivity` contract. F1.6 provides the reusable `MissionTemplate` contract and JSON-safe extension configuration boundary. F1.7 provides the concrete generated `MissionInstance` snapshot with explicit learner/runtime/grading/world data boundaries. F1.8 provides the minimal strict `ContentPackManifest` contract for pack identity, schema versioning, course references, and pack dependencies. F1.9 provides the raw `AttemptRecord` evidence snapshot and minimal renderer-neutral `WorldEvent` envelope. F1.10 completes Foundation 1 with a coherent neutral fixture family, public-barrel integration checks, branded output checks, invalid-boundary regressions, JSON round-trip checks, and a domain dependency/type audit. F2.1 starts Foundation 2 with a small instantiable in-memory `ContentRegistry` for static content definitions only. F2.2 adds pure pre-registration duplicate-ID validation over the seven static content categories. F2.3 adds pure pre-registration validation for the locked static content reference families. F2.4 adds lightweight branded-ID capability validation for MissionTemplate extension references without introducing implementation registries. F2.5 adds explicit ContentPack schema-compatibility validation using a caller-supplied supported-version set. F2.6 completes Foundation 2 with one pure `validateContent` preflight entry point that composes all four validation passes with explicit capability/schema context before registration. F3.1 starts Foundation 3 with a framework-independent Concept Graph snapshot derived only from registered `Concept.prerequisites`. F3.2 adds deterministic cyclic strongly-connected-component analysis over that snapshot without changing graph construction. F3.3 adds direct prerequisite snapshots plus deterministic nearest-first prerequisite traversal over `ConceptGraph`. F3.4 adds a derived specialized `ActivityRegistry` snapshot for activity ID, Concept, stage, and type lookup while preserving `ContentRegistry` as the canonical registration owner. F3.5 completes Foundation 3 with the exact seven production CS116 NumPy concepts, their minimal acyclic prerequisite graph, and seven content-local vertical-slice activity skeletons that reserve stable activity planning metadata without creating executable LearningActivity or MissionTemplate definitions. F4.1 starts Foundation 4 with a browser-safe stateful deterministic `SeededRng` using the locked `fnv1a32-mulberry32-v1` algorithm and the minimal `nextFloat`, `nextInt`, `pick`, and `shuffle` generator-facing API. F4.2 adds exact current-registry `MissionTemplateId` + version resolution with canonical object identity and no version fallback. F4.3 adds deterministic structural MissionInstance creation from an already resolved template, exact seed, difficulty, and already-produced generator payload. F4.4 proves end-to-end deterministic MissionInstance generation composition with a test-only generator fixture. F4.5 completes Foundation 4 with a versioned deterministic retry-seed derivation policy that preserves the canonical base seed on MissionInstance identity while keeping retry state generator-internal.
 
 ## Current Task
 
 ```text
-F3.5 — Minimal CS116 vertical-slice definitions
+F4.5 — Deterministic retry policy
 ```
 
 Status: **Complete**
 
 Scope completed:
 
-- added exactly seven production CS116 NumPy Concept definitions under `src/content/cs116`;
-- encoded the explicit F3.5 knowledge classification and minimal prerequisite mapping for those seven concepts;
-- validated the resulting Concept Graph as exact, minimal, and acyclic with dependency-query coverage;
-- added seven stable content-local vertical-slice activity skeletons with reserved IDs, titles, stages, optional source-stage labels, and Concept mappings;
-- skeletons remain planning metadata only and do not become canonical executable `LearningActivity`, `MissionTemplate`, grader/runtime/generator bindings, prompts, tests, hints, starter code, or hierarchy data;
-- skeletons are not registered in `ActivityRegistry`;
-- Core/content dependency direction remains intact: Generic Core has no import/reference to `content/cs116`;
-- no Foundation 4 implementation was started.
+- added public `GENERATION_ATTEMPT_SEED_POLICY = "mission-retry-seed-v1"` and `deriveGenerationAttemptSeed(baseSeed, attemptIndex)` under `core/missions`;
+- attempt index is zero-based; attempt 0 returns the exact base seed unchanged;
+- retry attempts derive `mission-retry:v1:<attemptIndex>:<encodeURIComponent(baseSeed)>` without trimming, case folding, Unicode normalization, hashing, entropy, or hidden state;
+- retry indexes accept the full finite non-negative safe-integer range, with invalid indexes rejected by `RangeError`;
+- derived retry seeds compose directly with F4.1 `createSeededRng`, and identical base seed + attempt index recreates the same RNG stream;
+- a test-only retry simulation proves at least one rejected attempt followed by later deterministic success, reproducing rejected candidates, accepted attempt, accepted generator output, and final MissionInstance;
+- accepted MissionInstance keeps the original base seed and base-seed-derived instance ID; retry seed/index are not persisted;
+- no production retry loop, max-attempt policy, semantic validator, generator registry, grader, reference solver, AttemptRecord change, MissionTemplate change, ContentRegistry change, CS116 content change, or dependency was added.
+
+Architecture lock:
+
+- retry seed policy v1 is `mission-retry-seed-v1` with exact retry format `mission-retry:v1:<attemptIndex>:<encodeURIComponent(baseSeed)>`;
+- attempt 0 preserves the exact base seed, while attempts 1+ derive deterministic stateless retry seeds from the exact base seed and zero-based attempt index;
+- `MissionInstance.seed` remains the canonical public reproduction seed and its deterministic ID continues to use that base seed;
+- derived retry seed/index are generator-internal reproduction details and are not persisted in MissionInstance or AttemptRecord;
+- generator/validator/retry behavior changes that can alter accepted generated output require a MissionTemplate version bump;
+- no production retry orchestration, validator architecture, Generator interface/registry, grader, or reference solver is introduced; Foundation 5 retains generator/grader registry ownership;
+- Foundation 4 is complete and locked.
+
+F4.5 validation:
+
+- [x] TypeScript typecheck passed;
+- [x] focused generation-attempt-seed suite passed: 1 test file, 32 tests;
+- [x] full regression suite passed: 28 test files, 461 tests, including F4.1-F4.4 coverage;
+- [x] Vite production build passed;
+- [x] `git diff --check` passed;
+- [x] `src/content/cs116` is unchanged;
+- [x] production retry-seed code uses browser-safe ECMAScript/TypeScript primitives with no entropy or Node-only API;
+- [x] no dependency was added and package manifests remain unchanged.
+
+Next planned task: **F5.1 — Generator Registry**.
 
 ## Completed
 
@@ -154,27 +177,62 @@ Scope completed:
 - [x] no fake executable `LearningActivity`, `MissionTemplate`, generator, grader, runtime, prompt/test/hint/starter-code, or hierarchy definitions were introduced.
 - [x] Core remains CS116-agnostic and never imports `content/cs116`.
 - [x] Foundation 3 — Concept Graph + Activity Registry complete and locked.
+- [x] F4.1 — Seeded RNG abstraction completed.
+- [x] `SeededRng`, `createSeededRng(seed: string)`, and `SEEDED_RNG_ALGORITHM` provide the shared deterministic generator-facing random source.
+- [x] RNG algorithm v1 is locked as FNV-1a 32-bit seed hashing over exact JavaScript string code units plus Mulberry32 uint32 PRNG state.
+- [x] `nextInt` uses validated half-open integer ranges with a maximum span of `2^32` and unbiased uint32 rejection sampling.
+- [x] generic `pick` and Fisher–Yates `shuffle` are deterministic for the same stream history and do not mutate supplied collections.
+- [x] golden float/integer vectors lock reproducibility behavior and independent instances have no shared state.
+- [x] F4.1 remains browser-safe and adds no external RNG dependency, template resolution, instance creation, generator registry, retry policy, RNG serialization, or CS116 content changes.
+- [x] F4.2 — MissionTemplate resolution completed.
+- [x] `resolveMissionTemplate` resolves only exact `MissionTemplateId` + exact positive safe-integer version pairs from the canonical `ContentRegistry`.
+- [x] unknown IDs and known IDs requested with a different valid version return `undefined`; no latest/range/nearest/compatibility fallback exists.
+- [x] successful resolution returns the exact registered `MissionTemplate` object without re-parsing, cloning, merging, or mutation.
+- [x] `ContentRegistry` remains one-template-per-stable-ID with its duplicate-ID guard unchanged; multi-version history/archive behavior remains deferred.
+- [x] F4.2 remains browser-safe and adds no RNG use, implementation registry, MissionInstance creation, persistence, or CS116 MissionTemplate content.
+- [x] F4.3 — MissionInstance creation contract completed.
+- [x] `MissionGeneratorOutput` contains only generated learner/runtime/grading/world payload and cannot override canonical identity metadata.
+- [x] `createMissionInstance` consumes an already resolved template, exact seed, difficulty, and generated output without registry lookup or generator execution.
+- [x] template ID/version and Concept IDs come from the template; seed/difficulty come from creation input; objective and concrete payload come from generator output.
+- [x] generated starter code uses nullish override semantics over the template default, including preserving an explicit empty string.
+- [x] deterministic delimiter-safe textual instance IDs depend only on template ID/version, difficulty, and exact seed; generated payload changes do not change the ID.
+- [x] candidate instances are validated through the canonical `MissionInstanceSchema`, preserving learner/runtime/grading/world separation and rejecting invalid structural output.
+- [x] F4.3 adds no generator interface/registry, semantic instance validator, RNG invocation, retry/sub-seed policy, grading/runtime execution, WorldEvent behavior, or CS116 mission content.
+- [x] F4.4 — End-to-end mission determinism tests completed.
+- [x] a local test-only generator consumes MissionTemplate generator config, Difficulty, and a caller-created fresh `SeededRng`, then composes its `MissionGeneratorOutput` through `createMissionInstance`.
+- [x] identical template identity/version/config + difficulty + exact seed reproduce the full MissionInstance across independent runs, repeated runs, multiple fixed seeds, separate equivalent template objects, and JSON-round-tripped templates.
+- [x] fixed changed-seed variants differ in concrete generated payload, each canonical difficulty reproduces independently, and controlled fixture difficulty affects generated sample count.
+- [x] generator config evolution is modeled only as same stable template ID with a higher MissionTemplate version; config and fixed RNG call order are treated as reproducibility-sensitive.
+- [x] inherited starter code, exact nontrivial seed text, learner/runtime/grading/world payloads, schema validity, and input immutability are covered.
+- [x] F4.4 changes only test/status files and adds no production generator interface/registry, semantic validator, grader, reference solver, retry/sub-seed behavior, CS116 generator/content, runtime/UI behavior, or dependency.
+- [x] F4.5 — Deterministic retry seed policy completed.
+- [x] `deriveGenerationAttemptSeed` preserves exact base seed for attempt 0 and derives versioned encoded retry seeds for attempts 1+.
+- [x] retry seed derivation is stateless, browser-safe, deterministic, and accepts the full non-negative safe-integer attempt-index range.
+- [x] retry composition with F4.1 reproduces rejected attempts, later accepted output, and the full accepted MissionInstance from the same base seed.
+- [x] MissionInstance keeps the canonical base seed and base-seed identity; retry seed/index are not persisted.
+- [x] F4.5 adds no production retry loop, semantic validator, generator/grader registry, reference solver, CS116 content, AttemptRecord schema field, or dependency.
+- [x] Foundation 4 — Mission Template / Instance + Seeded RNG complete and locked.
 
 ## In Progress
 
 - Foundation 1 is complete.
 - Foundation 2 is complete.
 - Foundation 3 is complete and locked.
-- No Foundation 4 implementation has started.
+- Foundation 4 is complete and locked.
 
 ## Next Planned Phase
 
 ```text
-Foundation 4 — Mission Template / Instance + Seeded RNG
+Foundation 5 — Generator + Grader Registries
 ```
 
 ## Next Planned Task
 
 ```text
-F4.1 — Seeded RNG abstraction
+F5.1 — Generator Registry
 ```
 
-Introduce the deterministic seeded RNG abstraction required by future mission generation without expanding the completed Foundation 3 scope.
+Define the production Generator Registry boundary without expanding into grader implementation or mission-family content beyond the task scope.
 
 ## Architecture Locks
 
@@ -391,6 +449,56 @@ These decisions are source-of-truth constraints until deliberately revised:
     - these skeletons are content-local metadata only, not canonical executable `LearningActivity` or `MissionTemplate` definitions, and they are not registered in `ActivityRegistry`;
     - Generic Core remains CS116-agnostic: `core/` never imports or references `content/cs116`.
 
+39. **F4.1 provides one shared deterministic SeededRng contract**
+    - canonical RNG seed input is the exact supplied string; the implementation does not trim, case-fold, Unicode-normalize, parse, or auto-generate seed text;
+    - algorithm v1 is `fnv1a32-mulberry32-v1`: FNV-1a 32-bit hashes JavaScript UTF-16 code units into initial uint32 state, then Mulberry32 advances the deterministic stream;
+    - public generator-facing primitives are exactly `nextFloat`, `nextInt`, `pick`, and `shuffle`; the internal uint32 primitive remains private;
+    - same seed plus the same call sequence produces the same outputs, while separately created RNGs never share mutable state;
+    - `nextInt` uses half-open `[minInclusive, maxExclusive)` semantics, finite safe-integer bounds, a maximum span of `2^32`, and deterministic rejection sampling over uint32 outputs;
+    - `pick` and `shuffle` operate on positions only, remain generic over item type, and do not mutate caller collections; shuffle uses Fisher–Yates;
+    - production RNG code uses no `Math.random`, timestamps, crypto entropy, Node-specific APIs, machine state, or global RNG singleton;
+    - changing hashing or PRNG behavior changes generated streams for existing seeds and is therefore a compatibility decision;
+    - runtime algorithm selection, general fork/sub-seed APIs, and RNG state serialization remain deferred; deterministic generation-attempt retry seed derivation is locked by F4.5.
+
+40. **F4.2 MissionTemplate resolution is exact and current-registry only**
+    - resolution requires the exact `MissionTemplateId` plus an exact finite positive safe-integer version;
+    - the resolver queries only `ContentRegistry.getMissionTemplate(templateId)` and succeeds only when that registered object's `version` equals the requested version;
+    - unknown IDs and known IDs with another valid version are normal misses that return `undefined`;
+    - successful resolution returns the exact canonical registered object by identity without schema re-parse, clone, config merge, or mutation;
+    - no latest, nearest, range, minimum/maximum, compatibility, or alternate-template fallback is allowed;
+    - `ContentRegistry` remains one-template-per-stable-ID and is not expanded into a multi-version store;
+    - historical content archives, migration tables, and historical loading remain deferred; a future historical loader may populate the relevant historical registry before using the same exact resolver contract.
+
+41. **F4.3 MissionInstance creation separates generated payload from canonical identity**
+    - creation consumes an already resolved `MissionTemplate`, exact seed, requested difficulty, and already-produced `MissionGeneratorOutput`;
+    - `MissionGeneratorOutput` owns only concrete learner/runtime/grading/world payload and exposes no instance/template identity, seed, difficulty, or Concept-ID override fields;
+    - `templateId`, `templateVersion`, and ordered `conceptIds` always come from the supplied template, while seed and difficulty come exactly from creation input;
+    - generated learner `starterCode` overrides template `starterCode` with nullish semantics; an explicit generated empty string is preserved;
+    - instance IDs are transparent deterministic text derived only from encoded template ID, template version, difficulty, and encoded exact seed; generated payload does not participate;
+    - learner-visible data, runtime setup data, grading-only data, and world initial state remain separate canonical branches;
+    - template generator/grader/runtime/visualization configs, restrictions, and hint references remain template-version-owned and are not copied into MissionInstance;
+    - the factory validates the assembled object through the existing canonical `MissionInstanceSchema` and performs no semantic mission-family validation;
+    - generator execution/interface/registry remains Foundation 5, determinism integration is covered by F4.4, and generation-attempt retry seed derivation is defined by F4.5 / Architecture Lock 43.
+
+42. **F4.4 proves deterministic MissionInstance generation composition with a test-only fixture**
+    - the integration harness composes MissionTemplate identity/version/config, Difficulty, exact seed, a freshly created `SeededRng`, deterministic fixture generation, `MissionGeneratorOutput`, and `createMissionInstance`;
+    - for identical reproduction inputs, independent runs produce deeply identical full MissionInstances including learner, runtime, grading, and world payloads, not only the deterministic instance ID;
+    - selected changed fixed seeds may produce deterministic allowed variants; F4.4 makes no statistical randomness-quality guarantee;
+    - generator config and RNG consumption order are reproducibility-sensitive behavior, so changes that affect historical reproduction require a MissionTemplate version bump;
+    - no production `MissionGenerator` interface or Generator Registry is introduced by F4.4; Foundation 5 retains that ownership;
+    - deterministic generation-attempt retry seed behavior is defined by F4.5 / Architecture Lock 43.
+
+43. **F4.5 locks deterministic generation-attempt retry seed derivation and completes Foundation 4**
+    - policy identifier is `mission-retry-seed-v1`;
+    - attempt indexes are zero-based finite non-negative safe integers; attempt 0 returns the exact base seed unchanged;
+    - attempts 1+ derive the exact string `mission-retry:v1:<attemptIndex>:<encodeURIComponent(baseSeed)>` from the exact base seed without normalization, hashing, entropy, or state;
+    - the derived attempt seed is consumed by the existing F4.1 `SeededRng`; derivation itself does not create RNG state or orchestrate retries;
+    - `MissionInstance.seed` remains the canonical public reproduction seed and deterministic instance identity continues to use that base seed;
+    - retry attempt seed/index are internal generation details and are not persisted into MissionInstance or AttemptRecord;
+    - changes to generator behavior, semantic validation, retry acceptance behavior, or RNG consumption that can change the accepted output for an existing reproduction tuple require a MissionTemplate version bump;
+    - no production retry loop, global max-attempt policy, semantic validator framework, Generator Registry, Grader Registry, reference solver, or CS116 mission-family implementation is introduced by F4.5;
+    - Foundation 4 — Mission Template / Instance + Seeded RNG is complete and locked; the next planned phase is Foundation 5 — Generator + Grader Registries.
+
 ## Known Risks
 
 ### Pyodide startup and recovery latency
@@ -417,7 +525,6 @@ Some practical ML topics, including current NumPy aggregation/axis coverage, may
 
 These decisions are intentionally deferred until implementation evidence is available:
 
-- exact seeded RNG algorithm/package;
 - exact runtime message schema field names;
 - exact IndexedDB wrapper;
 - precise v1 mastery thresholds for “multiple independent variants”;
@@ -425,9 +532,78 @@ These decisions are intentionally deferred until implementation evidence is avai
 - whether a given data visualization is best rendered in React or Phaser on a case-by-case basis;
 - which later grader primitives are justified after the vertical slice.
 
-None of these blocks the next planned **Foundation 4 — Mission Template / Instance + Seeded RNG** work.
+None of these blocks the next planned **Foundation 5 — Generator + Grader Registries** work.
 
 ## Validation Status
+
+F4.5 validation:
+
+- [x] TypeScript typecheck — passed;
+- [x] focused `tests/missions/generation-attempt-seed.test.ts` — passed: 1 test file, 32 tests;
+- [x] full Vitest suite — passed: 28 test files, 461 tests, including F4.1-F4.4 coverage;
+- [x] `npm.cmd run build` — passed with Vite 8.3.1 production bundling;
+- [x] `git diff --check` — passed; only the existing line-ending warning for `DEV_STATUS.md` was emitted;
+- [x] `git diff -- package.json package-lock.json` — empty; no dependency was added;
+- [x] `git diff -- src/content/cs116` — empty; production CS116 content is unchanged;
+- [x] policy identifier, exact attempt-0 preservation, golden retry strings, delimiter encoding, no normalization, safe-integer validation, stateless recreation, distinct retry indexes, and F4.1 RNG composition are covered;
+- [x] test-only retry simulation contains at least one rejected attempt before later deterministic success and reproduces the rejected sequence, accepted attempt, accepted generator output, and full MissionInstance;
+- [x] accepted MissionInstance stores the original base seed, keeps the base-seed-derived instance ID, and persists no retry seed/index metadata;
+- [x] production `generation-attempt-seed.ts` contains no `Math.random`, timestamp/crypto entropy, Node-only API, external dependency, production retry loop, semantic validator, generator registry, grader, reference solver, or max-attempt policy;
+- [x] Foundation 4 is complete and locked; next planned task is F5.1 — Generator Registry.
+
+F4.4 validation:
+
+- [x] TypeScript typecheck — passed;
+- [x] focused `tests/missions/mission-determinism.test.ts` — passed: 1 test file, 19 tests;
+- [x] full Vitest suite — passed: 27 test files, 429 tests;
+- [x] `npm.cmd run build` — passed after moving aside a stale generated `dist` directory whose existing files were undeletable in the host filesystem; browser bundling also passed with `--emptyOutDir false` during diagnosis;
+- [x] `git diff --check` — passed;
+- [x] `git diff -- package.json package-lock.json` — empty; no dependency was added;
+- [x] identical-tuple deep equality, repeated fresh-RNG reproduction, multiple fixed seeds, separate equivalent templates, JSON round-trip, exact complex seed preservation, starter-code inheritance, learner/runtime/grading/world reproduction, difficulty reproduction/variant behavior, versioned config evolution, schema validity, and input immutability are covered;
+- [x] fixture generation contains no `Math.random`, timestamp/performance entropy, crypto entropy, shared/global RNG state, retry/sub-seed logic, or production generator registry behavior;
+- [x] production source and `src/content/cs116` are unchanged by F4.4; browser-safety remains the F4.1-F4.3 production path;
+- [x] at F4.4 completion, Foundation 4 remained in progress with F4.5 as the next task.
+
+F4.3 validation:
+
+- [x] TypeScript typecheck — passed with public `MissionGeneratorOutput`, `CreateMissionInstanceInput`, and `createMissionInstance` contracts;
+- [x] focused `tests/missions/mission-instance-creation.test.ts` — passed: 1 test file, 27 tests;
+- [x] full Vitest suite — passed: 26 test files, 410 tests;
+- [x] Vite production build — passed, confirming F4.3 production code remains browser-bundle safe;
+- [x] `git diff --check` — passed;
+- [x] `git diff -- package.json package-lock.json` — empty; no dependency was added;
+- [x] minimal/full payload assembly, starter-code fallback/override/explicit-empty/absence, Concept-ID copying, exact seed preservation, deterministic ID reproduction and each identity dimension, delimiter-safe encoding, payload-independent identity, learner/grading/runtime/world separation, template-config exclusion, canonical-schema parsing/failure, input immutability, registry-free creation, and F4.2 composition are covered;
+- [x] existing F4.1 seeded-RNG tests and F4.2 exact resolver tests remain green in the full suite;
+- [x] production `src/core/missions/mission-instance-creation.ts` imports only the Core domain boundary and uses browser-safe ECMAScript/TypeScript primitives;
+- [x] no generator execution/interface/registry, semantic instance validator, grading, runtime execution, WorldEvent logic, retry/sub-seed policy, RNG invocation, CS116 content change, or package change was added;
+- [x] Foundation 4 remains in progress and next task is F4.4 — Determinism tests.
+
+F4.2 validation:
+
+- [x] TypeScript typecheck — passed with public `resolveMissionTemplate(registry, templateId, version)`;
+- [x] focused `tests/missions/mission-template-resolver.test.ts` — passed: 1 test file, 18 tests;
+- [x] full Vitest suite — passed: 25 test files, 383 tests;
+- [x] Vite production build — passed, confirming `core/missions` remains browser-bundle safe;
+- [x] `git diff --check` — passed;
+- [x] `git diff -- package.json package-lock.json` — empty; no dependency was added;
+- [x] exact-match identity, unknown-ID miss, both older/newer version mismatches, no cross-template fallback, same-version ID isolation, version 1, invalid version rejection, no mutation, multiple distinct IDs, empty registry, and semantic-content irrelevance are covered;
+- [x] existing Foundation 2 duplicate-ID behavior and F4.1 seeded-RNG golden vectors remain green in the full suite;
+- [x] production resolver code depends only on existing Core content/domain boundaries and browser-safe ECMAScript/TypeScript primitives;
+- [x] no multi-version registry, version history/archive, latest/range/list API, activity-to-template resolver, generator/grader/runtime implementation resolution, RNG use, MissionInstance creation, retry/sub-seed policy, persistence, hashing/fingerprints, or CS116 MissionTemplate content was added;
+- [x] F4.2 remains complete and its exact-resolution contract remains unchanged by F4.3.
+
+F4.1 validation:
+
+- [x] TypeScript typecheck — passed with the public `SeededRng`, `createSeededRng`, and `SEEDED_RNG_ALGORITHM` contracts;
+- [x] focused `tests/random/seeded-rng.test.ts` — passed: 1 test file, 23 tests;
+- [x] full Vitest suite — passed: 24 test files, 365 tests;
+- [x] Vite production build — passed, confirming `core/random` remains browser-bundle safe;
+- [x] `git diff --check` — passed;
+- [x] `git diff -- package.json package-lock.json` — empty; no RNG dependency was added;
+- [x] same-seed stream reproduction, stream restart on recreation, independent instance state, exact seed-text behavior, fixed different-seed smoke streams, `[0,1)` float range, exact float and integer golden vectors, half-open integer ranges, size-one range behavior, exact `2^32` span support, invalid-bound rejection, deterministic pick, empty-pick failure, deterministic Fisher–Yates shuffle, collection immutability, permutation preservation, empty/singleton shuffle, and generic object-reference behavior are covered;
+- [x] production `src/core/random/seeded-rng.ts` has no imports and contains no `Math.random`, timestamp/performance entropy, crypto entropy, Node API, machine-specific state, or `content/cs116` dependency;
+- [x] no fork/sub-seed API, retry policy, RNG serialization, random-boolean/distribution framework, MissionTemplate resolution, MissionInstance creation, Generator Registry/implementation, or CS116 content change was added;
+- [x] Foundation 3 remains complete and locked; F4.1 is complete and its deterministic RNG contract remains unchanged by F4.2.
 
 F3.5 / Foundation 3 completion validation:
 
