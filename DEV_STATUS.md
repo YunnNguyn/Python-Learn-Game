@@ -3,10 +3,10 @@
 ## Current Phase
 
 ```text
-Foundation 2 — Content Registry + Validator
+Foundation 3 — Concept Graph + Activity Registry
 ```
 
-Status: **Complete**
+Status: **Complete / locked**
 
 Phase 0 remains complete and locked through the six source-of-truth documents:
 
@@ -17,24 +17,26 @@ Phase 0 remains complete and locked through the six source-of-truth documents:
 - `ROADMAP.md`
 - `DEV_STATUS.md`
 
-Foundation 1 is complete and locked. F1.1 established the project/tooling foundation. F1.2 provides the smallest stable Core domain vocabulary and branded ID types. F1.3 provides the canonical `Concept` schema. F1.4 provides runtime-validatable `Course`, `World`, and `Lesson` hierarchy contracts. F1.5 provides the polymorphic `LearningActivity` contract. F1.6 provides the reusable `MissionTemplate` contract and JSON-safe extension configuration boundary. F1.7 provides the concrete generated `MissionInstance` snapshot with explicit learner/runtime/grading/world data boundaries. F1.8 provides the minimal strict `ContentPackManifest` contract for pack identity, schema versioning, course references, and pack dependencies. F1.9 provides the raw `AttemptRecord` evidence snapshot and minimal renderer-neutral `WorldEvent` envelope. F1.10 completes Foundation 1 with a coherent neutral fixture family, public-barrel integration checks, branded output checks, invalid-boundary regressions, JSON round-trip checks, and a domain dependency/type audit. F2.1 starts Foundation 2 with a small instantiable in-memory `ContentRegistry` for static content definitions only. F2.2 adds pure pre-registration duplicate-ID validation over the seven static content categories. F2.3 adds pure pre-registration validation for the locked static content reference families. F2.4 adds lightweight branded-ID capability validation for MissionTemplate extension references without introducing implementation registries. F2.5 adds explicit ContentPack schema-compatibility validation using a caller-supplied supported-version set. F2.6 completes Foundation 2 with one pure `validateContent` preflight entry point that composes all four validation passes with explicit capability/schema context before registration.
+Foundation 1 is complete and locked. F1.1 established the project/tooling foundation. F1.2 provides the smallest stable Core domain vocabulary and branded ID types. F1.3 provides the canonical `Concept` schema. F1.4 provides runtime-validatable `Course`, `World`, and `Lesson` hierarchy contracts. F1.5 provides the polymorphic `LearningActivity` contract. F1.6 provides the reusable `MissionTemplate` contract and JSON-safe extension configuration boundary. F1.7 provides the concrete generated `MissionInstance` snapshot with explicit learner/runtime/grading/world data boundaries. F1.8 provides the minimal strict `ContentPackManifest` contract for pack identity, schema versioning, course references, and pack dependencies. F1.9 provides the raw `AttemptRecord` evidence snapshot and minimal renderer-neutral `WorldEvent` envelope. F1.10 completes Foundation 1 with a coherent neutral fixture family, public-barrel integration checks, branded output checks, invalid-boundary regressions, JSON round-trip checks, and a domain dependency/type audit. F2.1 starts Foundation 2 with a small instantiable in-memory `ContentRegistry` for static content definitions only. F2.2 adds pure pre-registration duplicate-ID validation over the seven static content categories. F2.3 adds pure pre-registration validation for the locked static content reference families. F2.4 adds lightweight branded-ID capability validation for MissionTemplate extension references without introducing implementation registries. F2.5 adds explicit ContentPack schema-compatibility validation using a caller-supplied supported-version set. F2.6 completes Foundation 2 with one pure `validateContent` preflight entry point that composes all four validation passes with explicit capability/schema context before registration. F3.1 starts Foundation 3 with a framework-independent Concept Graph snapshot derived only from registered `Concept.prerequisites`. F3.2 adds deterministic cyclic strongly-connected-component analysis over that snapshot without changing graph construction. F3.3 adds direct prerequisite snapshots plus deterministic nearest-first prerequisite traversal over `ConceptGraph`. F3.4 adds a derived specialized `ActivityRegistry` snapshot for activity ID, Concept, stage, and type lookup while preserving `ContentRegistry` as the canonical registration owner. F3.5 completes Foundation 3 with the exact seven production CS116 NumPy concepts, their minimal acyclic prerequisite graph, and seven content-local vertical-slice activity skeletons that reserve stable activity planning metadata without creating executable LearningActivity or MissionTemplate definitions.
 
 ## Current Task
 
 ```text
-F2.6 — Content validation entry point / Foundation 2 integration gate
+F3.5 — Minimal CS116 vertical-slice definitions
 ```
 
 Status: **Complete**
 
 Scope completed:
 
-- added public `ContentValidationContext`, `ContentValidationIssue`, and `ContentValidationReport` contracts plus pure `validateContent(definitions, context)`;
-- `validateContent` runs duplicate-ID, static-reference, extension-ID, and schema-version validation in that exact order and never short-circuits later passes;
-- report validity is derived from the merged issue list, ordering stays deterministic by pass, and validation does not mutate content or context inputs;
-- coherent canonical content preflights successfully and can then be explicitly registered through the existing `ContentRegistry` API;
-- invalid semantic content is blocked by normal loading composition using `report.valid`; `ContentRegistry` remains responsible only for in-memory catalog storage and same-category collision safety;
-- no batch/atomic loader, rollback/transaction system, Concept Graph, Activity Registry, extension implementation registry, plugin-config validator, or production CS116 content was introduced.
+- added exactly seven production CS116 NumPy Concept definitions under `src/content/cs116`;
+- encoded the explicit F3.5 knowledge classification and minimal prerequisite mapping for those seven concepts;
+- validated the resulting Concept Graph as exact, minimal, and acyclic with dependency-query coverage;
+- added seven stable content-local vertical-slice activity skeletons with reserved IDs, titles, stages, optional source-stage labels, and Concept mappings;
+- skeletons remain planning metadata only and do not become canonical executable `LearningActivity`, `MissionTemplate`, grader/runtime/generator bindings, prompts, tests, hints, starter code, or hierarchy data;
+- skeletons are not registered in `ActivityRegistry`;
+- Core/content dependency direction remains intact: Generic Core has no import/reference to `content/cs116`;
+- no Foundation 4 implementation was started.
 
 ## Completed
 
@@ -122,26 +124,57 @@ Scope completed:
 - [x] mixed invalid content reports all four issue categories without short-circuiting or cross-pass deduplication.
 - [x] coherent valid content passes preflight and can be explicitly registered into a fresh `ContentRegistry`.
 - [x] Foundation 2 — Content Registry + Validator complete and locked.
+- [x] F3.1 — Concept Graph builder completed.
+- [x] `ConceptGraph` stores registered Concept IDs plus direct authored prerequisite adjacency using `concept → prerequisite` edges.
+- [x] graph construction preserves registry insertion order, authored prerequisite order, duplicate prerequisite references, and zero-prerequisite nodes.
+- [x] graph snapshots copy prerequisite arrays and remain independent of Course/World/Lesson presentation hierarchy.
+- [x] F3.1 intentionally permits cycles, self-cycles, and dangling declared prerequisite IDs without adding F3.2/F3.3 behavior.
+- [x] F3.2 — Concept Graph cycle detection completed.
+- [x] `detectConceptCycles` reports cyclic strongly-connected components without modifying F3.1 graph construction.
+- [x] self-cycles, multi-node cycles, multiple separate cycles, and SCCs containing multiple simple cycles are detected with deterministic graph insertion-order output.
+- [x] dangling prerequisite IDs are ignored during cycle analysis, duplicate edges do not duplicate components, and graph inputs remain unmodified.
+- [x] F3.2 remains browser-safe pure TypeScript and adds no dependency-query, topological-sort, reverse-index, Activity Registry, or CS116 production behavior.
+- [x] F3.3 — Concept dependency queries completed.
+- [x] `getDirectPrerequisites` returns copied direct prerequisite snapshots with authored ordering and duplicate references intact.
+- [x] `getAllPrerequisites` performs deterministic nearest-first BFS with unique first-discovery ordering and source exclusion.
+- [x] dependency traversal terminates on self/two/multi-node cycles without invoking F3.2 and preserves dangling declared IDs as terminal prerequisites.
+- [x] F3.3 queries operate only on `ConceptGraph`, leave graph state unchanged, and remain browser-safe pure TypeScript.
+- [x] F3.3 adds no reverse dependency/path/depth/topological APIs, caches/indexes, Activity Registry, learning/review policy, or CS116 production content.
+- [x] F3.4 — Activity Registry completed.
+- [x] `ActivityRegistry` is a derived snapshot/index built from canonical `ContentRegistry.getActivities()` data and exposes no second activity mutation path.
+- [x] specialized lookup supports activity ID, Concept ID, `LearningStage`, and `LearningActivityType`.
+- [x] concept/stage/type queries preserve ContentRegistry insertion order and return fresh caller-owned arrays.
+- [x] multi-concept activities index under each distinct Concept ID, duplicate Concept references inside one activity do not duplicate results, and authored `conceptIds` remain unchanged.
+- [x] ActivityRegistry snapshot behavior is explicit: later ContentRegistry registrations require rebuilding to appear in specialized indexes.
+- [x] F3.4 remains browser-safe pure TypeScript and adds no ConceptGraph coupling, hierarchy query, MissionTemplate resolution, review/practice policy, learner state, difficulty index, or CS116 production content.
+- [x] F3.5 — Minimal CS116 vertical-slice definitions completed.
+- [x] exactly seven production CS116 NumPy concepts are defined with locked IDs, titles, source, classifications, and minimal prerequisites.
+- [x] the production CS116 Concept Graph is acyclic and dependency queries return the expected direct/transitive prerequisite relationships.
+- [x] seven stable vertical-slice activity skeletons reserve IDs/titles/stages/Concept mappings while remaining content-local planning metadata.
+- [x] no fake executable `LearningActivity`, `MissionTemplate`, generator, grader, runtime, prompt/test/hint/starter-code, or hierarchy definitions were introduced.
+- [x] Core remains CS116-agnostic and never imports `content/cs116`.
+- [x] Foundation 3 — Concept Graph + Activity Registry complete and locked.
 
 ## In Progress
 
 - Foundation 1 is complete.
 - Foundation 2 is complete.
-- Foundation 3 has not started.
+- Foundation 3 is complete and locked.
+- No Foundation 4 implementation has started.
 
 ## Next Planned Phase
 
 ```text
-Foundation 3 — Concept Graph + Activity Registry
+Foundation 4 — Mission Template / Instance + Seeded RNG
 ```
 
 ## Next Planned Task
 
 ```text
-F3.1 — Concept Graph builder
+F4.1 — Seeded RNG abstraction
 ```
 
-Build graph from registered concept prerequisites. Foundation 3 has not started.
+Introduce the deterministic seeded RNG abstraction required by future mission generation without expanding the completed Foundation 3 scope.
 
 ## Architecture Locks
 
@@ -319,6 +352,45 @@ These decisions are source-of-truth constraints until deliberately revised:
     - `ContentRegistry` remains a separate in-memory catalog with its independent same-category collision guard;
     - normal content-loading composition must gate registration on `report.valid`, while atomic batch loading, rollback, hot reload, and pack ownership remain deferred.
 
+34. **Concept Graph construction is derived only from registered Concept prerequisites**
+    - `buildConceptGraph` derives a framework-independent snapshot solely from `ContentRegistry.getConcepts()` and each `Concept.prerequisites` array;
+    - canonical edge direction is `concept → prerequisite`, while Concept insertion order and authored prerequisite order remain deterministic and unsorted;
+    - Course, World, and Lesson presentation hierarchy does not participate in graph construction;
+    - F3.1 preserves direct authored prerequisite references, including duplicates and defensive dangling IDs, without repair or revalidation;
+    - F3.1 performs no cycle detection or dependency traversal; cycle detection remains F3.2 and dependency queries remain F3.3.
+
+35. **Concept cycle detection analyzes the F3.1 graph without changing graph construction**
+    - cycles are represented as cyclic strongly-connected components rather than every possible simple cycle;
+    - a component is cyclic when it contains more than one registered Concept, or when a single registered Concept has a direct self-edge;
+    - cyclic component order and member order follow `ConceptGraph.conceptIds` insertion order, independent of internal SCC traversal order;
+    - dangling prerequisite IDs are ignored during cycle traversal because they are not graph nodes; missing-reference validation remains Foundation 2;
+    - cycle detection is pure analysis and does not repair edges, mutate the graph, throw for normal cycle findings, or change `buildConceptGraph`.
+
+36. **Concept dependency queries consume ConceptGraph as the canonical dependency snapshot**
+    - queries operate on `ConceptGraph`, not Course/World/Lesson presentation hierarchy or `ContentRegistry`;
+    - `getDirectPrerequisites` preserves authored prerequisite order and duplicate references while returning a caller-owned array;
+    - `getAllPrerequisites` performs deterministic nearest-first breadth-first traversal, with first discovery fixing output position;
+    - transitive results contain each discovered prerequisite at most once and never contain the source Concept;
+    - traversal is cycle-safe but does not replace or automatically invoke F3.2 cycle detection;
+    - dangling declared prerequisite IDs are returned once as terminal references while F2.3 remains responsible for missing-reference validation.
+
+37. **ActivityRegistry is a derived specialized snapshot while ContentRegistry remains canonical**
+    - static `LearningActivity` registration continues exclusively through `ContentRegistry.registerActivity`;
+    - `buildActivityRegistry` snapshots `ContentRegistry.getActivities()` and does not add a second registration/mutation path or live synchronization;
+    - ActivityRegistry supports lookup by activity ID, Concept ID, `LearningStage`, and `LearningActivityType`;
+    - concept/stage/type result ordering follows canonical ContentRegistry activity registration order and multi-result queries return caller-owned arrays;
+    - a multi-concept activity is indexed under each distinct Concept ID, while duplicate Concept IDs inside one activity do not duplicate that activity in results;
+    - ActivityRegistry and ConceptGraph remain independent Core capabilities, and review/practice selection policy remains deferred.
+
+38. **Foundation 3 production CS116 vertical-slice definitions are locked**
+    - exactly seven primary Concept IDs exist for the first production slice, in canonical order: `numpy.array`, `numpy.shape`, `numpy.ndim`, `numpy.index.column`, `numpy.compare`, `numpy.boolean_mask`, `numpy.logical_and`;
+    - F3.5 knowledge classifications are explicit implementation choices derived from curriculum emphasis: `numpy.array`, `numpy.shape`, `numpy.ndim`, `numpy.index.column`, and `numpy.boolean_mask` are `MUST_RECALL`; `numpy.compare` and `numpy.logical_and` are `MUST_UNDERSTAND`;
+    - minimal prerequisites are locked as: `numpy.array` → `[]`; `numpy.shape`, `numpy.ndim`, `numpy.index.column`, and `numpy.compare` → [`numpy.array`]; `numpy.boolean_mask` → [`numpy.compare`]; `numpy.logical_and` → [`numpy.compare`];
+    - this graph is intentionally minimal and acyclic; presentation sequencing remains separate from Concept prerequisites;
+    - seven stable planning skeletons are reserved as `cs116.numpy.vs01` through `cs116.numpy.vs07`, with their F3.5 titles, stages, source-stage labels where present, and exact Concept mappings;
+    - these skeletons are content-local metadata only, not canonical executable `LearningActivity` or `MissionTemplate` definitions, and they are not registered in `ActivityRegistry`;
+    - Generic Core remains CS116-agnostic: `core/` never imports or references `content/cs116`.
+
 ## Known Risks
 
 ### Pyodide startup and recovery latency
@@ -353,9 +425,73 @@ These decisions are intentionally deferred until implementation evidence is avai
 - whether a given data visualization is best rendered in React or Phaser on a case-by-case basis;
 - which later grader primitives are justified after the vertical slice.
 
-None of these blocks the next planned **Foundation 3 — Concept Graph + Activity Registry** work.
+None of these blocks the next planned **Foundation 4 — Mission Template / Instance + Seeded RNG** work.
 
 ## Validation Status
+
+F3.5 / Foundation 3 completion validation:
+
+- [x] TypeScript typecheck — passed with the seven production CS116 Concept definitions and vertical-slice skeleton contracts;
+- [x] focused `tests/content/cs116/vertical-slice.test.ts` — passed: 1 test file, 9 tests;
+- [x] full Vitest suite — passed: 23 test files, 342 tests;
+- [x] Vite production build — passed, confirming the new static content remains browser-safe;
+- [x] `git diff --check` — passed;
+- [x] `git diff -- package.json package-lock.json` — empty; no dependency change was introduced;
+- [x] Core import audit over `src/core/**/*.ts` found zero imports/references to `content/cs116`;
+- [x] exact seven-Concept order/count, source/schema validity, classifications, ContentRegistry registration, exact prerequisite graph, acyclicity, dependency queries, stable skeleton IDs/titles/stages/source labels, exact Concept mappings, and skeleton Concept-reference validity are covered;
+- [x] skeletons remain outside canonical executable activity/mission registries and no Foundation 4 implementation was added.
+
+F3.4 validation:
+
+- [x] `npm.cmd run typecheck` — passed with public `ActivityRegistry` and `buildActivityRegistry` contracts;
+- [x] focused `npm.cmd run test:run -- tests/activities/activity-registry.test.ts` — passed: 1 test file, 12 tests;
+- [x] `npm.cmd run test:run` — passed: 22 test files, 333 tests;
+- [x] `npm.cmd run build` — passed with Vite production build;
+- [x] `git diff --check` — passed; the existing working-tree LF→CRLF warning for `DEV_STATUS.md` remains informational;
+- [x] empty registry, ID hit/miss, concept selection, unknown concept, multi-concept indexing, duplicate Concept reference deduplication, stage/type filtering, insertion order, result-array isolation, snapshot rebuilding, no mutation path, and no hierarchy/ConceptGraph requirement are covered;
+- [x] ActivityRegistry captures canonical LearningActivity object references without schema reparsing, duplicate-ID validation, static-reference validation, or deep-clone/freeze infrastructure;
+- [x] production F3.4 code imports only Core content/domain contracts and uses no Node filesystem/path/process APIs, shell calls, absolute paths, desktop/server APIs, machine state, or ConceptGraph dependency;
+- [x] no Lesson/Course/World query, combined filter API, MissionTemplate resolution, review/free-practice selection policy, learner completion/mastery/progress state, difficulty index, or production CS116 content was added;
+- [x] `git diff -- package.json package-lock.json` is empty; no new package was installed.
+
+F3.3 validation:
+
+- [x] `npm.cmd run typecheck` — passed with public `getDirectPrerequisites` and `getAllPrerequisites` exports;
+- [x] focused `npm.cmd run test:run -- tests/concepts/concept-dependencies.test.ts` — passed: 1 test file, 18 tests;
+- [x] `npm.cmd run test:run` — passed: 21 test files, 321 tests;
+- [x] `npm.cmd run build` — passed with Vite production build;
+- [x] `git diff --check` — passed; the existing working-tree LF→CRLF warning for `DEV_STATUS.md` remains informational;
+- [x] unknown/root behavior, direct authored order/duplicates, direct snapshot isolation, one-level and multi-level BFS, authored frontier order, shared prerequisites, first-discovery placement, two/three-node cycles, self-cycle behavior, dangling references, duplicate edges, transitive snapshot isolation, graph immutability, and presentation-hierarchy independence are covered;
+- [x] F3.1 graph construction and F3.2 cycle detection remain unchanged and their existing tests remain green;
+- [x] production F3.3 code imports only Core TypeScript contracts and uses no Node filesystem/path/process APIs, shell calls, absolute paths, desktop/server APIs, or machine state;
+- [x] no reverse dependency query, path/depth query, topological ordering, reverse index, closure cache, Activity Registry, learning/review policy, graph package, or production CS116 content was added;
+- [x] `git diff -- package.json package-lock.json` is empty; no new package was installed.
+
+F3.2 validation:
+
+- [x] `npm.cmd run typecheck` — passed with public `ConceptCycleComponent` and `detectConceptCycles` exports;
+- [x] focused `npm.cmd run test:run -- tests/concepts/concept-cycle.test.ts` — passed: 1 test file, 14 tests;
+- [x] `npm.cmd run test:run` — passed: 20 test files, 303 tests;
+- [x] `npm.cmd run build` — passed with Vite production build;
+- [x] `git diff --check` — passed; the existing working-tree LF→CRLF warning for `DEV_STATUS.md` remains informational;
+- [x] SCC analysis covers empty/acyclic graphs, self-cycles, two/three-node cycles, multiple separate cycles, one SCC with multiple simple cycles, deterministic component/member ordering, dangling edges, duplicate edges, and graph immutability;
+- [x] existing F3.1 graph-builder tests remain intact, including cycle-permitting construction behavior;
+- [x] production F3.2 code imports only Core TypeScript contracts and uses no Node filesystem/path/process APIs, shell calls, absolute paths, desktop/server APIs, or machine state;
+- [x] no dependency query API, transitive closure, topological ordering, reverse dependency index, Activity Registry, Foundation 2 validator rewrite, graph package, or production CS116 content was added;
+- [x] `git diff -- package.json package-lock.json` is empty; no new package was installed.
+
+F3.1 validation:
+
+- [x] `npm.cmd run typecheck` — passed with the public `ConceptGraph` and `buildConceptGraph` contracts;
+- [x] focused `npm.cmd run test:run -- tests/concepts/concept-graph.test.ts` — passed: 1 test file, 11 tests;
+- [x] `npm.cmd run test:run` — passed: 19 test files, 289 tests;
+- [x] `npm.cmd run build` — passed with Vite production build;
+- [x] `git diff --check` — passed; the existing working-tree LF→CRLF warning for `DEV_STATUS.md` remains informational;
+- [x] graph construction preserves Concept insertion order, authored prerequisite order, duplicate prerequisite references, zero-prerequisite nodes, and copied prerequisite arrays;
+- [x] two-node cycles, self-cycles, and defensive dangling prerequisite IDs remain buildable in F3.1 without cycle or missing-reference diagnostics;
+- [x] `src/core/concepts` depends only on sibling Core content/domain contracts; no content/cs116, features, visualization, app, React, Phaser, Monaco, Pyodide, or IndexedDB dependency was added;
+- [x] no dependency traversal, topological ordering, reverse dependency index, Activity Registry, mastery logic, graph framework, or production CS116 content was added;
+- [x] `git diff -- package.json package-lock.json` is empty; no new package was installed.
 
 F2.6 / Foundation 2 completion validation:
 
