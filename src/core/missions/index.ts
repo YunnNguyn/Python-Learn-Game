@@ -8,3 +8,8 @@ export type {
   CreateMissionInstanceInput,
   MissionGeneratorOutput,
 } from "./mission-instance-creation";
+export type {
+  MissionInstanceValidationIssue,
+  MissionInstanceValidationResult,
+  MissionInstanceValidator,
+} from "./mission-instance-validator";

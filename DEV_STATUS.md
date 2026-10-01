@@ -3,10 +3,10 @@
 ## Current Phase
 
 ```text
-Foundation 4 — Mission Template / Instance + Seeded RNG
+Foundation 5 — Generator + Grader Registries
 ```
 
-Status: **Complete / Locked**
+Status: **COMPLETE / LOCKED**
 
 Phase 0 remains complete and locked through the six source-of-truth documents:
 
@@ -17,49 +17,50 @@ Phase 0 remains complete and locked through the six source-of-truth documents:
 - `ROADMAP.md`
 - `DEV_STATUS.md`
 
-Foundation 1 is complete and locked. F1.1 established the project/tooling foundation. F1.2 provides the smallest stable Core domain vocabulary and branded ID types. F1.3 provides the canonical `Concept` schema. F1.4 provides runtime-validatable `Course`, `World`, and `Lesson` hierarchy contracts. F1.5 provides the polymorphic `LearningActivity` contract. F1.6 provides the reusable `MissionTemplate` contract and JSON-safe extension configuration boundary. F1.7 provides the concrete generated `MissionInstance` snapshot with explicit learner/runtime/grading/world data boundaries. F1.8 provides the minimal strict `ContentPackManifest` contract for pack identity, schema versioning, course references, and pack dependencies. F1.9 provides the raw `AttemptRecord` evidence snapshot and minimal renderer-neutral `WorldEvent` envelope. F1.10 completes Foundation 1 with a coherent neutral fixture family, public-barrel integration checks, branded output checks, invalid-boundary regressions, JSON round-trip checks, and a domain dependency/type audit. F2.1 starts Foundation 2 with a small instantiable in-memory `ContentRegistry` for static content definitions only. F2.2 adds pure pre-registration duplicate-ID validation over the seven static content categories. F2.3 adds pure pre-registration validation for the locked static content reference families. F2.4 adds lightweight branded-ID capability validation for MissionTemplate extension references without introducing implementation registries. F2.5 adds explicit ContentPack schema-compatibility validation using a caller-supplied supported-version set. F2.6 completes Foundation 2 with one pure `validateContent` preflight entry point that composes all four validation passes with explicit capability/schema context before registration. F3.1 starts Foundation 3 with a framework-independent Concept Graph snapshot derived only from registered `Concept.prerequisites`. F3.2 adds deterministic cyclic strongly-connected-component analysis over that snapshot without changing graph construction. F3.3 adds direct prerequisite snapshots plus deterministic nearest-first prerequisite traversal over `ConceptGraph`. F3.4 adds a derived specialized `ActivityRegistry` snapshot for activity ID, Concept, stage, and type lookup while preserving `ContentRegistry` as the canonical registration owner. F3.5 completes Foundation 3 with the exact seven production CS116 NumPy concepts, their minimal acyclic prerequisite graph, and seven content-local vertical-slice activity skeletons that reserve stable activity planning metadata without creating executable LearningActivity or MissionTemplate definitions. F4.1 starts Foundation 4 with a browser-safe stateful deterministic `SeededRng` using the locked `fnv1a32-mulberry32-v1` algorithm and the minimal `nextFloat`, `nextInt`, `pick`, and `shuffle` generator-facing API. F4.2 adds exact current-registry `MissionTemplateId` + version resolution with canonical object identity and no version fallback. F4.3 adds deterministic structural MissionInstance creation from an already resolved template, exact seed, difficulty, and already-produced generator payload. F4.4 proves end-to-end deterministic MissionInstance generation composition with a test-only generator fixture. F4.5 completes Foundation 4 with a versioned deterministic retry-seed derivation policy that preserves the canonical base seed on MissionInstance identity while keeping retry state generator-internal.
+Foundation 1 is complete and locked. F1.1 established the project/tooling foundation. F1.2 provides the smallest stable Core domain vocabulary and branded ID types. F1.3 provides the canonical `Concept` schema. F1.4 provides runtime-validatable `Course`, `World`, and `Lesson` hierarchy contracts. F1.5 provides the polymorphic `LearningActivity` contract. F1.6 provides the reusable `MissionTemplate` contract and JSON-safe extension configuration boundary. F1.7 provides the concrete generated `MissionInstance` snapshot with explicit learner/runtime/grading/world data boundaries. F1.8 provides the minimal strict `ContentPackManifest` contract for pack identity, schema versioning, course references, and pack dependencies. F1.9 provides the raw `AttemptRecord` evidence snapshot and minimal renderer-neutral `WorldEvent` envelope. F1.10 completes Foundation 1 with a coherent neutral fixture family, public-barrel integration checks, branded output checks, invalid-boundary regressions, JSON round-trip checks, and a domain dependency/type audit. F2.1 starts Foundation 2 with a small instantiable in-memory `ContentRegistry` for static content definitions only. F2.2 adds pure pre-registration duplicate-ID validation over the seven static content categories. F2.3 adds pure pre-registration validation for the locked static content reference families. F2.4 adds lightweight branded-ID capability validation for MissionTemplate extension references without introducing implementation registries. F2.5 adds explicit ContentPack schema-compatibility validation using a caller-supplied supported-version set. F2.6 completes Foundation 2 with one pure `validateContent` preflight entry point that composes all four validation passes with explicit capability/schema context before registration. F3.1 starts Foundation 3 with a framework-independent Concept Graph snapshot derived only from registered `Concept.prerequisites`. F3.2 adds deterministic cyclic strongly-connected-component analysis over that snapshot without changing graph construction. F3.3 adds direct prerequisite snapshots plus deterministic nearest-first prerequisite traversal over `ConceptGraph`. F3.4 adds a derived specialized `ActivityRegistry` snapshot for activity ID, Concept, stage, and type lookup while preserving `ContentRegistry` as the canonical registration owner. F3.5 completes Foundation 3 with the exact seven production CS116 NumPy concepts, their minimal acyclic prerequisite graph, and seven content-local vertical-slice activity skeletons that reserve stable activity planning metadata without creating executable LearningActivity or MissionTemplate definitions. F4.1 starts Foundation 4 with a browser-safe stateful deterministic `SeededRng` using the locked `fnv1a32-mulberry32-v1` algorithm and the minimal `nextFloat`, `nextInt`, `pick`, and `shuffle` generator-facing API. F4.2 adds exact current-registry `MissionTemplateId` + version resolution with canonical object identity and no version fallback. F4.3 adds deterministic structural MissionInstance creation from an already resolved template, exact seed, difficulty, and already-produced generator payload. F4.4 proves end-to-end deterministic MissionInstance generation composition with a test-only generator fixture. F4.5 completes Foundation 4 with a versioned deterministic retry-seed derivation policy that preserves the canonical base seed on MissionInstance identity while keeping retry state generator-internal. F5.1 starts Foundation 5 with the production `MissionGenerator` interface and an instantiable in-memory `GeneratorRegistry` that maps stable generator IDs to executable implementations while preserving the locked static-content and determinism boundaries. F5.2 adds the first three reusable production CS116 NumPy generator families in the content layer, with deterministic config-driven generation and no semantic-retry ownership. F5.3 adds a generic pure `MissionInstanceValidator` contract plus the first production Threshold Filter semantic validator, preserving generator/validator separation and test-only deterministic retry composition. F5.4 adds the generic browser-safe declarative grader engine over normalized execution snapshots, schema-validates authored grader config, evaluates all seven minimum reusable checks in authored order, and returns deterministic structured grading results without runtime/Pyodide coupling. F5.5 adds the common synchronous `Grader` contract, an instantiable `GraderRegistry`, and the built-in `core.declarative` adapter while keeping static grader config, generated grading data, and execution snapshots as separate inputs.
 
 ## Current Task
 
 ```text
-F4.5 — Deterministic retry policy
+F5.6 — Reference solver test loop
 ```
 
 Status: **Complete**
 
 Scope completed:
 
-- added public `GENERATION_ATTEMPT_SEED_POLICY = "mission-retry-seed-v1"` and `deriveGenerationAttemptSeed(baseSeed, attemptIndex)` under `core/missions`;
-- attempt index is zero-based; attempt 0 returns the exact base seed unchanged;
-- retry attempts derive `mission-retry:v1:<attemptIndex>:<encodeURIComponent(baseSeed)>` without trimming, case folding, Unicode normalization, hashing, entropy, or hidden state;
-- retry indexes accept the full finite non-negative safe-integer range, with invalid indexes rejected by `RangeError`;
-- derived retry seeds compose directly with F4.1 `createSeededRng`, and identical base seed + attempt index recreates the same RNG stream;
-- a test-only retry simulation proves at least one rejected attempt followed by later deterministic success, reproducing rejected candidates, accepted attempt, accepted generator output, and final MissionInstance;
-- accepted MissionInstance keeps the original base seed and base-seed-derived instance ID; retry seed/index are not persisted;
-- no production retry loop, max-attempt policy, semantic validator, generator registry, grader, reference solver, AttemptRecord change, MissionTemplate change, ContentRegistry change, CS116 content change, or dependency was added.
+- added content-local developer/content QA reference solvers for Matrix Shape, Column Extract, and Threshold Filter;
+- each solver independently computes its result from `MissionInstance.learner.data`; hidden grading data is cross-checked only by tests and is never used as solver input;
+- Matrix Shape derives copied matrix data, `[rows, columns]`, and `ndim = 2` from a validated rectangular finite-number matrix;
+- Column Extract derives the selected column row-by-row and returns the family-specific 1D shape `[rowCount]`;
+- Threshold Filter preserves entity order while independently applying authored `GT` / `GTE` threshold semantics;
+- the production test loop composes `GeneratorRegistry` → generator → `MissionInstance` → validator where required → reference solver → trusted `GraderExecutionSnapshot` → `GraderRegistry` → `core.declarative` → PASS;
+- Threshold Filter includes a deterministic test-only retry proof using `deriveGenerationAttemptSeed`, preserving the canonical base seed on the accepted `MissionInstance`;
+- negative grading proofs cover Matrix Shape `SHAPE_ERROR`, Column Extract `VALUE_ERROR`, and Threshold Filter `VALUE_ERROR`;
+- solver purity, fresh-array/caller-mutation safety, repeated solving, and malformed learner-data rejection are covered.
 
 Architecture lock:
 
-- retry seed policy v1 is `mission-retry-seed-v1` with exact retry format `mission-retry:v1:<attemptIndex>:<encodeURIComponent(baseSeed)>`;
-- attempt 0 preserves the exact base seed, while attempts 1+ derive deterministic stateless retry seeds from the exact base seed and zero-based attempt index;
-- `MissionInstance.seed` remains the canonical public reproduction seed and its deterministic ID continues to use that base seed;
-- derived retry seed/index are generator-internal reproduction details and are not persisted in MissionInstance or AttemptRecord;
-- generator/validator/retry behavior changes that can alter accepted generated output require a MissionTemplate version bump;
-- no production retry orchestration, validator architecture, Generator interface/registry, grader, or reference solver is introduced; Foundation 5 retains generator/grader registry ownership;
-- Foundation 4 is complete and locked.
+- reference solvers are content-local QA/developer tools and are not part of the learner Submit runtime;
+- reference solvers derive expected behavior independently from learner-visible mission data and never read `MissionInstance.grading.data`;
+- Column Extract with an integer column index produces a 1D result with shape `[rowCount]`; this is the explicit F5.6 family-specific implementation choice;
+- deterministic semantic retry remains test-only composition at this stage; no production retry service or retry engine is introduced;
+- no ReferenceSolver registry/field, production MissionTemplate set, expected-data interpolation DSL, runtime/Pyodide integration, AttemptRecord/WorldEvent flow, UI, or persistence is added by F5.6;
+- Foundation 5 is complete and locked after this gate.
 
-F4.5 validation:
+F5.6 validation:
 
 - [x] TypeScript typecheck passed;
-- [x] focused generation-attempt-seed suite passed: 1 test file, 32 tests;
-- [x] full regression suite passed: 28 test files, 461 tests, including F4.1-F4.4 coverage;
+- [x] focused reference-solver loop passed: 1 test file, 11 tests;
+- [x] full regression suite passed: 34 test files, 615 tests;
 - [x] Vite production build passed;
 - [x] `git diff --check` passed;
-- [x] `src/content/cs116` is unchanged;
-- [x] production retry-seed code uses browser-safe ECMAScript/TypeScript primitives with no entropy or Node-only API;
-- [x] no dependency was added and package manifests remain unchanged.
+- [x] `git diff -- package.json package-lock.json` is empty; no dependency was added;
+- [x] `src/core` has no dependency on `content/cs116`;
+- [x] CS116 reference solvers contain no `Math.random`, wall-clock/performance time, crypto randomness, Pyodide, or Node-only API dependency;
+- [x] browser-first deployment boundary remains intact; no manual user testing is required for this foundation-only task.
 
-Next planned task: **F5.1 — Generator Registry**.
+Next planned task: **AS.1 — Vite/React shell** under **App Shell — React Workspace**.
 
 ## Completed
 
@@ -212,6 +213,31 @@ Next planned task: **F5.1 — Generator Registry**.
 - [x] MissionInstance keeps the canonical base seed and base-seed identity; retry seed/index are not persisted.
 - [x] F4.5 adds no production retry loop, semantic validator, generator/grader registry, reference solver, CS116 content, AttemptRecord schema field, or dependency.
 - [x] Foundation 4 — Mission Template / Instance + Seeded RNG complete and locked.
+- [x] F5.1 — Generator Registry completed.
+- [x] `MissionGeneratorContext` is limited to template version, generator config, canonical Difficulty, and caller-supplied SeededRng.
+- [x] `MissionGenerator` synchronously returns the existing `MissionGeneratorOutput` contract and owns no mission identity, retry policy, grading, runtime execution, or visualization implementation.
+- [x] `GeneratorRegistry` is instantiable, insertion-ordered, ID-based, append-only, and returns canonical implementation references plus isolated generator-ID snapshots.
+- [x] duplicate generator-ID registration fails before mutation while ordinary missing lookup returns `undefined`.
+- [x] GeneratorRegistry IDs compose with the existing F2.4 `ExtensionCapabilitySet.generatorIds` without validator changes.
+- [x] F5.1 adds no real CS116 generator, semantic validator, grader infrastructure, reference solver, production retry orchestration, package dependency, or CS116 content change.
+- [x] F5.2 — First simple generators completed.
+- [x] exactly three first-slice CS116 production generator IDs are registered in deterministic order: matrix-shape, column-extract, threshold-filter.
+- [x] VS-01/VS-02 share Matrix Shape through config, VS-03 uses Column Extract, and VS-04/VS-05 share Threshold Filter through config.
+- [x] production CS116 generators remain content-local, deterministic, JSON-safe, browser-safe, and independent of Python/runtime/grader/visualization execution.
+- [x] Threshold Filter returns candidate output directly without retrying empty or universal selections; semantic acceptance remains deferred to F5.3.
+- [x] F5.3 — Instance validators completed.
+- [x] Generic Core exposes only the pure `MissionInstanceValidator` contract; the first production Threshold Filter validator remains CS116 content-local.
+- [x] Threshold Filter validation safely rejects malformed family data plus empty/universal expected selections without mutation, RNG, retry, grading, learner feedback, or reference solving.
+- [x] F4.5 retry seeds, F5.2 generation, canonical MissionInstance creation, and F5.3 validation compose deterministically in test-only bounded retry coverage.
+- [x] F5.4 — Declarative Grader Engine completed.
+- [x] Generic Core now exposes a browser-safe declarative grader over normalized execution snapshots with schema-validated authored config and seven minimum reusable checks.
+- [x] Learner/runtime mismatches return structured check failures, exact/approximate comparisons are deterministic, and no runtime/Pyodide or CS116 dependency is introduced.
+- [x] F5.5 — Grader Registry escape hatch completed.
+- [x] `GraderRegistry` provides the executable grader lookup boundary, registers `core.declarative`, and preserves custom graders as a local trusted escape hatch without changing static content validation.
+- [x] F5.6 — Reference solver test loop completed.
+- [x] Matrix Shape, Column Extract, and Threshold Filter reference solvers independently compute trusted expected behavior from learner mission data and drive the full generator → validator → solver → grader QA loop.
+- [x] deterministic Threshold Filter retry reproduction, hidden-data cross-checks, negative grading, and solver purity/immutability are covered.
+- [x] Foundation 5 — Generator + Grader Registries complete and locked.
 
 ## In Progress
 
@@ -219,20 +245,22 @@ Next planned task: **F5.1 — Generator Registry**.
 - Foundation 2 is complete.
 - Foundation 3 is complete and locked.
 - Foundation 4 is complete and locked.
+- Foundation 5 is complete and locked.
+- App Shell is next; implementation has not started.
 
 ## Next Planned Phase
 
 ```text
-Foundation 5 — Generator + Grader Registries
+App Shell — React Workspace
 ```
 
 ## Next Planned Task
 
 ```text
-F5.1 — Generator Registry
+AS.1 — Vite/React shell
 ```
 
-Define the production Generator Registry boundary without expanding into grader implementation or mission-family content beyond the task scope.
+Establish the browser-first React application shell and composition root on top of the locked Foundation 1–5 contracts.
 
 ## Architecture Locks
 
@@ -499,6 +527,56 @@ These decisions are source-of-truth constraints until deliberately revised:
     - no production retry loop, global max-attempt policy, semantic validator framework, Generator Registry, Grader Registry, reference solver, or CS116 mission-family implementation is introduced by F4.5;
     - Foundation 4 — Mission Template / Instance + Seeded RNG is complete and locked; the next planned phase is Foundation 5 — Generator + Grader Registries.
 
+44. **F5.1 defines the production MissionGenerator contract and GeneratorRegistry**
+    - `GeneratorRegistry` is an instantiable in-memory executable extension registry mapping stable `MissionGeneratorId` values to canonical `MissionGenerator` implementation references;
+    - `ContentRegistry` remains the owner of static content definitions; executable generator behavior is kept in `GeneratorRegistry`;
+    - `MissionGeneratorContext` contains only `templateVersion`, optional generator `config`, canonical `Difficulty`, and a caller-supplied `SeededRng`;
+    - `MissionGenerator.generate` is synchronous and returns the existing F4.3 `MissionGeneratorOutput` contract;
+    - generators receive no raw seed, retry seed/index, MissionTemplate object, template ID, MissionInstance ID, Concept IDs, grader/runtime/visualization bindings, or lifecycle/execution-environment dependencies;
+    - generator IDs belong to the registry association and are not duplicated on implementation objects; different IDs may intentionally share the same implementation reference;
+    - duplicate generator-ID registration throws before mutation; missing lookup returns `undefined`; ID snapshots preserve insertion order and do not expose mutable internal state;
+    - multiple GeneratorRegistry instances are independent, with no global singleton, unregister, replacement, overwrite option, registry version, or config-schema registry;
+    - `GeneratorRegistry.getGeneratorIds()` can be supplied directly to the existing F2.4 `ExtensionCapabilitySet.generatorIds` without changing `validateExtensionIds`, `validateContent`, or Foundation 2 semantics;
+    - GeneratorRegistry performs no MissionInstance assembly, retry orchestration, semantic validation, grading, reference solving, runtime execution, or visualization implementation;
+    - F5.1 remains the generic executable-generator contract/registry boundary; concrete CS116 implementations remain content-owned.
+
+45. **F5.2 locks the first production CS116 generator families**
+    - exactly three stable first-slice IDs exist: `cs116.numpy.matrix-shape`, `cs116.numpy.column-extract`, and `cs116.numpy.threshold-filter`;
+    - Matrix Shape serves VS-01/VS-02, Column Extract serves VS-03, and Threshold Filter serves VS-04/VS-05; VS-06/VS-07 remain unimplemented at this stage;
+    - concrete generator code lives under `src/content/cs116/generators`; `src/core` remains independent of CS116 content;
+    - activity-level differences are represented primarily by validated generator config such as matrix mode and threshold instruction level/comparison;
+    - each generator returns deterministic JSON-safe `MissionGeneratorOutput` derived only from template version, config, Difficulty, and caller-supplied SeededRng;
+    - generators do not execute Python, assemble MissionInstance identity, own grader/runtime execution, provide solution code, or manipulate visualization;
+    - Threshold Filter computes candidate expected IDs once and returns them even when the result is empty or universal; semantic retry/acceptance belongs to F5.3;
+    - RNG consumption order is part of reproducibility: matrix values are row-major; Column Extract samples the target column only after the matrix; Threshold Filter samples values in entity order and threshold last;
+    - any behavior change that can alter output for an existing template/config/difficulty/seed tuple requires MissionTemplate versioning;
+    - Foundation 5 remains in progress; F5.3 provides semantic candidate acceptance after canonical instance creation.
+
+46. **F5.3 defines semantic MissionInstance validation without collapsing generator, retry, or grader boundaries**
+    - Generic Core defines only a pure `MissionInstanceValidator` contract over canonical `MissionInstance`, with stable string issue codes and `valid === (issues.length === 0)`;
+    - the first production validator is content-owned Threshold Filter validation for valid family data plus non-empty/non-universal expected selections;
+    - malformed family data returns `THRESHOLD_FILTER_INVALID_DATA` and short-circuits semantic count checks; ordinary invalidity is returned, not thrown;
+    - validators do not mutate instances, consume RNG, retry/resample/repair generation, log or persist state, grade learner submissions, or emit learner-facing feedback;
+    - Threshold Filter validation does not recompute GT/GTE solutions; reference solving remains deferred;
+    - the F5.2 Threshold Filter generator remains candidate-only and may emit rejected empty/universal candidates;
+    - no ValidatorRegistry, validator ID, MissionTemplate validation binding, MissionInstance validation field, or production retry service is introduced;
+    - deterministic F4.5 + F5.2 + F5.3 retry composition is proven only through bounded test integration;
+    - Foundation 5 remains in progress; F5.4 — Declarative Grader Engine follows this boundary.
+
+47. **F5.4 defines a generic declarative grader over normalized execution snapshots**
+    - the grader consumes only a normalized `GraderExecutionSnapshot`: a variable map whose observed values contain `pythonType`, `isNdarray`, optional `shape`, optional JSON `value`, plus an optional execution exception;
+    - the grader remains independent of Python, Pyodide, RuntimeManager, Worker protocol, and CS116 content; runtime-specific code is responsible for producing the normalized snapshot;
+    - declarative grader config is validated through the canonical local Zod schema before any check evaluation; malformed authored config throws as an authoring/configuration error;
+    - learner/runtime mismatches never throw from grading and instead produce structured `GraderCheckResult` failures using the locked failure categories;
+    - the minimum primitive set is `NO_EXCEPTION`, `VARIABLE_EXISTS`, `PYTHON_TYPE`, `NDARRAY_TYPE`, `SHAPE`, `EXACT_VALUES`, and `APPROX_VALUES`;
+    - authored checks execute in exact authored order, all checks run without short-circuiting, and the overall result passes exactly when every authored check passes;
+    - `EXACT_VALUES` uses recursive structural JSON equality with array order significance and object key-order independence;
+    - `APPROX_VALUES` accepts numeric scalars or recursively nested numeric arrays and uses only the explicitly authored non-negative absolute tolerance; no relative tolerance is implied;
+    - execution exceptions are copied into `GraderResult.runtimeError` whenever present, while an exception affects overall pass only when an authored check fails because of it, such as `NO_EXCEPTION`;
+    - `GraderResult` is the generic common result for future grader implementations; optional `conceptualGuidance` and `semanticResult` remain undefined in F5.4;
+    - F5.4 adds no `GraderRegistry`, custom grader implementation, built-in grader ID, production CS116 grader config, learner feedback renderer, dtype/scalar duplicate primitive, raises-exception primitive, mutation primitive, or new dependency;
+    - Foundation 5 remains in progress; F5.5 — Grader Registry escape hatch is next.
+
 ## Known Risks
 
 ### Pyodide startup and recovery latency
@@ -536,6 +614,62 @@ None of these blocks the next planned **Foundation 5 — Generator + Grader Regi
 
 ## Validation Status
 
+F5.4 validation:
+
+- [x] TypeScript typecheck — passed;
+- [x] focused `tests/grading/declarative-grader.test.ts` — passed: 1 test file, 60 tests;
+- [x] full Vitest suite — passed: 32 test files, 584 tests;
+- [x] Vite 8.3.1 production build — passed;
+- [x] `git diff --check` — passed with only informational LF→CRLF warnings from existing modified files;
+- [x] `git diff -- package.json package-lock.json` — empty; no dependency was added;
+- [x] `src/core/grading` audit found no Pyodide, runtime implementation, Node-only API, React, Phaser, IndexedDB, or `content/cs116` dependency;
+- [x] schema/config rejection, all seven primitives, missing observations, all-check execution, authored order, overall pass semantics, recursive exact comparison, absolute-tolerance approximate comparison, runtime-error copying, input immutability, fresh result isolation, deterministic repeat grading, and a representative vertical-slice-like snapshot are covered;
+- [x] no manual user testing is required for this foundation-only change;
+- [x] Foundation 5 remains in progress with F5.5 — Grader Registry escape hatch as the next planned task.
+
+F5.3 validation:
+
+- [x] TypeScript typecheck — passed;
+- [x] focused `tests/content/cs116/validators/threshold-filter-validator.test.ts` — passed: 1 test file, 25 tests;
+- [x] full Vitest suite — passed: 31 test files, 524 tests;
+- [x] Vite 8.3.1 production build — passed;
+- [x] `git diff --check` — passed with only informational LF→CRLF warnings;
+- [x] `git diff -- package.json package-lock.json` — empty; no dependency was added;
+- [x] `src/core` audit found no import from `content/cs116`;
+- [x] production validator audit found no Math.random, time/crypto entropy, Node-only API, filesystem/network dependency, or external state access;
+- [x] invalid family data, empty/universal selection rejection, valid 1..N-1 acceptance, deterministic issue results, input immutability, fresh result isolation, real generator composition, representative difficulty candidates, multi-seed coverage, and test-only deterministic retry composition are covered;
+- [x] no manual user testing is required for this foundation-only change;
+- [x] Foundation 5 remains in progress with F5.4 — Declarative Grader Engine as the next planned task.
+
+F5.2 validation:
+
+- [x] TypeScript typecheck — passed;
+- [x] focused `tests/content/cs116/generators/generators.test.ts` — passed: 1 test file, 25 tests;
+- [x] full Vitest suite — passed: 30 test files, 499 tests;
+- [x] `npm.cmd run build` — passed with Vite 8.3.1 production bundling;
+- [x] `git diff --check` — passed; only informational working-tree LF→CRLF warnings were emitted;
+- [x] `git diff -- package.json package-lock.json` — empty; no dependency was added;
+- [x] `src/core` audit found no import from `content/cs116`;
+- [x] production generator audit found no Math.random, time/crypto entropy, Node-only API, filesystem/network dependency, or external state access;
+- [x] exactly three registered IDs, duplicate-registration failure, fixed-seed determinism, selected changed-seed variants, difficulty sizing, range constraints, hidden grading data, local config validation, pre-RNG invalid-config rejection, GT/GTE correctness, no semantic retry, and F4 MissionInstance composition are covered;
+- [x] no manual user testing is required for this foundation-only change;
+- [x] Foundation 5 remains in progress with F5.3 — Instance validators as the next planned task.
+
+F5.1 validation:
+
+- [x] TypeScript typecheck — passed;
+- [x] focused `tests/generators/generator-registry.test.ts` — passed: 1 test file, 13 tests;
+- [x] full Vitest suite — passed: 29 test files, 474 tests, including all locked Foundation 4 coverage;
+- [x] `npm.cmd run build` — passed with Vite 8.3.1 production bundling;
+- [x] `git diff --check` — passed;
+- [x] `git diff -- package.json package-lock.json` — empty; no dependency was added;
+- [x] `git diff -- src/content/cs116` — empty; production CS116 content is unchanged;
+- [x] fresh registry behavior, canonical implementation identity, multiple independent mappings, ordinary misses, duplicate same/different implementation rejection, shared implementation under different IDs, insertion order, ID snapshot isolation, and independent registry instances are covered;
+- [x] MissionGenerator fixture coverage proves direct use of templateVersion/config/Difficulty/caller-supplied SeededRng, same-seed deterministic reproduction, and selected changed-seed variation;
+- [x] existing F2.4 `validateExtensionIds` accepts `GeneratorRegistry.getGeneratorIds()` through `ExtensionCapabilitySet.generatorIds`, while an absent registered generator still produces the existing missing-generator issue;
+- [x] production `src/core/generators` contains no `Math.random`, `Date.now`, `performance.now`, crypto randomness, Node-only API, filesystem/network dependency, or external state access;
+- [x] Foundation 4 remains complete and locked; Foundation 5 is in progress and next planned task is F5.2 — First simple generators.
+
 F4.5 validation:
 
 - [x] TypeScript typecheck — passed;
@@ -549,7 +683,7 @@ F4.5 validation:
 - [x] test-only retry simulation contains at least one rejected attempt before later deterministic success and reproduces the rejected sequence, accepted attempt, accepted generator output, and full MissionInstance;
 - [x] accepted MissionInstance stores the original base seed, keeps the base-seed-derived instance ID, and persists no retry seed/index metadata;
 - [x] production `generation-attempt-seed.ts` contains no `Math.random`, timestamp/crypto entropy, Node-only API, external dependency, production retry loop, semantic validator, generator registry, grader, reference solver, or max-attempt policy;
-- [x] Foundation 4 is complete and locked; next planned task is F5.1 — Generator Registry.
+- [x] at F4.5 completion, Foundation 4 was complete and locked with F5.1 — Generator Registry as the next planned task.
 
 F4.4 validation:
 
