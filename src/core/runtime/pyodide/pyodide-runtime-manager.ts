@@ -9,7 +9,7 @@ import {
 import type { RuntimeManager } from "../runtime-manager";
 import {
   isRuntimeWorkerResponse,
-  type RuntimeInitWorkerRequest,
+  type RuntimeWorkerRequest,
 } from "./worker-protocol";
 
 type RuntimeState = "IDLE" | "INITIALIZING" | "READY" | "DISPOSED";
@@ -18,7 +18,7 @@ export interface RuntimeWorkerPort {
   onmessage: ((event: { readonly data: unknown }) => void) | null;
   onerror: ((event: unknown) => void) | null;
   onmessageerror: ((event: unknown) => void) | null;
-  postMessage(message: RuntimeInitWorkerRequest): void;
+  postMessage(message: RuntimeWorkerRequest): void;
   terminate(): void;
 }
 
@@ -36,12 +36,20 @@ interface PendingInitialization {
   readonly resolve: (result: RuntimeLifecycleResult) => void;
 }
 
+interface PendingRun {
+  readonly worker: RuntimeWorkerPort;
+  readonly requestId: string;
+  readonly promise: Promise<RuntimeExecutionResult>;
+  readonly resolve: (result: RuntimeExecutionResult) => void;
+}
+
 const READY_RESULT: RuntimeLifecycleResult = { ok: true };
 
 export class PyodideRuntimeManager implements RuntimeManager {
   private state: RuntimeState = "IDLE";
   private worker: RuntimeWorkerPort | null = null;
   private pendingInitialization: PendingInitialization | null = null;
+  private pendingRun: PendingRun | null = null;
   private nextRequestNumber = 0;
 
   constructor(private readonly options: PyodideRuntimeManagerOptions) {}
@@ -109,14 +117,16 @@ export class PyodideRuntimeManager implements RuntimeManager {
         return;
       }
 
-      this.completeInitialization(
-        worker,
-        {
-          ok: false,
-          error: event.data.error,
-        },
-        true,
-      );
+      if (event.data.type === "RUNTIME_ERROR") {
+        this.completeInitialization(
+          worker,
+          {
+            ok: false,
+            error: event.data.error,
+          },
+          true,
+        );
+      }
     };
 
     worker.onerror = (event) => {
@@ -178,13 +188,131 @@ export class PyodideRuntimeManager implements RuntimeManager {
     return Promise.resolve(
       lifecycleFailure(
         "NOT_IMPLEMENTED",
-        "prepareMission chưa được triển khai trong PR.2.",
+        "prepareMission chưa được triển khai trong PR.3.",
       ),
     );
   }
 
-  run(_request: RuntimeExecutionRequest): Promise<RuntimeExecutionResult> {
-    return Promise.resolve(notImplementedExecutionResult("run"));
+  run(request: RuntimeExecutionRequest): Promise<RuntimeExecutionResult> {
+    if (this.state === "DISPOSED") {
+      return Promise.resolve(
+        executionFailure(
+          "RUNTIME_DISPOSED",
+          "Runtime manager đã được hủy và không thể chạy mã.",
+        ),
+      );
+    }
+
+    if (this.state !== "READY" || this.worker === null) {
+      return Promise.resolve(
+        executionFailure(
+          "RUNTIME_NOT_READY",
+          "Runtime chưa sẵn sàng. Hãy khởi tạo runtime trước khi chạy mã.",
+        ),
+      );
+    }
+
+    if (this.pendingRun !== null) {
+      return Promise.resolve(
+        executionFailure(
+          "RUNTIME_BUSY",
+          "Runtime đang xử lý một lần chạy khác.",
+        ),
+      );
+    }
+
+    const worker = this.worker;
+    const requestId = "runtime-" + ++this.nextRequestNumber;
+    let resolveRun!: (result: RuntimeExecutionResult) => void;
+    const promise = new Promise<RuntimeExecutionResult>((resolve) => {
+      resolveRun = resolve;
+    });
+
+    this.pendingRun = {
+      worker,
+      requestId,
+      promise,
+      resolve: resolveRun,
+    };
+
+    worker.onmessage = (event) => {
+      if (!this.isCurrentRun(worker, requestId)) {
+        return;
+      }
+
+      if (!isRuntimeWorkerResponse(event.data)) {
+        return;
+      }
+
+      if (event.data.requestId !== requestId) {
+        return;
+      }
+
+      if (event.data.type === "RUN_RESULT") {
+        this.completeRun(worker, copyExecutionResult(event.data.result), false);
+        return;
+      }
+
+      if (event.data.type === "RUNTIME_ERROR") {
+        this.completeRun(
+          worker,
+          executionFailure(event.data.error.code, event.data.error.message),
+          true,
+        );
+      }
+    };
+
+    worker.onerror = (event) => {
+      if (!this.isCurrentRun(worker, requestId)) {
+        return;
+      }
+
+      this.completeRun(
+        worker,
+        executionFailure(
+          "WORKER_ERROR",
+          getErrorMessage(event, "Python runtime worker gặp lỗi khi chạy mã."),
+        ),
+        true,
+      );
+    };
+
+    worker.onmessageerror = (event) => {
+      if (!this.isCurrentRun(worker, requestId)) {
+        return;
+      }
+
+      this.completeRun(
+        worker,
+        executionFailure(
+          "WORKER_MESSAGE_ERROR",
+          getErrorMessage(
+            event,
+            "Không thể nhận kết quả từ Python runtime worker.",
+          ),
+        ),
+        true,
+      );
+    };
+
+    try {
+      worker.postMessage({
+        type: "RUN_CODE",
+        requestId,
+        code: request.code,
+      });
+    } catch (error) {
+      this.completeRun(
+        worker,
+        executionFailure(
+          "WORKER_MESSAGE_FAILED",
+          getErrorMessage(error, "Không thể gửi mã tới Python runtime worker."),
+        ),
+        true,
+      );
+    }
+
+    return promise;
   }
 
   submit(_request: RuntimeExecutionRequest): Promise<RuntimeExecutionResult> {
@@ -197,10 +325,12 @@ export class PyodideRuntimeManager implements RuntimeManager {
     }
 
     const pending = this.pendingInitialization;
+    const pendingRun = this.pendingRun;
     const worker = this.worker;
 
     this.state = "DISPOSED";
     this.pendingInitialization = null;
+    this.pendingRun = null;
     this.worker = null;
 
     if (worker !== null) {
@@ -212,6 +342,13 @@ export class PyodideRuntimeManager implements RuntimeManager {
       lifecycleFailure(
         "RUNTIME_DISPOSED",
         "Runtime manager đã được hủy trong khi đang khởi tạo.",
+      ),
+    );
+
+    pendingRun?.resolve(
+      executionFailure(
+        "RUNTIME_DISPOSED",
+        "Runtime manager đã được hủy trong khi đang chạy mã.",
       ),
     );
   }
@@ -256,6 +393,45 @@ export class PyodideRuntimeManager implements RuntimeManager {
 
     pending.resolve(result);
   }
+
+  private isCurrentRun(
+    worker: RuntimeWorkerPort,
+    requestId: string,
+  ): boolean {
+    return (
+      this.state === "READY" &&
+      this.worker === worker &&
+      this.pendingRun?.worker === worker &&
+      this.pendingRun.requestId === requestId
+    );
+  }
+
+  private completeRun(
+    worker: RuntimeWorkerPort,
+    result: RuntimeExecutionResult,
+    discardWorker: boolean,
+  ): void {
+    const pending = this.pendingRun;
+    if (
+      pending === null ||
+      pending.worker !== worker ||
+      this.worker !== worker ||
+      this.state !== "READY"
+    ) {
+      return;
+    }
+
+    this.pendingRun = null;
+    clearWorkerListeners(worker);
+
+    if (discardWorker) {
+      worker.terminate();
+      this.worker = null;
+      this.state = "IDLE";
+    }
+
+    pending.resolve(result);
+  }
 }
 
 class BrowserRuntimeWorkerPort implements RuntimeWorkerPort {
@@ -274,7 +450,7 @@ class BrowserRuntimeWorkerPort implements RuntimeWorkerPort {
     this.worker.onmessageerror = (event) => this.onmessageerror?.(event);
   }
 
-  postMessage(message: RuntimeInitWorkerRequest): void {
+  postMessage(message: RuntimeWorkerRequest): void {
     this.worker.postMessage(message);
   }
 
@@ -324,9 +500,43 @@ function notImplementedExecutionResult(
     stderr: "",
     error: {
       code: "NOT_IMPLEMENTED",
-      message: `${operation} chưa được triển khai trong PR.2.`,
+      message: operation + " chưa được triển khai trong PR.3.",
     },
   };
+}
+
+function executionFailure(
+  code: string | undefined,
+  message: string,
+): RuntimeExecutionResult {
+  return {
+    status: RUNTIME_EXECUTION_STATUS.RUNTIME_ERROR,
+    stdout: "",
+    stderr: "",
+    error: { code, message },
+  };
+}
+
+function copyExecutionResult(
+  result: RuntimeExecutionResult,
+): RuntimeExecutionResult {
+  if (result.status === RUNTIME_EXECUTION_STATUS.PYTHON_EXCEPTION) {
+    return {
+      ...result,
+      exception: { ...result.exception },
+    };
+  }
+
+  if (
+    result.status === RUNTIME_EXECUTION_STATUS.RUNTIME_ERROR ||
+    result.status === RUNTIME_EXECUTION_STATUS.TIMEOUT
+  ) {
+    return result.error === undefined
+      ? { ...result }
+      : { ...result, error: { ...result.error } };
+  }
+
+  return { ...result };
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {

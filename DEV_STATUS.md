@@ -21,7 +21,15 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 
 ## Current Task
 
-App Shell — **COMPLETE / LOCKED**
+Python Runtime — Pyodide Worker
+
+```text
+PR.3 — Basic code execution
+```
+
+Status: **Awaiting Manual Browser Validation**
+
+Runtime checkpoints:
 
 ```text
 PR.1 — RuntimeManager interface
@@ -55,7 +63,7 @@ PR.1 validation:
 PR.2 — Pyodide Web Worker boot
 ```
 
-Status: **Awaiting Manual Browser Validation**
+Status: **Complete / Locked**
 
 Architecture lock:
 
@@ -80,9 +88,43 @@ PR.2 automated validation:
 - [x] `git diff --check` passed;
 - [x] static audits found no learner execution protocol, `runPython`, package loading, timeout/recovery system, runtime wiring in Mission Workspace/content, or introduced Pyodide CDN URL.
 
-Manual browser validation is still required before PR.2 can be marked Complete / Locked.
+PR.2 manual browser validation is complete. Checkpoint `c7be4c4` remains the locked baseline for PR.3.
 
-Next: **PR.3 — Basic code execution**.
+```text
+PR.3 — Basic code execution
+```
+
+Status: **Awaiting Manual Browser Validation**
+
+Architecture lock:
+
+- PR.3 implements `RuntimeManager.run()` through internal `RUN_CODE → RUN_RESULT` messages to the already initialized Pyodide Web Worker.
+- Learner Python executes only inside the Worker through `runPythonAsync`; the public PR.1 runtime contracts remain unchanged and transport request IDs remain internal.
+- Every Run installs fresh Worker-owned stdout/stderr captures, preserves emitted output on learner failure, and resets the capture hooks afterward.
+- Ordinary Pyodide `PythonError` failures normalize to `PYTHON_EXCEPTION`; runtime/Worker failures normalize to `RUNTIME_ERROR`.
+- One manager permits only one active Run. Concurrent Run requests return `RUNTIME_BUSY`; Run before READY returns `RUNTIME_NOT_READY`; Run after disposal returns `RUNTIME_DISPOSED`.
+- Ordinary learner Python exceptions keep the initialized Worker usable for later Runs.
+- Worker/message failures settle a pending Run and discard the failed Worker; later recovery still requires an explicit `initialize()`.
+- `prepareMission` and `submit` remain deliberately `NOT_IMPLEMENTED`.
+- PR.3 adds no NumPy/package loading, mission setup, serialized grading observations, timeout/interrupt handling, automatic worker replacement, environment restoration, grading, `AttemptRecord`, `WorldEvent`, or Mission Workspace runtime wiring.
+- Infinite-loop execution is explicitly deferred until the timeout/recovery work in PR.5.
+
+PR.3 automated validation:
+
+- [x] focused runtime-manager tests passed: 1 test file, 26 tests;
+- [x] TypeScript typecheck passed;
+- [x] full regression suite passed: 36 test files, 653 tests;
+- [x] production build passed and retained local Pyodide asset copying;
+- [x] `git diff --check` passed;
+- [x] `package.json` and `package-lock.json` are unchanged from PR.2 checkpoint `c7be4c4`;
+- [x] generic runtime contracts remain unchanged and Pyodide-free;
+- [x] `src/content` remains unaware of Pyodide, Worker, RuntimeManager, and React;
+- [x] Mission Workspace has no runtime `run`/`submit` wiring and keeps `Chạy thử` / `Nộp bài` disabled;
+- [x] static audit found no NumPy/package loading, timeout/watchdog/interrupt handling, grading, `AttemptRecord`, `WorldEvent`, or recovery implementation in PR.3 scope.
+
+Manual browser execution validation is still required before PR.3 can be marked Complete / Locked.
+
+Next: **PR.4 — Mission setup execution**.
 
 ## Completed
 

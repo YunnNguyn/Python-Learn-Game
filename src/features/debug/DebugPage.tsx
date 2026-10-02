@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { RuntimeManager } from "../../core/runtime";
+import type {
+  RuntimeExecutionResult,
+  RuntimeManager,
+} from "../../core/runtime";
 import { createPyodideRuntimeManager } from "../../core/runtime/pyodide";
 
 type RuntimeProbeStatus = "IDLE" | "INITIALIZING" | "READY" | "ERROR";
@@ -10,6 +13,10 @@ export function DebugPage() {
   const mountedRef = useRef(false);
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeProbeStatus>("IDLE");
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [code, setCode] = useState('print("Hello from Pyodide")');
+  const [runPending, setRunPending] = useState(false);
+  const [executionResult, setExecutionResult] =
+    useState<RuntimeExecutionResult | null>(null);
 
   const getRuntimeManager = (): RuntimeManager => {
     managerRef.current ??= createPyodideRuntimeManager();
@@ -48,6 +55,19 @@ export function DebugPage() {
     setRuntimeStatus("ERROR");
   };
 
+  const runRuntimeTest = async () => {
+    setExecutionResult(null);
+    setRunPending(true);
+
+    const result = await getRuntimeManager().run({ code });
+    if (!mountedRef.current) {
+      return;
+    }
+
+    setExecutionResult(result);
+    setRunPending(false);
+  };
+
   return (
     <section className="page-card" aria-labelledby="debug-title">
       <p className="eyebrow">Development</p>
@@ -71,6 +91,62 @@ export function DebugPage() {
             : "Khởi tạo runtime"}
         </button>
         {runtimeError ? <p role="alert">{runtimeError}</p> : null}
+        <label htmlFor="runtime-test-code">
+          <strong>Mã Python kiểm tra</strong>
+        </label>
+        <textarea
+          id="runtime-test-code"
+          rows={8}
+          value={code}
+          onChange={(event) => setCode(event.target.value)}
+        />
+        <button
+          className="primary-action"
+          type="button"
+          onClick={runRuntimeTest}
+          disabled={runtimeStatus !== "READY" || runPending}
+        >
+          {runPending ? "Đang chạy..." : "Chạy test"}
+        </button>
+        {executionResult ? (
+          <div aria-live="polite">
+            <p>
+              <strong>Kết quả:</strong> {executionResult.status}
+            </p>
+            <p>
+              <strong>stdout</strong>
+            </p>
+            <pre>{executionResult.stdout}</pre>
+            <p>
+              <strong>stderr</strong>
+            </p>
+            <pre>{executionResult.stderr}</pre>
+            {executionResult.status === "PYTHON_EXCEPTION" ? (
+              <>
+                <p>
+                  <strong>Python exception</strong>
+                </p>
+                <pre>
+                  {[
+                    executionResult.exception.type,
+                    executionResult.exception.message,
+                    executionResult.exception.traceback,
+                  ]
+                    .filter(Boolean)
+                    .join("\n")}
+                </pre>
+              </>
+            ) : null}
+            {executionResult.status === "RUNTIME_ERROR" ? (
+              <p role="alert">
+                {executionResult.error.code
+                  ? executionResult.error.code + ": "
+                  : ""}
+                {executionResult.error.message}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </section>
     </section>
   );

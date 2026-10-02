@@ -4,7 +4,7 @@ import {
   PyodideRuntimeManager,
   type RuntimeWorkerPort,
 } from "../../src/core/runtime/pyodide/pyodide-runtime-manager";
-import type { RuntimeInitWorkerRequest } from "../../src/core/runtime/pyodide/worker-protocol";
+import type { RuntimeWorkerRequest } from "../../src/core/runtime/pyodide/worker-protocol";
 
 const LOCAL_INDEX_URL = "http://local.test/app/assets/pyodide/";
 
@@ -12,10 +12,10 @@ class FakeWorker implements RuntimeWorkerPort {
   onmessage: ((event: { readonly data: unknown }) => void) | null = null;
   onerror: ((event: unknown) => void) | null = null;
   onmessageerror: ((event: unknown) => void) | null = null;
-  readonly postedMessages: RuntimeInitWorkerRequest[] = [];
+  readonly postedMessages: RuntimeWorkerRequest[] = [];
   terminateCount = 0;
 
-  postMessage(message: RuntimeInitWorkerRequest): void {
+  postMessage(message: RuntimeWorkerRequest): void {
     this.postedMessages.push(message);
   }
 
@@ -48,6 +48,17 @@ function createHarness() {
   });
 
   return { manager, workers };
+}
+
+async function createReadyHarness() {
+  const harness = createHarness();
+  const initialization = harness.manager.initialize();
+  harness.workers[0].emitMessage({
+    type: "READY",
+    requestId: "runtime-1",
+  });
+  await initialization;
+  return harness;
 }
 
 describe("PyodideRuntimeManager initialization", () => {
@@ -198,6 +209,333 @@ describe("PyodideRuntimeManager initialization", () => {
   });
 });
 
+describe("PyodideRuntimeManager basic execution", () => {
+  it("returns RUNTIME_NOT_READY before initialization without creating a worker", async () => {
+    const { manager, workers } = createHarness();
+
+    await expect(manager.run({ code: "print('early')" })).resolves.toEqual({
+      status: "RUNTIME_ERROR",
+      stdout: "",
+      stderr: "",
+      error: {
+        code: "RUNTIME_NOT_READY",
+        message: "Runtime chưa sẵn sàng. Hãy khởi tạo runtime trước khi chạy mã.",
+      },
+    });
+    expect(workers).toHaveLength(0);
+  });
+
+  it("sends one correlated RUN_CODE and returns SUCCESS", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const run = manager.run({ code: 'print("hello")' });
+
+    expect(worker.postedMessages).toHaveLength(2);
+    expect(worker.postedMessages[1]).toEqual({
+      type: "RUN_CODE",
+      requestId: "runtime-2",
+      code: 'print("hello")',
+    });
+
+    worker.emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-2",
+      result: {
+        status: "SUCCESS",
+        stdout: "hello\n",
+        stderr: "",
+      },
+    });
+
+    await expect(run).resolves.toEqual({
+      status: "SUCCESS",
+      stdout: "hello\n",
+      stderr: "",
+    });
+  });
+
+  it("keeps stdout and stderr separate with exact pass-through", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const run = manager.run({ code: "print('a')" });
+
+    workers[0].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-2",
+      result: {
+        status: "SUCCESS",
+        stdout: "a\nb\n",
+        stderr: "warning\n",
+      },
+    });
+
+    await expect(run).resolves.toEqual({
+      status: "SUCCESS",
+      stdout: "a\nb\n",
+      stderr: "warning\n",
+    });
+  });
+
+  it("returns learner Python exceptions without discarding the ready worker", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const failedRun = manager.run({
+      code: 'print("before"); raise ValueError("boom")',
+    });
+
+    worker.emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-2",
+      result: {
+        status: "PYTHON_EXCEPTION",
+        stdout: "before\n",
+        stderr: "",
+        exception: {
+          type: "ValueError",
+          message: "boom",
+        },
+      },
+    });
+
+    await expect(failedRun).resolves.toEqual({
+      status: "PYTHON_EXCEPTION",
+      stdout: "before\n",
+      stderr: "",
+      exception: {
+        type: "ValueError",
+        message: "boom",
+      },
+    });
+    expect(worker.terminateCount).toBe(0);
+
+    const nextRun = manager.run({ code: 'print("still alive")' });
+    expect(worker.postedMessages[2]).toMatchObject({
+      type: "RUN_CODE",
+      requestId: "runtime-3",
+    });
+    worker.emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-3",
+      result: {
+        status: "SUCCESS",
+        stdout: "still alive\n",
+        stderr: "",
+      },
+    });
+
+    await expect(nextRun).resolves.toMatchObject({
+      status: "SUCCESS",
+      stdout: "still alive\n",
+    });
+  });
+
+  it("returns normalized runtime failures without raw event data", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const run = manager.run({ code: "x = 1" });
+    const rawEvent = {
+      message: "worker exploded",
+      eventType: "ErrorEvent",
+      nested: { browser: true },
+    };
+
+    workers[0].emitError(rawEvent);
+
+    const result = await run;
+    expect(result).toEqual({
+      status: "RUNTIME_ERROR",
+      stdout: "",
+      stderr: "",
+      error: {
+        code: "WORKER_ERROR",
+        message: "worker exploded",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("ErrorEvent");
+    expect(JSON.stringify(result)).not.toContain("nested");
+    expect(workers[0].terminateCount).toBe(1);
+  });
+
+  it("ignores RUN_RESULT with the wrong request ID", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const run = manager.run({ code: "x = 1" });
+    let settled = false;
+    void run.then(() => {
+      settled = true;
+    });
+
+    workers[0].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-999",
+      result: { status: "SUCCESS", stdout: "wrong", stderr: "" },
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    workers[0].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-2",
+      result: { status: "SUCCESS", stdout: "right", stderr: "" },
+    });
+    await expect(run).resolves.toMatchObject({
+      status: "SUCCESS",
+      stdout: "right",
+    });
+  });
+
+  it("rejects a concurrent run with RUNTIME_BUSY without sending another RUN_CODE", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const first = manager.run({ code: "x = 1" });
+    const second = manager.run({ code: "y = 2" });
+
+    await expect(second).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_BUSY" },
+    });
+    expect(workers[0].postedMessages).toHaveLength(2);
+
+    workers[0].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-2",
+      result: { status: "SUCCESS", stdout: "", stderr: "" },
+    });
+    await expect(first).resolves.toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("settles an active run on dispose and ignores its late response", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const run = manager.run({ code: "x = 1" });
+    const lateHandler = worker.onmessage;
+
+    manager.dispose();
+
+    await expect(run).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_DISPOSED" },
+    });
+    expect(worker.terminateCount).toBe(1);
+
+    lateHandler?.({
+      data: {
+        type: "RUN_RESULT",
+        requestId: "runtime-2",
+        result: { status: "SUCCESS", stdout: "late", stderr: "" },
+      },
+    });
+
+    await expect(manager.run({ code: "x = 2" })).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_DISPOSED" },
+    });
+    expect(worker.postedMessages).toHaveLength(2);
+  });
+
+  it("settles messageerror during a run and discards the failed worker", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const run = manager.run({ code: "x = 1" });
+
+    workers[0].emitMessageError({ message: "decode failed" });
+
+    await expect(run).resolves.toEqual({
+      status: "RUNTIME_ERROR",
+      stdout: "",
+      stderr: "",
+      error: {
+        code: "WORKER_MESSAGE_ERROR",
+        message: "decode failed",
+      },
+    });
+    expect(workers[0].terminateCount).toBe(1);
+  });
+
+  it("allows explicit reinitialization after a worker error during a run", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const run = manager.run({ code: "x = 1" });
+
+    workers[0].emitError({ message: "run worker failed" });
+    await run;
+
+    const reinitialize = manager.initialize();
+    expect(workers).toHaveLength(2);
+    expect(workers[1].postedMessages[0]).toMatchObject({
+      type: "RUNTIME_INIT",
+      requestId: "runtime-3",
+    });
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-3" });
+    await expect(reinitialize).resolves.toEqual({ ok: true });
+  });
+
+  it("ignores stale failed-worker run responses after a fresh worker is initialized", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const oldWorker = workers[0];
+    const oldRun = manager.run({ code: "x = 1" });
+    const staleHandler = oldWorker.onmessage;
+
+    oldWorker.emitError({ message: "old worker failed" });
+    await oldRun;
+
+    const reinitialize = manager.initialize();
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-3" });
+    await reinitialize;
+
+    const currentRun = manager.run({ code: "x = 2" });
+    let currentSettled = false;
+    void currentRun.then(() => {
+      currentSettled = true;
+    });
+
+    staleHandler?.({
+      data: {
+        type: "RUN_RESULT",
+        requestId: "runtime-2",
+        result: { status: "SUCCESS", stdout: "stale", stderr: "" },
+      },
+    });
+    await Promise.resolve();
+    expect(currentSettled).toBe(false);
+
+    workers[1].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-4",
+      result: { status: "SUCCESS", stdout: "fresh", stderr: "" },
+    });
+    await expect(currentRun).resolves.toMatchObject({
+      status: "SUCCESS",
+      stdout: "fresh",
+    });
+  });
+
+  it("returns fresh public result objects for separate runs", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const sharedResult = {
+      status: "SUCCESS" as const,
+      stdout: "same\n",
+      stderr: "",
+    };
+
+    const firstRun = manager.run({ code: "1" });
+    workers[0].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-2",
+      result: sharedResult,
+    });
+    const firstResult = await firstRun;
+
+    const secondRun = manager.run({ code: "2" });
+    workers[0].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-3",
+      result: sharedResult,
+    });
+    const secondResult = await secondRun;
+
+    expect(firstResult).toEqual(sharedResult);
+    expect(secondResult).toEqual(sharedResult);
+    expect(firstResult).not.toBe(sharedResult);
+    expect(secondResult).not.toBe(sharedResult);
+    expect(secondResult).not.toBe(firstResult);
+  });
+});
+
 describe("PyodideRuntimeManager disposal", () => {
   it("terminates a ready worker exactly once", async () => {
     const { manager, workers } = createHarness();
@@ -249,7 +587,7 @@ describe("PyodideRuntimeManager disposal", () => {
   });
 });
 
-describe("PR.2 deferred RuntimeManager operations", () => {
+describe("PR.3 deferred RuntimeManager operations", () => {
   it("returns structured NOT_IMPLEMENTED from prepareMission", async () => {
     const { manager, workers } = createHarness();
 
@@ -260,34 +598,23 @@ describe("PR.2 deferred RuntimeManager operations", () => {
     expect(workers).toHaveLength(0);
   });
 
-  it("keeps run and submit distinct and returns RUNTIME_ERROR / NOT_IMPLEMENTED", async () => {
+  it("keeps submit unimplemented and distinct from run execution", async () => {
     const { manager, workers } = createHarness();
     const initialization = manager.initialize();
     workers[0].emitMessage({ type: "READY", requestId: "runtime-1" });
     await initialization;
 
-    const runResult = await manager.run({ code: "print('run')" });
     const submitResult = await manager.submit({ code: "print('submit')" });
 
-    expect(runResult).toEqual({
-      status: "RUNTIME_ERROR",
-      stdout: "",
-      stderr: "",
-      error: {
-        code: "NOT_IMPLEMENTED",
-        message: "run chưa được triển khai trong PR.2.",
-      },
-    });
     expect(submitResult).toEqual({
       status: "RUNTIME_ERROR",
       stdout: "",
       stderr: "",
       error: {
         code: "NOT_IMPLEMENTED",
-        message: "submit chưa được triển khai trong PR.2.",
+        message: "submit chưa được triển khai trong PR.3.",
       },
     });
-    expect(runResult).not.toBe(submitResult);
     expect(workers).toHaveLength(1);
     expect(workers[0].postedMessages).toEqual([
       {
