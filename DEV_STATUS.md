@@ -3,7 +3,7 @@
 ## Current Phase
 
 ```text
-Python Runtime — Pyodide Worker
+Mission Pipeline — Run + Submit + Grading
 ```
 
 Status: **In Progress**
@@ -21,13 +21,50 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 
 ## Current Task
 
-Python Runtime — Pyodide Worker
+Mission Pipeline — Run + Submit + Grading
 
 ```text
-PR.6 — Environment restoration
+MP.1 — Run pipeline
 ```
 
-Status: **Awaiting Manual Browser Validation**
+Status: **Complete / Locked**
+
+Python Runtime status:
+
+```text
+Python Runtime — Pyodide Worker
+```
+
+Status: **Complete / Locked**
+
+PR.6 checkpoint `d403a34` is the locked Python Runtime baseline for the Mission Pipeline.
+
+MP.1 architecture lock:
+
+- MP.1 establishes the Run slice of the generic `MissionEngine`.
+- `MissionEngine` consumes an already-resolved canonical `MissionTemplate` + `MissionInstance` and coordinates runtime initialization and mission preparation through an injected generic `RuntimeManager`.
+- Mission runtime preparation maps only `MissionTemplate.runtime.config` to `runtimeConfig` and `MissionInstance.runtime?.setupData` to `setupData`. Learner presentation data and grading data are not implicitly injected into Python.
+- `run(code)` forwards the learner's code exactly to `RuntimeManager.run({ code })` and preserves the normalized `RuntimeExecutionResult` inside `MissionRunResult`.
+- Run is experimental and may mutate the currently prepared mission runtime state. `MissionEngine` does not re-prepare before each Run.
+- `MissionEngine` serializes load/run ownership with a deterministic `MISSION_ENGINE_BUSY` guard and owns disposal of the injected `RuntimeManager`.
+- Runtime timeout, worker replacement, and environment restoration remain owned entirely by `RuntimeManager`.
+- Run performs no hidden grading, creates no `AttemptRecord`, updates no mastery/progress state, and emits no authoritative `WorldEvent`.
+- MP.1 adds no Submit pipeline, NumPy-specific Mission Engine logic, package loading, session subsystem, or stdout semantic parsing.
+- MP.1 does not enable learner Mission Workspace Run/Submit controls because the production route does not yet resolve a real canonical mission.
+
+MP.1 automated validation:
+
+- [x] focused Mission Engine suite passed: 1 test file, 20 tests;
+- [x] full regression suite passed: 39 test files, 716 tests;
+- [x] `npm.cmd run typecheck` passed;
+- [x] `npm.cmd run build` passed after preserving the pre-existing undeletable `dist` output under a temporary name; the original generated `dist` was restored afterward;
+- [x] `git diff --check` passed;
+- [x] `package.json` and `package-lock.json` are unchanged from PR.6 checkpoint `d403a34`;
+- [x] Mission Workspace/app/route files are unchanged from PR.6 checkpoint `d403a34`;
+- [x] static Mission Engine audit found no Pyodide implementation import, React, `content/cs116`, grader, `AttemptRecord`, mastery/progress, `WorldEvent`, package-loading, NumPy, or Submit dependency;
+- [x] no new package dependency was added.
+
+Next: **MP.2 — Fresh-state Submit pipeline**.
 
 Runtime checkpoints:
 
@@ -208,7 +245,7 @@ PR.5 manual browser validation is complete. Checkpoint `88c0100` is the locked b
 PR.6 — Environment restoration
 ```
 
-Status: **Awaiting Manual Browser Validation**
+Status: **Complete / Locked**
 
 Architecture lock:
 
@@ -240,9 +277,7 @@ PR.6 automated validation:
 - [x] Mission Workspace is unchanged from checkpoint `88c0100` and still renders `Chạy thử` / `Nộp bài` disabled;
 - [x] no new package dependency was added.
 
-Real browser validation of environment restoration is required before Python Runtime can be marked complete.
-
-Next: **Mission Pipeline / MP.1 — Run pipeline**.
+PR.6 manual browser validation is complete. Checkpoint `d403a34` is the locked baseline for Mission Pipeline / MP.1.
 
 ## Completed
 
