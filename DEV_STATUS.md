@@ -23,45 +23,52 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 
 AS.1 — **Complete / Locked**
 
+AS.2 — **Complete / Locked**
+
 ```text
-AS.2 — Feature boundaries
+AS.3 — Monaco workspace
 ```
 
 Status: **Awaiting Manual Browser Validation**
 
 Scope implemented:
 
-- generic React feature boundaries now exist for home/learning entry, course, lesson, activity launch, mission workspace, settings, and development-only debug;
-- Home responsibility moved from `src/app/pages` to `src/features/home`;
-- `/learn` is the learner-facing entry into future registered course content;
-- parameterized course, lesson, activity, and mission routes use generic navigation IDs with no CS116/NumPy route coupling;
-- `/dev` is registered only in Vite development mode and is absent from the production bundle;
-- About and in-app 404 remain app/shell-level concerns;
-- no domain registry or runtime service is bootstrapped into React.
+- `src/features/mission-workspace` now owns a controlled Monaco Python editor backed only by local React state;
+- `/mission/:missionId` lazy-loads the mission-workspace feature so Monaco is kept out of the initial app chunk;
+- Monaco is loaded from the installed local package through `@monaco-editor/react` with the locally imported Monaco API supplied to its loader;
+- Monaco's core editor worker is bundled locally through Vite and provided through `MonacoEnvironment.getWorker`;
+- only the Python language definition is registered for this workspace;
+- the editor uses neutral temporary content and treats `missionId` only as navigation context;
+- the existing AS.2 routes remain unchanged and valid.
 
 Architecture lock:
 
 - App remains the router/composition root.
 - Core and Content remain React-independent.
 - LearningActivity remains broader than executable missions; the activity route does not assume Python execution.
-- Mission Workspace is a structural entry boundary only; Monaco remains AS.3 and mission panels remain AS.4.
+- Mission Workspace owns editor presentation/state only at AS.3; mission panels remain AS.4.
+- `missionId` remains navigation-only and does not resolve or generate `MissionInstance` data.
+- Python execution, Pyodide, runtime workers/managers, Run/Submit, tests, grading, hints, output/error/result panels, persistence, Phaser, formatting, and multi-file behavior remain deferred.
 - Feature components contain no curriculum, generation, grading, mastery, runtime, or persistence rules.
 - Normal future lessons/content should not require new React route definitions.
 
-AS.2 automated validation:
+AS.3 automated validation:
 
 - [x] TypeScript typecheck passed;
 - [x] full regression suite passed: 34 test files, 615 tests;
 - [x] Vite production build passed;
 - [x] `git diff --check` passed;
-- [x] `package.json` and `package-lock.json` are unchanged;
-- [x] static dependency audit found no forbidden React/app/features imports from `src/core` or `src/content`;
-- [x] feature audit found no mission generation, grading, content validation, mastery/progress, runtime, or persistence logic;
-- [x] Vite dev-server booted successfully at `http://127.0.0.1:5173/`;
-- [x] production bundle contains no development debug-page copy;
-- [ ] manual browser route validation is required before AS.2 can be complete/locked.
+- [x] only `monaco-editor@0.57.0` and `@monaco-editor/react@4.7.0` were added as direct dependencies;
+- [x] production build emits local `editor.worker`, Python language, and lazy `mission-workspace` assets with no CDN dependency;
+- [x] initial app JS remains separate from the lazy Monaco workspace chunk;
+- [x] static dependency audit found no React/Monaco/runtime leakage into `src/core` or `src/content`;
+- [x] mission-workspace audit found no Run/Submit/Pyodide/runtime/grading/hints/persistence/Phaser/mission-generation scope creep;
+- [x] Vite dev-server booted successfully and `/mission/demo` returned HTTP 200;
+- [ ] manual browser validation is required before AS.3 can be complete/locked.
 
-Next: **AS.3 — Monaco workspace**, only after AS.2 manual browser validation passes.
+Environment note: an older sandbox-owned generated `dist` could not be deleted due Windows access denial. It was moved into ignored `.npm-cache` without changing ACLs or ownership; a clean AS.3 production build then passed.
+
+Next: **AS.4 — Basic mission panels**, only after AS.3 manual browser validation passes.
 
 ## Completed
 

@@ -5,7 +5,6 @@ import { CoursePage, LearnPage } from "../features/course";
 import { DebugPage } from "../features/debug";
 import { HomePage } from "../features/home";
 import { LessonPage } from "../features/lesson";
-import { MissionWorkspacePage } from "../features/mission-workspace";
 import { SettingsPage } from "../features/settings";
 import { AppLayout } from "./AppLayout";
 import { AboutPage } from "./pages/AboutPage";
@@ -38,7 +37,11 @@ export const appRouter = createBrowserRouter([
       },
       {
         path: "mission/:missionId",
-        element: <MissionWorkspacePage />,
+        lazy: async () => {
+          const { MissionWorkspacePage } = await import("../features/mission-workspace");
+
+          return { Component: MissionWorkspacePage };
+        },
       },
       {
         path: "settings",
