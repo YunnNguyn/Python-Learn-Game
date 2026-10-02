@@ -115,12 +115,70 @@ a {
 
 .mission-workspace {
   width: 100%;
+  max-width: none;
+}
+
+.mission-workspace__main {
+  display: grid;
+  grid-template-columns: minmax(14rem, 0.75fr) minmax(0, 2fr);
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.mission-workspace__info {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.mission-panel,
+.mission-editor-region,
+.mission-result-panel {
+  min-width: 0;
+  border: 1px solid #e0e5ef;
+  border-radius: 0.8rem;
+  background: #f8faff;
+  padding: 1rem;
+}
+
+.mission-panel p {
+  margin: 0;
+}
+
+.mission-panel__secondary {
+  margin-top: 0.75rem !important;
+  font-size: 0.92rem;
+}
+
+.mission-data-preview,
+.mission-result-panel__content {
+  max-width: 100%;
+  margin: 0;
+  overflow: auto;
+  border-radius: 0.55rem;
+  background: #edf1f8;
+  color: #263248;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.87rem;
+  line-height: 1.55;
+  padding: 0.85rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mission-editor-region {
+  background: #ffffff;
+}
+
+.mission-editor-region > h2 {
+  margin-bottom: 0.85rem;
 }
 
 .python-editor {
-  height: clamp(26rem, 65vh, 44rem);
-  min-height: 420px;
-  margin-top: 1.5rem;
+  height: clamp(28rem, 62vh, 40rem);
+  min-height: 450px;
+  margin-top: 0;
   overflow: hidden;
   border: 1px solid #2f3748;
   border-radius: 0.8rem;
@@ -135,6 +193,76 @@ a {
   color: #d9deea;
   background: #1e1e1e;
   font-size: 0.95rem;
+}
+
+.mission-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.mission-controls__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.mission-action-button {
+  min-width: 7rem;
+  min-height: 2.75rem;
+  border: 1px solid #9aa8bf;
+  border-radius: 0.65rem;
+  background: #ffffff;
+  color: #34435b;
+  font-weight: 700;
+  padding: 0.7rem 1rem;
+}
+
+.mission-action-button--submit {
+  border-color: #6b8fc5;
+  background: #e8efff;
+  color: #184b9b;
+}
+
+.mission-action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.mission-controls__note {
+  max-width: 30rem;
+  margin: 0;
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+.mission-results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.mission-result-panel {
+  background: #ffffff;
+}
+
+.mission-result-panel--error {
+  border-color: #ead6d6;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .page-card h1,
@@ -256,5 +384,25 @@ a {
 
   .page-card {
     border-radius: 0.8rem;
+  }
+
+  .mission-workspace__main,
+  .mission-results {
+    grid-template-columns: 1fr;
+  }
+
+  .mission-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mission-controls__note {
+    max-width: none;
+    text-align: left;
+  }
+
+  .python-editor {
+    height: 30rem;
+    min-height: 450px;
   }
 }

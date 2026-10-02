@@ -25,20 +25,21 @@ AS.1 — **Complete / Locked**
 
 AS.2 — **Complete / Locked**
 
+AS.3 — **Complete / Locked**
+
 ```text
-AS.3 — Monaco workspace
+AS.4 — Basic mission panels
 ```
 
 Status: **Awaiting Manual Browser Validation**
 
 Scope implemented:
 
-- `src/features/mission-workspace` now owns a controlled Monaco Python editor backed only by local React state;
-- `/mission/:missionId` lazy-loads the mission-workspace feature so Monaco is kept out of the initial app chunk;
-- Monaco is loaded from the installed local package through `@monaco-editor/react` with the locally imported Monaco API supplied to its loader;
-- Monaco's core editor worker is bundled locally through Vite and provided through `MonacoEnvironment.getWorker`;
-- only the Python language definition is registered for this workspace;
-- the editor uses neutral temporary content and treats `missionId` only as navigation context;
+- Mission Workspace now composes learner-facing objective, setup/data preview, Monaco editor, Run/Submit controls, and output/error regions;
+- temporary preview content is feature-local presentation data used only to validate workspace composition;
+- Run and Submit remain deliberately disabled and execute nothing until Python Runtime and Mission Pipeline infrastructure exists;
+- Monaco remains locally bundled, route-lazy-loaded, worker-backed, Python-enabled, editable, and controlled by local React state;
+- `missionId` remains navigation-only and does not load or generate production mission data;
 - the existing AS.2 routes remain unchanged and valid.
 
 Architecture lock:
@@ -46,29 +47,29 @@ Architecture lock:
 - App remains the router/composition root.
 - Core and Content remain React-independent.
 - LearningActivity remains broader than executable missions; the activity route does not assume Python execution.
-- Mission Workspace owns editor presentation/state only at AS.3; mission panels remain AS.4.
+- AS.4 completes the structural Mission Workspace UI with objective, setup/data preview, Monaco editor, Run/Submit controls, and output/error regions.
+- These components are presentation-only; temporary preview content is not canonical `MissionInstance` content.
 - `missionId` remains navigation-only and does not resolve or generate `MissionInstance` data.
-- Python execution, Pyodide, runtime workers/managers, Run/Submit, tests, grading, hints, output/error/result panels, persistence, Phaser, formatting, and multi-file behavior remain deferred.
+- Run and Submit are structurally distinct but disabled; actual execution begins in Python Runtime and authoritative submission/grading lifecycle begins in Mission Pipeline.
+- Python execution, Pyodide, RuntimeManager, Python workers, MissionInstance loading, generation, grading, AttemptRecord, mastery, persistence, hints, Phaser, formatting, and multi-file behavior remain deferred.
 - Feature components contain no curriculum, generation, grading, mastery, runtime, or persistence rules.
 - Normal future lessons/content should not require new React route definitions.
 
-AS.3 automated validation:
+AS.4 automated validation:
 
 - [x] TypeScript typecheck passed;
 - [x] full regression suite passed: 34 test files, 615 tests;
 - [x] Vite production build passed;
 - [x] `git diff --check` passed;
-- [x] only `monaco-editor@0.57.0` and `@monaco-editor/react@4.7.0` were added as direct dependencies;
-- [x] production build emits local `editor.worker`, Python language, and lazy `mission-workspace` assets with no CDN dependency;
+- [x] no package changes were introduced after the AS.3 checkpoint;
+- [x] production build still emits local `editor.worker`, Python language, and lazy `mission-workspace` assets;
 - [x] initial app JS remains separate from the lazy Monaco workspace chunk;
-- [x] static dependency audit found no React/Monaco/runtime leakage into `src/core` or `src/content`;
-- [x] mission-workspace audit found no Run/Submit/Pyodide/runtime/grading/hints/persistence/Phaser/mission-generation scope creep;
-- [x] Vite dev-server booted successfully and `/mission/demo` returned HTTP 200;
-- [ ] manual browser validation is required before AS.3 can be complete/locked.
+- [x] static dependency audit found no React/Monaco/app/features leakage into `src/core` or `src/content`;
+- [x] mission-workspace audit found no generator, grader, RuntimeManager, Pyodide, AttemptRecord, mastery, persistence, Phaser, or starter-code scope creep;
+- [x] routing remains unchanged from AS.3;
+- [ ] manual browser validation is required before AS.4 can be complete/locked.
 
-Environment note: an older sandbox-owned generated `dist` could not be deleted due Windows access denial. It was moved into ignored `.npm-cache` without changing ACLs or ownership; a clean AS.3 production build then passed.
-
-Next: **AS.4 — Basic mission panels**, only after AS.3 manual browser validation passes.
+Next after manual PASS: **Python Runtime — Pyodide Worker / PR.1 — RuntimeManager interface**.
 
 ## Completed
 
