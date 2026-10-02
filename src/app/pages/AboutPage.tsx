@@ -8,9 +8,8 @@ export function AboutPage() {
         năng dùng trực tiếp trong Machine Learning và AI.
       </p>
       <p>
-        CS116 hiện là lát cắt nội dung đầu tiên để triển khai và kiểm chứng hệ
-        thống. Phạm vi sản phẩm sẽ tiếp tục mở rộng theo lộ trình học Python cho
-        ML/AI.
+        Nội dung sẽ được mở rộng từng bước, từ Python nền tảng và NumPy đến các kỹ
+        năng thực hành cần thiết cho Machine Learning và AI.
       </p>
     </section>
   );

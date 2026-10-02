@@ -21,45 +21,47 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 
 ## Current Task
 
+AS.1 — **Complete / Locked**
+
 ```text
-AS.1 — Vite/React shell
+AS.2 — Feature boundaries
 ```
 
 Status: **Awaiting Manual Browser Validation**
 
 Scope implemented:
 
-- React 19, React DOM, React Router, and the Vite React plugin are installed on top of the existing TypeScript/Vite/Vitest toolchain;
-- `src/main.ts` is the thin ReactDOM bootstrap and mounts the application into `#root` under `StrictMode`;
-- `src/app/App.tsx` owns app composition and wraps the router with a top-level render error boundary;
-- `createBrowserRouter` provides the minimal `/`, `/about`, and `*` routes;
-- `AppLayout` provides semantic header, navigation, main content, and footer structure;
-- Home, About, and in-app 404 pages use concise Vietnamese copy;
-- app-layer CSS provides the initial responsive shell without introducing a component/CSS framework;
-- `index.html` is configured for Vietnamese metadata and the React root mount;
-- no curriculum, generation, grading, Python runtime, persistence, visualization, or other domain service was bootstrapped into React.
+- generic React feature boundaries now exist for home/learning entry, course, lesson, activity launch, mission workspace, settings, and development-only debug;
+- Home responsibility moved from `src/app/pages` to `src/features/home`;
+- `/learn` is the learner-facing entry into future registered course content;
+- parameterized course, lesson, activity, and mission routes use generic navigation IDs with no CS116/NumPy route coupling;
+- `/dev` is registered only in Vite development mode and is absent from the production bundle;
+- About and in-app 404 remain app/shell-level concerns;
+- no domain registry or runtime service is bootstrapped into React.
 
 Architecture lock:
 
-- `src/app` owns application boot, top-level routing/layout, and the top-level render error boundary;
-- the shell contains no curriculum, generation, grading, runtime, persistence, or visualization domain logic;
-- `src/core` remains framework-independent and must not depend on React or the app layer;
-- client routing is intentionally minimal in AS.1;
-- AS.2 will define feature entry points, AS.3 will introduce Monaco, AS.4 will add mission panels, and the Python runtime remains deferred to its later phase;
-- automated checks may pass before manual browser validation, but AS.1 must not be marked complete or locked until that manual validation passes.
+- App remains the router/composition root.
+- Core and Content remain React-independent.
+- LearningActivity remains broader than executable missions; the activity route does not assume Python execution.
+- Mission Workspace is a structural entry boundary only; Monaco remains AS.3 and mission panels remain AS.4.
+- Feature components contain no curriculum, generation, grading, mastery, runtime, or persistence rules.
+- Normal future lessons/content should not require new React route definitions.
 
-AS.1 automated validation:
+AS.2 automated validation:
 
 - [x] TypeScript typecheck passed;
 - [x] full regression suite passed: 34 test files, 615 tests;
 - [x] Vite production build passed;
 - [x] `git diff --check` passed;
-- [x] static dependency audit found no forbidden `src/core` imports from app/features/content/visualization or React-family packages;
-- [x] static dependency audit found no app/features/React-family imports from `src/content`;
-- [ ] Vite dev-server smoke could not be re-run because the native shell harness fails with `helper_unknown_error: setup refresh had errors`, and the available Node REPL blocks Vite's internal `node:process` import;
-- [ ] manual browser validation is still required before AS.1 can be complete/locked.
+- [x] `package.json` and `package-lock.json` are unchanged;
+- [x] static dependency audit found no forbidden React/app/features imports from `src/core` or `src/content`;
+- [x] feature audit found no mission generation, grading, content validation, mastery/progress, runtime, or persistence logic;
+- [x] Vite dev-server booted successfully at `http://127.0.0.1:5173/`;
+- [x] production bundle contains no development debug-page copy;
+- [ ] manual browser route validation is required before AS.2 can be complete/locked.
 
-Next planned task after AS.1 manual validation: **AS.2 — Feature boundaries**.
+Next: **AS.3 — Monaco workspace**, only after AS.2 manual browser validation passes.
 
 ## Completed
 

@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 export function HomePage() {
   return (
     <section className="page-card" aria-labelledby="home-title">
@@ -13,6 +15,10 @@ export function HomePage() {
           <li>áp dụng kiến thức qua bài tập ngắn, có mục tiêu.</li>
         </ul>
       </div>
+
+      <Link className="primary-action primary-action--link" to="/learn">
+        Bắt đầu học
+      </Link>
     </section>
   );
 }

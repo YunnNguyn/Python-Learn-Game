@@ -1,8 +1,14 @@
 import { createBrowserRouter } from "react-router-dom";
 
+import { ActivityLaunchPage } from "../features/activity";
+import { CoursePage, LearnPage } from "../features/course";
+import { DebugPage } from "../features/debug";
+import { HomePage } from "../features/home";
+import { LessonPage } from "../features/lesson";
+import { MissionWorkspacePage } from "../features/mission-workspace";
+import { SettingsPage } from "../features/settings";
 import { AppLayout } from "./AppLayout";
 import { AboutPage } from "./pages/AboutPage";
-import { HomePage } from "./pages/HomePage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 export const appRouter = createBrowserRouter([
@@ -14,6 +20,38 @@ export const appRouter = createBrowserRouter([
         index: true,
         element: <HomePage />,
       },
+      {
+        path: "learn",
+        element: <LearnPage />,
+      },
+      {
+        path: "course/:courseId",
+        element: <CoursePage />,
+      },
+      {
+        path: "lesson/:lessonId",
+        element: <LessonPage />,
+      },
+      {
+        path: "activity/:activityId",
+        element: <ActivityLaunchPage />,
+      },
+      {
+        path: "mission/:missionId",
+        element: <MissionWorkspacePage />,
+      },
+      {
+        path: "settings",
+        element: <SettingsPage />,
+      },
+      ...(import.meta.env.DEV
+        ? [
+            {
+              path: "dev",
+              element: <DebugPage />,
+            },
+          ]
+        : []),
       {
         path: "about",
         element: <AboutPage />,
