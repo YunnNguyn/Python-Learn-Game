@@ -24,7 +24,7 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 Python Runtime — Pyodide Worker
 
 ```text
-PR.3 — Basic code execution
+PR.4 — Mission setup execution
 ```
 
 Status: **Awaiting Manual Browser Validation**
@@ -94,7 +94,7 @@ PR.2 manual browser validation is complete. Checkpoint `c7be4c4` remains the loc
 PR.3 — Basic code execution
 ```
 
-Status: **Awaiting Manual Browser Validation**
+Status: **Complete / Locked**
 
 Architecture lock:
 
@@ -122,9 +122,47 @@ PR.3 automated validation:
 - [x] Mission Workspace has no runtime `run`/`submit` wiring and keeps `Chạy thử` / `Nộp bài` disabled;
 - [x] static audit found no NumPy/package loading, timeout/watchdog/interrupt handling, grading, `AttemptRecord`, `WorldEvent`, or recovery implementation in PR.3 scope.
 
-Manual browser execution validation is still required before PR.3 can be marked Complete / Locked.
+PR.3 manual browser execution validation is complete. Checkpoint `f8e115f` remains the locked baseline for PR.4.
 
-Next: **PR.4 — Mission setup execution**.
+```text
+PR.4 — Mission setup execution
+```
+
+Status: **Awaiting Manual Browser Validation**
+
+Architecture lock:
+
+- PR.4 implements `RuntimeManager.prepareMission()` through internal `MISSION_PREPARE → MISSION_PREPARED / RUNTIME_ERROR` messages to the initialized Pyodide Worker.
+- The public `RuntimeMissionPreparationRequest` remains unchanged and generic: it carries only optional JSON-safe `runtimeConfig` and `setupData`; transport request IDs remain internal.
+- Each successful preparation creates a fresh Python execution namespace owned by the Worker. The Worker serializes JSON-safe `setupData` once and parses it with Python `json.loads`, so learner globals use normal recursive Python JSON semantics (`str` / numeric value / `bool` / `None` / `list` / `dict`) without ordinary setup structures leaking `JsProxy` values.
+- Runs are stateful inside the current prepared namespace: one Run may mutate prepared variables and later Runs observe that mutation until another successful prepare occurs.
+- Re-preparing creates a clean baseline and removes variables that existed only in the previous mission namespace.
+- Preparation is transactional: a replacement namespace is validated and created before the previous valid namespace is destroyed, so a failed prepare leaves the prior environment usable.
+- Setup variable names must be valid non-keyword Python identifiers and cannot be `__builtins__` or use the reserved `__runtime_` prefix. Invalid names fail with `INVALID_SETUP_DATA`.
+- `runtimeConfig` currently supports only `undefined` or an empty object. Any non-empty object fails explicitly with `UNSUPPORTED_RUNTIME_CONFIG`; no speculative runtime-config DSL is introduced.
+- PR.3 Run behavior is preserved: stdout/stderr capture remains per-Run, learner `PythonError` still normalizes to `PYTHON_EXCEPTION`, and ordinary learner exceptions leave the Worker usable.
+- PR.4 adds no NumPy or other package loading, arbitrary content setup script, full `MissionInstance` loading, automatic `learner.data` binding, grading-data exposure, serialized grading values, Submit implementation, timeout/interrupt handling, worker replacement, environment restoration, grading, `AttemptRecord`, `WorldEvent`, or Mission Workspace runtime wiring.
+- PR.5 owns timeout and worker replacement. PR.6 owns environment restoration.
+
+PR.4 automated validation:
+
+- [x] focused PR.4 runtime/setup tests passed: 3 test files, 45 tests, including 5 tests against the installed Pyodide 314.0.7 runtime for recursive JSON-to-Python conversion;
+- [x] full regression suite passed: 38 test files, 672 tests;
+- [x] `npm.cmd run typecheck` passed;
+- [x] `npm.cmd run build` passed: 774 modules transformed and four local Pyodide assets copied; existing browser-externalization and large-chunk warnings remain non-failing;
+- [x] `git diff --check` passed; working-tree LF→CRLF notices are informational;
+- [x] public PR.1 runtime contracts are unchanged from checkpoint `f8e115f`;
+- [x] `package.json` and `package-lock.json` are unchanged from checkpoint `f8e115f`;
+- [x] `src/content` is unchanged from checkpoint `f8e115f` and contains no Pyodide, RuntimeManager, React, or runtime-implementation coupling;
+- [x] Mission Workspace is unchanged from checkpoint `f8e115f`, has no RuntimeManager/Pyodide wiring, and keeps `Chạy thử` / `Nộp bài` disabled;
+- [x] static audit found no package loading, timeout/watchdog/interrupt implementation, recovery/restoration, arbitrary setup script, MissionInstance/learner/grading wiring, grading, AttemptRecord, or WorldEvent implementation in PR.4 runtime/debug scope;
+- [x] `submit()` remains `NOT_IMPLEMENTED`;
+- [x] no new package dependency was added;
+- [x] the development-only `/dev` probe now supports JSON mission preparation diagnostics without wiring Mission Workspace.
+
+Real Pyodide browser validation is required before PR.4 can be marked Complete / Locked.
+
+Next: **PR.5 — Timeout and worker replacement**.
 
 ## Completed
 

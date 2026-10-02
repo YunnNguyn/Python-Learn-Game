@@ -1,3 +1,4 @@
+import type { JsonObject } from "../../domain";
 import type {
   RuntimeExecutionResult,
   RuntimeSystemError,
@@ -15,8 +16,20 @@ export interface RuntimeRunCodeWorkerRequest {
   readonly code: string;
 }
 
+export interface RuntimeMissionPrepareWorkerRequest {
+  readonly type: "MISSION_PREPARE";
+  readonly requestId: string;
+  readonly runtimeConfig?: JsonObject;
+  readonly setupData?: JsonObject;
+}
+
 export interface RuntimeReadyWorkerResponse {
   readonly type: "READY";
+  readonly requestId: string;
+}
+
+export interface RuntimeMissionPreparedWorkerResponse {
+  readonly type: "MISSION_PREPARED";
   readonly requestId: string;
 }
 
@@ -34,10 +47,12 @@ export interface RuntimeErrorWorkerResponse {
 
 export type RuntimeWorkerRequest =
   | RuntimeInitWorkerRequest
+  | RuntimeMissionPrepareWorkerRequest
   | RuntimeRunCodeWorkerRequest;
 
 export type RuntimeWorkerResponse =
   | RuntimeReadyWorkerResponse
+  | RuntimeMissionPreparedWorkerResponse
   | RuntimeRunResultWorkerResponse
   | RuntimeErrorWorkerResponse;
 
@@ -69,6 +84,21 @@ export function isRuntimeRunCodeWorkerRequest(
   );
 }
 
+export function isRuntimeMissionPrepareWorkerRequest(
+  value: unknown,
+): value is RuntimeMissionPrepareWorkerRequest {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    value.type === "MISSION_PREPARE" &&
+    typeof value.requestId === "string" &&
+    isOptionalJsonObject(value.runtimeConfig) &&
+    isOptionalJsonObject(value.setupData)
+  );
+}
+
 export function isRuntimeWorkerResponse(
   value: unknown,
 ): value is RuntimeWorkerResponse {
@@ -77,6 +107,10 @@ export function isRuntimeWorkerResponse(
   }
 
   if (value.type === "READY") {
+    return true;
+  }
+
+  if (value.type === "MISSION_PREPARED") {
     return true;
   }
 
@@ -137,4 +171,11 @@ function isRuntimeSystemError(value: unknown): value is RuntimeSystemError {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isOptionalJsonObject(value: unknown): value is JsonObject | undefined {
+  return (
+    value === undefined ||
+    (isRecord(value) && !Array.isArray(value))
+  );
 }

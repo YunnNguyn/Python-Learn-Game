@@ -536,6 +536,310 @@ describe("PyodideRuntimeManager basic execution", () => {
   });
 });
 
+describe("PyodideRuntimeManager mission preparation", () => {
+  it("returns RUNTIME_NOT_READY before initialization without sending MISSION_PREPARE", async () => {
+    const { manager, workers } = createHarness();
+
+    await expect(manager.prepareMission({})).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "RUNTIME_NOT_READY",
+        message:
+          "Runtime chưa sẵn sàng. Hãy khởi tạo runtime trước khi chuẩn bị môi trường.",
+      },
+    });
+    expect(workers).toHaveLength(0);
+  });
+
+  it("sends one correlated MISSION_PREPARE and resolves MISSION_PREPARED", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const preparation = manager.prepareMission({
+      runtimeConfig: {},
+      setupData: {
+        values: [2, 5, 8],
+        threshold: 5,
+        metadata: {
+          label: "demo",
+        },
+      },
+    });
+
+    expect(worker.postedMessages).toHaveLength(2);
+    expect(worker.postedMessages[1]).toEqual({
+      type: "MISSION_PREPARE",
+      requestId: "runtime-2",
+      runtimeConfig: {},
+      setupData: {
+        values: [2, 5, 8],
+        threshold: 5,
+        metadata: {
+          label: "demo",
+        },
+      },
+    });
+
+    worker.emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-2",
+    });
+
+    await expect(preparation).resolves.toEqual({ ok: true });
+  });
+
+  it("ignores MISSION_PREPARED with the wrong request ID", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+    let settled = false;
+    void preparation.then(() => {
+      settled = true;
+    });
+
+    worker.emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-999",
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    worker.emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-2",
+    });
+    await expect(preparation).resolves.toEqual({ ok: true });
+  });
+
+  it("blocks prepare while a Run is pending without sending MISSION_PREPARE", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const run = manager.run({ code: "value = 1" });
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+
+    await expect(preparation).resolves.toMatchObject({
+      ok: false,
+      error: { code: "RUNTIME_BUSY" },
+    });
+    expect(worker.postedMessages).toHaveLength(2);
+
+    worker.emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-2",
+      result: { status: "SUCCESS", stdout: "", stderr: "" },
+    });
+    await expect(run).resolves.toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("blocks Run while prepare is pending without sending RUN_CODE", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+    const run = manager.run({ code: "print(value)" });
+
+    await expect(run).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_BUSY" },
+    });
+    expect(worker.postedMessages).toHaveLength(2);
+
+    worker.emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-2",
+    });
+    await expect(preparation).resolves.toEqual({ ok: true });
+  });
+
+  it("blocks a concurrent prepare without sending a second MISSION_PREPARE", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const first = manager.prepareMission({ setupData: { value: 10 } });
+    const second = manager.prepareMission({ setupData: { value: 20 } });
+
+    await expect(second).resolves.toMatchObject({
+      ok: false,
+      error: { code: "RUNTIME_BUSY" },
+    });
+    expect(worker.postedMessages).toHaveLength(2);
+
+    worker.emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-2",
+    });
+    await expect(first).resolves.toEqual({ ok: true });
+  });
+
+  it("keeps the ready worker after a structured preparation failure", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const invalid = manager.prepareMission({
+      setupData: { "bad-key": 1 },
+    });
+
+    worker.emitMessage({
+      type: "RUNTIME_ERROR",
+      requestId: "runtime-2",
+      error: {
+        code: "INVALID_SETUP_DATA",
+        message: "invalid setup key",
+      },
+    });
+
+    await expect(invalid).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "INVALID_SETUP_DATA",
+        message: "invalid setup key",
+      },
+    });
+    expect(worker.terminateCount).toBe(0);
+
+    const valid = manager.prepareMission({ setupData: { value: 10 } });
+    expect(worker.postedMessages[2]).toMatchObject({
+      type: "MISSION_PREPARE",
+      requestId: "runtime-3",
+    });
+    worker.emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-3",
+    });
+    await expect(valid).resolves.toEqual({ ok: true });
+  });
+
+  it("settles prepare on dispose and ignores the late response", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+    const lateHandler = worker.onmessage;
+
+    manager.dispose();
+
+    await expect(preparation).resolves.toMatchObject({
+      ok: false,
+      error: { code: "RUNTIME_DISPOSED" },
+    });
+    expect(worker.terminateCount).toBe(1);
+
+    lateHandler?.({
+      data: {
+        type: "MISSION_PREPARED",
+        requestId: "runtime-2",
+      },
+    });
+
+    await expect(
+      manager.prepareMission({ setupData: { value: 20 } }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: "RUNTIME_DISPOSED" },
+    });
+    expect(worker.postedMessages).toHaveLength(2);
+  });
+
+  it("settles worker error during prepare and allows explicit reinitialization", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+
+    workers[0].emitError({ message: "prepare worker failed" });
+
+    await expect(preparation).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "WORKER_ERROR",
+        message: "prepare worker failed",
+      },
+    });
+    expect(workers[0].terminateCount).toBe(1);
+
+    const reinitialize = manager.initialize();
+    expect(workers).toHaveLength(2);
+    expect(workers[1].postedMessages[0]).toMatchObject({
+      type: "RUNTIME_INIT",
+      requestId: "runtime-3",
+    });
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-3" });
+    await expect(reinitialize).resolves.toEqual({ ok: true });
+  });
+
+  it("settles messageerror during prepare and discards the failed worker", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+
+    workers[0].emitMessageError({ message: "prepare decode failed" });
+
+    await expect(preparation).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "WORKER_MESSAGE_ERROR",
+        message: "prepare decode failed",
+      },
+    });
+    expect(workers[0].terminateCount).toBe(1);
+  });
+
+  it("ignores stale failed-worker prepare responses after a fresh worker is ready", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const oldWorker = workers[0];
+    const failedPrepare = manager.prepareMission({ setupData: { value: 10 } });
+    const staleHandler = oldWorker.onmessage;
+
+    oldWorker.emitError({ message: "old prepare worker failed" });
+    await failedPrepare;
+
+    const reinitialize = manager.initialize();
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-3" });
+    await reinitialize;
+
+    const currentPrepare = manager.prepareMission({
+      setupData: { value: 20 },
+    });
+    let currentSettled = false;
+    void currentPrepare.then(() => {
+      currentSettled = true;
+    });
+
+    staleHandler?.({
+      data: {
+        type: "MISSION_PREPARED",
+        requestId: "runtime-2",
+      },
+    });
+    await Promise.resolve();
+    expect(currentSettled).toBe(false);
+
+    workers[1].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-4",
+    });
+    await expect(currentPrepare).resolves.toEqual({ ok: true });
+  });
+
+  it("returns JSON-safe lifecycle results for preparation failures", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const preparation = manager.prepareMission({
+      runtimeConfig: { packages: ["numpy"] },
+    });
+
+    workers[0].emitMessage({
+      type: "RUNTIME_ERROR",
+      requestId: "runtime-2",
+      error: {
+        code: "UNSUPPORTED_RUNTIME_CONFIG",
+        message: "unsupported",
+      },
+    });
+
+    const result = await preparation;
+    expect(JSON.parse(JSON.stringify(result))).toEqual(result);
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "UNSUPPORTED_RUNTIME_CONFIG",
+        message: "unsupported",
+      },
+    });
+  });
+});
+
 describe("PyodideRuntimeManager disposal", () => {
   it("terminates a ready worker exactly once", async () => {
     const { manager, workers } = createHarness();
@@ -587,17 +891,7 @@ describe("PyodideRuntimeManager disposal", () => {
   });
 });
 
-describe("PR.3 deferred RuntimeManager operations", () => {
-  it("returns structured NOT_IMPLEMENTED from prepareMission", async () => {
-    const { manager, workers } = createHarness();
-
-    await expect(manager.prepareMission({})).resolves.toMatchObject({
-      ok: false,
-      error: { code: "NOT_IMPLEMENTED" },
-    });
-    expect(workers).toHaveLength(0);
-  });
-
+describe("PR.4 deferred RuntimeManager operations", () => {
   it("keeps submit unimplemented and distinct from run execution", async () => {
     const { manager, workers } = createHarness();
     const initialization = manager.initialize();

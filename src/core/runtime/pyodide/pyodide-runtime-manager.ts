@@ -43,12 +43,20 @@ interface PendingRun {
   readonly resolve: (result: RuntimeExecutionResult) => void;
 }
 
+interface PendingPreparation {
+  readonly worker: RuntimeWorkerPort;
+  readonly requestId: string;
+  readonly promise: Promise<RuntimeLifecycleResult>;
+  readonly resolve: (result: RuntimeLifecycleResult) => void;
+}
+
 const READY_RESULT: RuntimeLifecycleResult = { ok: true };
 
 export class PyodideRuntimeManager implements RuntimeManager {
   private state: RuntimeState = "IDLE";
   private worker: RuntimeWorkerPort | null = null;
   private pendingInitialization: PendingInitialization | null = null;
+  private pendingPreparation: PendingPreparation | null = null;
   private pendingRun: PendingRun | null = null;
   private nextRequestNumber = 0;
 
@@ -183,14 +191,137 @@ export class PyodideRuntimeManager implements RuntimeManager {
   }
 
   prepareMission(
-    _request: RuntimeMissionPreparationRequest,
+    request: RuntimeMissionPreparationRequest,
   ): Promise<RuntimeLifecycleResult> {
-    return Promise.resolve(
-      lifecycleFailure(
-        "NOT_IMPLEMENTED",
-        "prepareMission chưa được triển khai trong PR.3.",
-      ),
-    );
+    if (this.state === "DISPOSED") {
+      return Promise.resolve(
+        lifecycleFailure(
+          "RUNTIME_DISPOSED",
+          "Runtime manager đã được hủy và không thể chuẩn bị môi trường.",
+        ),
+      );
+    }
+
+    if (this.state !== "READY" || this.worker === null) {
+      return Promise.resolve(
+        lifecycleFailure(
+          "RUNTIME_NOT_READY",
+          "Runtime chưa sẵn sàng. Hãy khởi tạo runtime trước khi chuẩn bị môi trường.",
+        ),
+      );
+    }
+
+    if (this.pendingRun !== null || this.pendingPreparation !== null) {
+      return Promise.resolve(
+        lifecycleFailure(
+          "RUNTIME_BUSY",
+          "Runtime đang xử lý một thao tác Python khác.",
+        ),
+      );
+    }
+
+    const worker = this.worker;
+    const requestId = "runtime-" + ++this.nextRequestNumber;
+    let resolvePreparation!: (result: RuntimeLifecycleResult) => void;
+    const promise = new Promise<RuntimeLifecycleResult>((resolve) => {
+      resolvePreparation = resolve;
+    });
+
+    this.pendingPreparation = {
+      worker,
+      requestId,
+      promise,
+      resolve: resolvePreparation,
+    };
+
+    worker.onmessage = (event) => {
+      if (!this.isCurrentPreparation(worker, requestId)) {
+        return;
+      }
+
+      if (!isRuntimeWorkerResponse(event.data)) {
+        return;
+      }
+
+      if (event.data.requestId !== requestId) {
+        return;
+      }
+
+      if (event.data.type === "MISSION_PREPARED") {
+        this.completePreparation(worker, READY_RESULT, false);
+        return;
+      }
+
+      if (event.data.type === "RUNTIME_ERROR") {
+        this.completePreparation(
+          worker,
+          {
+            ok: false,
+            error: { ...event.data.error },
+          },
+          false,
+        );
+      }
+    };
+
+    worker.onerror = (event) => {
+      if (!this.isCurrentPreparation(worker, requestId)) {
+        return;
+      }
+
+      this.completePreparation(
+        worker,
+        lifecycleFailure(
+          "WORKER_ERROR",
+          getErrorMessage(
+            event,
+            "Python runtime worker gặp lỗi khi chuẩn bị môi trường.",
+          ),
+        ),
+        true,
+      );
+    };
+
+    worker.onmessageerror = (event) => {
+      if (!this.isCurrentPreparation(worker, requestId)) {
+        return;
+      }
+
+      this.completePreparation(
+        worker,
+        lifecycleFailure(
+          "WORKER_MESSAGE_ERROR",
+          getErrorMessage(
+            event,
+            "Không thể nhận kết quả chuẩn bị từ Python runtime worker.",
+          ),
+        ),
+        true,
+      );
+    };
+
+    try {
+      worker.postMessage({
+        type: "MISSION_PREPARE",
+        requestId,
+        runtimeConfig: request.runtimeConfig,
+        setupData: request.setupData,
+      });
+    } catch (error) {
+      this.completePreparation(
+        worker,
+        lifecycleFailure(
+          "WORKER_MESSAGE_FAILED",
+          getErrorMessage(
+            error,
+            "Không thể gửi yêu cầu chuẩn bị môi trường tới runtime.",
+          ),
+        ),
+        true,
+      );
+    }
+
+    return promise;
   }
 
   run(request: RuntimeExecutionRequest): Promise<RuntimeExecutionResult> {
@@ -212,11 +343,11 @@ export class PyodideRuntimeManager implements RuntimeManager {
       );
     }
 
-    if (this.pendingRun !== null) {
+    if (this.pendingRun !== null || this.pendingPreparation !== null) {
       return Promise.resolve(
         executionFailure(
           "RUNTIME_BUSY",
-          "Runtime đang xử lý một lần chạy khác.",
+          "Runtime đang xử lý một thao tác Python khác.",
         ),
       );
     }
@@ -325,11 +456,13 @@ export class PyodideRuntimeManager implements RuntimeManager {
     }
 
     const pending = this.pendingInitialization;
+    const pendingPreparation = this.pendingPreparation;
     const pendingRun = this.pendingRun;
     const worker = this.worker;
 
     this.state = "DISPOSED";
     this.pendingInitialization = null;
+    this.pendingPreparation = null;
     this.pendingRun = null;
     this.worker = null;
 
@@ -349,6 +482,13 @@ export class PyodideRuntimeManager implements RuntimeManager {
       executionFailure(
         "RUNTIME_DISPOSED",
         "Runtime manager đã được hủy trong khi đang chạy mã.",
+      ),
+    );
+
+    pendingPreparation?.resolve(
+      lifecycleFailure(
+        "RUNTIME_DISPOSED",
+        "Runtime manager đã được hủy trong khi đang chuẩn bị môi trường.",
       ),
     );
   }
@@ -404,6 +544,45 @@ export class PyodideRuntimeManager implements RuntimeManager {
       this.pendingRun?.worker === worker &&
       this.pendingRun.requestId === requestId
     );
+  }
+
+  private isCurrentPreparation(
+    worker: RuntimeWorkerPort,
+    requestId: string,
+  ): boolean {
+    return (
+      this.state === "READY" &&
+      this.worker === worker &&
+      this.pendingPreparation?.worker === worker &&
+      this.pendingPreparation.requestId === requestId
+    );
+  }
+
+  private completePreparation(
+    worker: RuntimeWorkerPort,
+    result: RuntimeLifecycleResult,
+    discardWorker: boolean,
+  ): void {
+    const pending = this.pendingPreparation;
+    if (
+      pending === null ||
+      pending.worker !== worker ||
+      this.worker !== worker ||
+      this.state !== "READY"
+    ) {
+      return;
+    }
+
+    this.pendingPreparation = null;
+    clearWorkerListeners(worker);
+
+    if (discardWorker) {
+      worker.terminate();
+      this.worker = null;
+      this.state = "IDLE";
+    }
+
+    pending.resolve(result);
   }
 
   private completeRun(

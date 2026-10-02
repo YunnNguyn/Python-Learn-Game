@@ -312,6 +312,82 @@ a {
   padding-left: 1.25rem;
 }
 
+.debug-runtime-card {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.debug-runtime-section {
+  min-width: 0;
+  border: 1px solid #e0e5ef;
+  border-radius: 0.8rem;
+  background: #f8faff;
+  padding: 1rem;
+}
+
+.debug-runtime-section > p:first-of-type {
+  margin-top: 0;
+}
+
+.debug-runtime-field {
+  display: grid;
+  min-width: 0;
+  gap: 0.5rem;
+}
+
+.debug-runtime-textarea {
+  width: 100%;
+  max-width: 100%;
+  min-height: 10rem;
+  resize: vertical;
+  border: 1px solid #bac4d4;
+  border-radius: 0.6rem;
+  background: #ffffff;
+  color: #263248;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  padding: 0.8rem;
+}
+
+.debug-runtime-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.debug-runtime-result {
+  min-width: 0;
+  margin-top: 1rem;
+  border-radius: 0.6rem;
+  background: #edf1f8;
+  padding: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.debug-runtime-result p {
+  margin: 0;
+}
+
+.debug-runtime-result p + p,
+.debug-runtime-result p + pre,
+.debug-runtime-result pre + p {
+  margin-top: 0.55rem;
+}
+
+.debug-runtime-output {
+  max-width: 100%;
+  margin-bottom: 0;
+  overflow: auto;
+  color: #263248;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.87rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .primary-action {
   display: inline-flex;
   min-height: 2.75rem;
