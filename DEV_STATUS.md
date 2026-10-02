@@ -51,7 +51,38 @@ PR.1 validation:
 - [x] package files remain unchanged from App Shell checkpoint `23d4b62`;
 - [x] static runtime audit found no React, Monaco, Pyodide, Worker, Node-only, CS116/content, grading-snapshot, timer, recovery, or registry leakage.
 
-Next: **PR.2 — Pyodide Web Worker boot**.
+```text
+PR.2 — Pyodide Web Worker boot
+```
+
+Status: **Awaiting Manual Browser Validation**
+
+Architecture lock:
+
+- PR.2 provides the concrete Pyodide-backed `RuntimeManager` implementation behind the unchanged PR.1 public contract.
+- Pyodide boots exclusively inside a module Web Worker through the internal `RUNTIME_INIT → READY / RUNTIME_ERROR` protocol.
+- Worker correlation uses deterministic monotonic request IDs that remain internal to the adapter.
+- Pyodide core boot assets are self-hosted under `assets/pyodide/` and resolved from Vite `BASE_URL`; core boot has no external CDN dependency.
+- `initialize()` is idempotent after READY, concurrent-safe while booting, and retries with a fresh worker after ordinary boot failure.
+- Worker errors, message errors, and Pyodide initialization errors are normalized to `RuntimeSystemError`; stale worker/request responses cannot transition the current manager.
+- `dispose()` terminates the active worker, settles pending initialization, and permanently disposes that manager instance.
+- `prepareMission`, `run`, and `submit` remain deliberately unimplemented and return structured `NOT_IMPLEMENTED` results.
+- PR.2 executes no learner Python, captures no stdout/stderr, loads no NumPy package, implements no timeout/recovery/environment restoration, and does not wire Mission Workspace controls.
+- The development-only `/dev` probe exists solely to verify real browser Pyodide Worker boot and disposes its manager when the page unmounts.
+
+PR.2 automated validation:
+
+- [x] focused runtime-manager lifecycle tests passed: 1 test file, 14 tests;
+- [x] TypeScript typecheck passed;
+- [x] full regression suite passed: 36 test files, 641 tests;
+- [x] production build passed and copied the four local Pyodide core boot assets;
+- [x] Vite development probe served `/dev` plus all four Pyodide assets locally with correct HTTP content types;
+- [x] `git diff --check` passed;
+- [x] static audits found no learner execution protocol, `runPython`, package loading, timeout/recovery system, runtime wiring in Mission Workspace/content, or introduced Pyodide CDN URL.
+
+Manual browser validation is still required before PR.2 can be marked Complete / Locked.
+
+Next: **PR.3 — Basic code execution**.
 
 ## Completed
 
