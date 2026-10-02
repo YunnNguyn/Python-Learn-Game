@@ -3,7 +3,7 @@
 ## Current Phase
 
 ```text
-App Shell — React Workspace
+Python Runtime — Pyodide Worker
 ```
 
 Status: **In Progress**
@@ -21,55 +21,37 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 
 ## Current Task
 
-AS.1 — **Complete / Locked**
-
-AS.2 — **Complete / Locked**
-
-AS.3 — **Complete / Locked**
+App Shell — **COMPLETE / LOCKED**
 
 ```text
-AS.4 — Basic mission panels
+PR.1 — RuntimeManager interface
 ```
 
-Status: **Awaiting Manual Browser Validation**
-
-Scope implemented:
-
-- Mission Workspace now composes learner-facing objective, setup/data preview, Monaco editor, Run/Submit controls, and output/error regions;
-- temporary preview content is feature-local presentation data used only to validate workspace composition;
-- Run and Submit remain deliberately disabled and execute nothing until Python Runtime and Mission Pipeline infrastructure exists;
-- Monaco remains locally bundled, route-lazy-loaded, worker-backed, Python-enabled, editable, and controlled by local React state;
-- `missionId` remains navigation-only and does not load or generate production mission data;
-- the existing AS.2 routes remain unchanged and valid.
+Status: **Complete / Locked**
 
 Architecture lock:
 
-- App remains the router/composition root.
-- Core and Content remain React-independent.
-- LearningActivity remains broader than executable missions; the activity route does not assume Python execution.
-- AS.4 completes the structural Mission Workspace UI with objective, setup/data preview, Monaco editor, Run/Submit controls, and output/error regions.
-- These components are presentation-only; temporary preview content is not canonical `MissionInstance` content.
-- `missionId` remains navigation-only and does not resolve or generate `MissionInstance` data.
-- Run and Submit are structurally distinct but disabled; actual execution begins in Python Runtime and authoritative submission/grading lifecycle begins in Mission Pipeline.
-- Python execution, Pyodide, RuntimeManager, Python workers, MissionInstance loading, generation, grading, AttemptRecord, mastery, persistence, hints, Phaser, formatting, and multi-file behavior remain deferred.
-- Feature components contain no curriculum, generation, grading, mastery, runtime, or persistence rules.
-- Normal future lessons/content should not require new React route definitions.
+- PR.1 establishes a generic asynchronous `RuntimeManager` boundary between application/mission orchestration and runtime-specific execution infrastructure.
+- `RuntimeManager` exposes separate `initialize`, `prepareMission`, `run`, `submit`, and `dispose` lifecycle operations.
+- Run and Submit remain separate API operations because future Submit execution must use clean mission state while Run is experimental.
+- Runtime request/response contracts are JSON-safe and do not expose Worker, Pyodide, React, Monaco, or CS116-specific types.
+- Learner Python exceptions are distinct from runtime-system failures.
+- Execution results normalize `stdout`, `stderr`, optional serialized JSON-safe values, and one of `SUCCESS`, `PYTHON_EXCEPTION`, `RUNTIME_ERROR`, or `TIMEOUT`.
+- `TIMEOUT` is a contract outcome only; timeout and worker replacement remain deferred to PR.5.
+- Runtime serialized values remain generic and are not the F5.4 `GraderExecutionSnapshot` contract.
+- PR.1 contains no Worker, Pyodide, runtime execution, Mission Engine, grading, or UI wiring.
 
-AS.4 automated validation:
+PR.1 validation:
 
-- [x] TypeScript typecheck passed;
-- [x] full regression suite passed: 34 test files, 615 tests;
-- [x] Vite production build passed;
+- [x] focused runtime contract test passed: 1 test file, 12 tests;
+- [x] `npm.cmd run typecheck` passed;
+- [x] full regression suite passed: 35 test files, 627 tests;
+- [x] `npm.cmd run build` passed;
 - [x] `git diff --check` passed;
-- [x] no package changes were introduced after the AS.3 checkpoint;
-- [x] production build still emits local `editor.worker`, Python language, and lazy `mission-workspace` assets;
-- [x] initial app JS remains separate from the lazy Monaco workspace chunk;
-- [x] static dependency audit found no React/Monaco/app/features leakage into `src/core` or `src/content`;
-- [x] mission-workspace audit found no generator, grader, RuntimeManager, Pyodide, AttemptRecord, mastery, persistence, Phaser, or starter-code scope creep;
-- [x] routing remains unchanged from AS.3;
-- [ ] manual browser validation is required before AS.4 can be complete/locked.
+- [x] package files remain unchanged from App Shell checkpoint `23d4b62`;
+- [x] static runtime audit found no React, Monaco, Pyodide, Worker, Node-only, CS116/content, grading-snapshot, timer, recovery, or registry leakage.
 
-Next after manual PASS: **Python Runtime — Pyodide Worker / PR.1 — RuntimeManager interface**.
+Next: **PR.2 — Pyodide Web Worker boot**.
 
 ## Completed
 
