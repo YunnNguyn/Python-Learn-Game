@@ -16,6 +16,14 @@ export interface RuntimeRunCodeWorkerRequest {
   readonly code: string;
 }
 
+export interface RuntimeSubmitCodeWorkerRequest {
+  readonly type: "SUBMIT_CODE";
+  readonly requestId: string;
+  readonly code: string;
+  readonly runtimeConfig?: JsonObject;
+  readonly setupData?: JsonObject;
+}
+
 export interface RuntimeMissionPrepareWorkerRequest {
   readonly type: "MISSION_PREPARE";
   readonly requestId: string;
@@ -39,6 +47,12 @@ export interface RuntimeRunResultWorkerResponse {
   readonly result: RuntimeExecutionResult;
 }
 
+export interface RuntimeSubmitResultWorkerResponse {
+  readonly type: "SUBMIT_RESULT";
+  readonly requestId: string;
+  readonly result: RuntimeExecutionResult;
+}
+
 export interface RuntimeErrorWorkerResponse {
   readonly type: "RUNTIME_ERROR";
   readonly requestId: string;
@@ -48,12 +62,14 @@ export interface RuntimeErrorWorkerResponse {
 export type RuntimeWorkerRequest =
   | RuntimeInitWorkerRequest
   | RuntimeMissionPrepareWorkerRequest
-  | RuntimeRunCodeWorkerRequest;
+  | RuntimeRunCodeWorkerRequest
+  | RuntimeSubmitCodeWorkerRequest;
 
 export type RuntimeWorkerResponse =
   | RuntimeReadyWorkerResponse
   | RuntimeMissionPreparedWorkerResponse
   | RuntimeRunResultWorkerResponse
+  | RuntimeSubmitResultWorkerResponse
   | RuntimeErrorWorkerResponse;
 
 export function isRuntimeInitWorkerRequest(
@@ -81,6 +97,22 @@ export function isRuntimeRunCodeWorkerRequest(
     value.type === "RUN_CODE" &&
     typeof value.requestId === "string" &&
     typeof value.code === "string"
+  );
+}
+
+export function isRuntimeSubmitCodeWorkerRequest(
+  value: unknown,
+): value is RuntimeSubmitCodeWorkerRequest {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    value.type === "SUBMIT_CODE" &&
+    typeof value.requestId === "string" &&
+    typeof value.code === "string" &&
+    isOptionalJsonObject(value.runtimeConfig) &&
+    isOptionalJsonObject(value.setupData)
   );
 }
 
@@ -115,6 +147,10 @@ export function isRuntimeWorkerResponse(
   }
 
   if (value.type === "RUN_RESULT") {
+    return isRuntimeExecutionResult(value.result);
+  }
+
+  if (value.type === "SUBMIT_RESULT") {
     return isRuntimeExecutionResult(value.result);
   }
 

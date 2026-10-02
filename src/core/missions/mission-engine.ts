@@ -10,6 +10,10 @@ export interface MissionRunResult {
   readonly execution: RuntimeExecutionResult;
 }
 
+export interface MissionSubmitResult {
+  readonly execution: RuntimeExecutionResult;
+}
+
 interface CurrentMission {
   readonly templateId: MissionTemplate["id"];
   readonly templateVersion: number;
@@ -134,6 +138,48 @@ export class MissionEngine {
     try {
       return {
         execution: await this.runtimeManager.run({ code }),
+      };
+    } finally {
+      if (this.activeOperation === operation) {
+        this.activeOperation = null;
+      }
+    }
+  }
+
+  async submit(code: string): Promise<MissionSubmitResult> {
+    if (this.disposed) {
+      return {
+        execution: executionFailure(
+          "MISSION_ENGINE_DISPOSED",
+          "Mission Engine đã được hủy và không thể nộp mã.",
+        ),
+      };
+    }
+
+    if (this.activeOperation !== null) {
+      return {
+        execution: executionFailure(
+          "MISSION_ENGINE_BUSY",
+          "Mission Engine đang xử lý một thao tác khác.",
+        ),
+      };
+    }
+
+    if (this.currentMission === null) {
+      return {
+        execution: executionFailure(
+          "MISSION_NOT_READY",
+          "Chưa có mission nào được tải thành công.",
+        ),
+      };
+    }
+
+    const operation = Symbol("submit");
+    this.activeOperation = operation;
+
+    try {
+      return {
+        execution: await this.runtimeManager.submit({ code }),
       };
     } finally {
       if (this.activeOperation === operation) {

@@ -1837,25 +1837,14 @@ describe("PyodideRuntimeManager disposal", () => {
   });
 });
 
-describe("PR.4 deferred RuntimeManager operations", () => {
-  it("keeps submit unimplemented and distinct from run execution", async () => {
-    const { manager, workers } = createHarness();
-    const initialization = manager.initialize();
-    workers[0].emitMessage({ type: "READY", requestId: "runtime-1" });
-    await initialization;
+describe("MP.2 fresh-state Submit pipeline", () => {
+  it("requires a successful mission preparation baseline before Submit", async () => {
+    const { manager, workers } = await createReadyHarness();
 
-    const submitResult = await manager.submit({ code: "print('submit')" });
-
-    expect(submitResult).toEqual({
+    await expect(manager.submit({ code: "print('submit')" })).resolves.toMatchObject({
       status: "RUNTIME_ERROR",
-      stdout: "",
-      stderr: "",
-      error: {
-        code: "NOT_IMPLEMENTED",
-        message: "submit chưa được triển khai trong PR.3.",
-      },
+      error: { code: "RUNTIME_MISSION_NOT_PREPARED" },
     });
-    expect(workers).toHaveLength(1);
     expect(workers[0].postedMessages).toEqual([
       {
         type: "RUNTIME_INIT",
@@ -1864,6 +1853,386 @@ describe("PR.4 deferred RuntimeManager operations", () => {
       },
     ]);
   });
+
+  it("posts distinct SUBMIT_CODE with the saved clean baseline after a finite Run and leaves Run usable", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const baseline = {
+      runtimeConfig: {},
+      setupData: {
+        value: 10,
+        flag: true,
+        nothing: null,
+        items: [1, 2, 3],
+        config: { name: "demo" },
+      },
+    };
+    const preparation = manager.prepareMission(baseline);
+    worker.emitMessage({ type: "MISSION_PREPARED", requestId: "runtime-2" });
+    await preparation;
+
+    const run = manager.run({ code: "value = 99\nitems.append(99)" });
+    expect(worker.postedMessages[2]).toEqual({
+      type: "RUN_CODE",
+      requestId: "runtime-3",
+      code: "value = 99\nitems.append(99)",
+    });
+    worker.emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-3",
+      result: { status: "SUCCESS", stdout: "", stderr: "" },
+    });
+    await run;
+
+    const submit = manager.submit({ code: "print(value)" });
+    expect(worker.postedMessages[3]).toEqual({
+      type: "SUBMIT_CODE",
+      requestId: "runtime-4",
+      code: "print(value)",
+      runtimeConfig: {},
+      setupData: {
+        value: 10,
+        flag: true,
+        nothing: null,
+        items: [1, 2, 3],
+        config: { name: "demo" },
+      },
+    });
+    worker.emitMessage({
+      type: "SUBMIT_RESULT",
+      requestId: "runtime-4",
+      result: { status: "SUCCESS", stdout: "10\n", stderr: "" },
+    });
+    await expect(submit).resolves.toEqual({
+      status: "SUCCESS",
+      stdout: "10\n",
+      stderr: "",
+    });
+
+    const runAfterSubmit = manager.run({ code: "print(value)" });
+    expect(worker.postedMessages[4]).toEqual({
+      type: "RUN_CODE",
+      requestId: "runtime-5",
+      code: "print(value)",
+    });
+    worker.emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-5",
+      result: { status: "SUCCESS", stdout: "99\n", stderr: "" },
+    });
+    await expect(runAfterSubmit).resolves.toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("starts every Submit from the same saved baseline snapshot", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const request = {
+      runtimeConfig: {},
+      setupData: {
+        flag: true,
+        nothing: null,
+        items: [1, 2, 3],
+        config: { name: "demo" },
+      },
+    };
+    const preparation = manager.prepareMission(request);
+    worker.emitMessage({ type: "MISSION_PREPARED", requestId: "runtime-2" });
+    await preparation;
+
+    request.setupData.flag = false;
+    request.setupData.items.push(99);
+    request.setupData.config.name = "mutated outside";
+
+    const first = manager.submit({ code: "items.append(500)" });
+    expect(worker.postedMessages[2]).toMatchObject({
+      type: "SUBMIT_CODE",
+      requestId: "runtime-3",
+      setupData: {
+        flag: true,
+        nothing: null,
+        items: [1, 2, 3],
+        config: { name: "demo" },
+      },
+    });
+    worker.emitMessage({
+      type: "SUBMIT_RESULT",
+      requestId: "runtime-3",
+      result: { status: "SUCCESS", stdout: "", stderr: "" },
+    });
+    await first;
+
+    const second = manager.submit({ code: "print(items)" });
+    expect(worker.postedMessages[3]).toMatchObject({
+      type: "SUBMIT_CODE",
+      requestId: "runtime-4",
+      setupData: {
+        flag: true,
+        nothing: null,
+        items: [1, 2, 3],
+        config: { name: "demo" },
+      },
+    });
+    worker.emitMessage({
+      type: "SUBMIT_RESULT",
+      requestId: "runtime-4",
+      result: { status: "SUCCESS", stdout: "[1, 2, 3]\n", stderr: "" },
+    });
+    await second;
+  });
+
+  it("keeps the latest successful preparation baseline when a later prepare fails, then replaces it after a later success", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+
+    const prepareA = manager.prepareMission({ setupData: { value: "A" } });
+    worker.emitMessage({ type: "MISSION_PREPARED", requestId: "runtime-2" });
+    await prepareA;
+
+    const prepareB = manager.prepareMission({ setupData: { value: "B" } });
+    worker.emitMessage({
+      type: "RUNTIME_ERROR",
+      requestId: "runtime-3",
+      error: { code: "MISSION_PREPARE_FAILED", message: "B failed" },
+    });
+    await expect(prepareB).resolves.toMatchObject({ ok: false });
+
+    const submitA = manager.submit({ code: "print(value)" });
+    expect(worker.postedMessages[3]).toMatchObject({
+      type: "SUBMIT_CODE",
+      requestId: "runtime-4",
+      setupData: { value: "A" },
+    });
+    worker.emitMessage({
+      type: "SUBMIT_RESULT",
+      requestId: "runtime-4",
+      result: { status: "SUCCESS", stdout: "A\n", stderr: "" },
+    });
+    await submitA;
+
+    const prepareC = manager.prepareMission({ setupData: { value: "C" } });
+    worker.emitMessage({ type: "MISSION_PREPARED", requestId: "runtime-5" });
+    await prepareC;
+
+    const submitC = manager.submit({ code: "print(value)" });
+    expect(worker.postedMessages[5]).toMatchObject({
+      type: "SUBMIT_CODE",
+      requestId: "runtime-6",
+      setupData: { value: "C" },
+    });
+    worker.emitMessage({
+      type: "SUBMIT_RESULT",
+      requestId: "runtime-6",
+      result: { status: "SUCCESS", stdout: "C\n", stderr: "" },
+    });
+    await submitC;
+  });
+
+  it("guards Run, Submit, and prepareMission concurrency while Submit is pending and reuses READY initialize", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+    worker.emitMessage({ type: "MISSION_PREPARED", requestId: "runtime-2" });
+    await preparation;
+
+    const submit = manager.submit({ code: "slow_submit()" });
+    await expect(manager.run({ code: "run_race()" })).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_BUSY" },
+    });
+    await expect(manager.submit({ code: "submit_race()" })).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_BUSY" },
+    });
+    await expect(manager.prepareMission({ setupData: { value: 20 } })).resolves.toMatchObject({
+      ok: false,
+      error: { code: "RUNTIME_BUSY" },
+    });
+    await expect(manager.initialize()).resolves.toEqual({ ok: true });
+    expect(workers).toHaveLength(1);
+    expect(worker.postedMessages).toHaveLength(3);
+
+    worker.emitMessage({
+      type: "SUBMIT_RESULT",
+      requestId: "runtime-3",
+      result: { status: "SUCCESS", stdout: "", stderr: "" },
+    });
+    await submit;
+  });
+
+  it("ignores a wrong SUBMIT_RESULT request ID and settles only the correlated response", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+    worker.emitMessage({ type: "MISSION_PREPARED", requestId: "runtime-2" });
+    await preparation;
+
+    const submit = manager.submit({ code: "print(value)" });
+    let settled = false;
+    void submit.then(() => {
+      settled = true;
+    });
+    worker.emitMessage({
+      type: "SUBMIT_RESULT",
+      requestId: "runtime-wrong",
+      result: { status: "SUCCESS", stdout: "wrong\n", stderr: "" },
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    worker.emitMessage({
+      type: "SUBMIT_RESULT",
+      requestId: "runtime-3",
+      result: { status: "SUCCESS", stdout: "10\n", stderr: "" },
+    });
+    await expect(submit).resolves.toEqual({
+      status: "SUCCESS",
+      stdout: "10\n",
+      stderr: "",
+    });
+  });
+
+  it("preserves Submit Python-exception output and keeps the worker usable", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+    worker.emitMessage({ type: "MISSION_PREPARED", requestId: "runtime-2" });
+    await preparation;
+
+    const submit = manager.submit({ code: "print('before')\nraise ValueError('boom')" });
+    worker.emitMessage({
+      type: "SUBMIT_RESULT",
+      requestId: "runtime-3",
+      result: {
+        status: "PYTHON_EXCEPTION",
+        stdout: "before\n",
+        stderr: "",
+        exception: {
+          type: "ValueError",
+          message: "boom",
+          traceback: "trace",
+        },
+      },
+    });
+    await expect(submit).resolves.toMatchObject({
+      status: "PYTHON_EXCEPTION",
+      stdout: "before\n",
+      exception: { type: "ValueError", message: "boom" },
+    });
+
+    const run = manager.run({ code: "print(value)" });
+    worker.emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-4",
+      result: { status: "SUCCESS", stdout: "10\n", stderr: "" },
+    });
+    await expect(run).resolves.toMatchObject({ status: "SUCCESS", stdout: "10\n" });
+  });
+
+  it("reuses PR.5/PR.6 timeout recovery for Submit without replaying submitted code", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const oldWorker = workers[0];
+    const preparation = manager.prepareMission({
+      runtimeConfig: {},
+      setupData: { value: 10, items: [1, 2, 3], nothing: null },
+    });
+    oldWorker.emitMessage({ type: "MISSION_PREPARED", requestId: "runtime-2" });
+    await preparation;
+
+    const submit = manager.submit({ code: "while True: pass" });
+    const staleHandler = oldWorker.onmessage;
+    expect(oldWorker.postedMessages[2]).toMatchObject({
+      type: "SUBMIT_CODE",
+      requestId: "runtime-3",
+      code: "while True: pass",
+    });
+
+    vi.advanceTimersByTime(25);
+    expect(oldWorker.terminateCount).toBe(1);
+    expect(workers).toHaveLength(2);
+    const replacement = workers[1];
+    expect(replacement.postedMessages).toEqual([
+      {
+        type: "RUNTIME_INIT",
+        requestId: "runtime-4",
+        indexURL: LOCAL_INDEX_URL,
+      },
+    ]);
+
+    staleHandler?.({
+      data: {
+        type: "SUBMIT_RESULT",
+        requestId: "runtime-3",
+        result: { status: "SUCCESS", stdout: "too late\n", stderr: "" },
+      },
+    });
+    replacement.emitMessage({ type: "READY", requestId: "runtime-4" });
+    await Promise.resolve();
+    expect(replacement.postedMessages[1]).toEqual({
+      type: "MISSION_PREPARE",
+      requestId: "runtime-5",
+      runtimeConfig: {},
+      setupData: { value: 10, items: [1, 2, 3], nothing: null },
+    });
+    replacement.emitMessage({ type: "MISSION_PREPARED", requestId: "runtime-5" });
+
+    await expect(submit).resolves.toMatchObject({
+      status: "TIMEOUT",
+      error: { code: "EXECUTION_TIMEOUT" },
+    });
+    expect(
+      replacement.postedMessages.filter((message) => message.type === "SUBMIT_CODE"),
+    ).toEqual([]);
+
+    const run = manager.run({ code: "print(value)" });
+    expect(replacement.postedMessages[2]).toEqual({
+      type: "RUN_CODE",
+      requestId: "runtime-6",
+      code: "print(value)",
+    });
+    replacement.emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-6",
+      result: { status: "SUCCESS", stdout: "10\n", stderr: "" },
+    });
+    await expect(run).resolves.toMatchObject({ status: "SUCCESS", stdout: "10\n" });
+  });
+
+  it("settles a pending Submit as disposed, clears its timer, and never creates a replacement worker", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const worker = workers[0];
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+    worker.emitMessage({ type: "MISSION_PREPARED", requestId: "runtime-2" });
+    await preparation;
+
+    const submit = manager.submit({ code: "while True: pass" });
+    const lateHandler = worker.onmessage;
+    manager.dispose();
+
+    await expect(submit).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_DISPOSED" },
+    });
+    expect(worker.terminateCount).toBe(1);
+    vi.advanceTimersByTime(100);
+    expect(workers).toHaveLength(1);
+
+    lateHandler?.({
+      data: {
+        type: "SUBMIT_RESULT",
+        requestId: "runtime-3",
+        result: { status: "SUCCESS", stdout: "late\n", stderr: "" },
+      },
+    });
+    await expect(manager.initialize()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "RUNTIME_DISPOSED" },
+    });
+  });
+});
+
+describe("RuntimeManager public result serialization", () => {
 
   it("returns only normalized public result data", async () => {
     const { manager, workers } = createHarness();

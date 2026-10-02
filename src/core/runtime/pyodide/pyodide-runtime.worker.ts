@@ -12,10 +12,12 @@ import {
   isRuntimeInitWorkerRequest,
   isRuntimeMissionPrepareWorkerRequest,
   isRuntimeRunCodeWorkerRequest,
+  isRuntimeSubmitCodeWorkerRequest,
   type RuntimeErrorWorkerResponse,
   type RuntimeMissionPreparedWorkerResponse,
   type RuntimeReadyWorkerResponse,
   type RuntimeRunResultWorkerResponse,
+  type RuntimeSubmitResultWorkerResponse,
 } from "./worker-protocol";
 import { createPythonSetupNamespace } from "./setup-conversion";
 import { validateSetupKeys } from "./setup-validation";
@@ -27,6 +29,7 @@ interface RuntimeWorkerScope {
       | RuntimeReadyWorkerResponse
       | RuntimeMissionPreparedWorkerResponse
       | RuntimeRunResultWorkerResponse
+      | RuntimeSubmitResultWorkerResponse
       | RuntimeErrorWorkerResponse,
   ): void;
 }
@@ -54,6 +57,16 @@ workerScope.onmessage = (event) => {
 
   if (isRuntimeRunCodeWorkerRequest(event.data)) {
     void runCode(event.data.requestId, event.data.code);
+    return;
+  }
+
+  if (isRuntimeSubmitCodeWorkerRequest(event.data)) {
+    void submitCode(
+      event.data.requestId,
+      event.data.code,
+      event.data.runtimeConfig,
+      event.data.setupData,
+    );
   }
 };
 
@@ -106,37 +119,21 @@ async function prepareMission(
   let candidateNamespace: PyProxy | null = null;
 
   try {
-    if (
-      runtimeConfig !== undefined &&
-      Object.keys(runtimeConfig).length > 0
-    ) {
-      postRuntimeError(
-        requestId,
-        "UNSUPPORTED_RUNTIME_CONFIG",
-        "runtimeConfig hiện chỉ hỗ trợ undefined hoặc object rỗng.",
-      );
-      return;
-    }
-
-    const setup = setupData ?? {};
-    const validationError = validateSetupKeys(
-      {
-        setGlobal: (name, value) => runtime?.globals.set(name, value),
-        deleteGlobal: (name) => runtime?.globals.delete(name),
-        runPython: (code) => runtime?.runPython(code),
-      },
-      setup,
+    const namespaceResult = buildMissionNamespace(
+      runtime,
+      runtimeConfig,
+      setupData,
     );
-    if (validationError !== null) {
+    if (!namespaceResult.ok) {
       workerScope.postMessage({
         type: "RUNTIME_ERROR",
         requestId,
-        error: validationError,
+        error: namespaceResult.error,
       });
       return;
     }
 
-    candidateNamespace = createPythonSetupNamespace(runtime, setup);
+    candidateNamespace = namespaceResult.namespace;
 
     const previousNamespace = activeNamespace;
     activeNamespace = candidateNamespace;
@@ -156,6 +153,66 @@ async function prepareMission(
     );
   } finally {
     activeOperationRequestId = null;
+  }
+}
+
+type MissionNamespaceResult =
+  | {
+      readonly ok: true;
+      readonly namespace: PyProxy;
+    }
+  | {
+      readonly ok: false;
+      readonly error: RuntimeSystemError;
+    };
+
+function buildMissionNamespace(
+  pyodide: PyodideInterface,
+  runtimeConfig: JsonObject | undefined,
+  setupData: JsonObject | undefined,
+): MissionNamespaceResult {
+  if (
+    runtimeConfig !== undefined &&
+    Object.keys(runtimeConfig).length > 0
+  ) {
+    return {
+      ok: false,
+      error: {
+        code: "UNSUPPORTED_RUNTIME_CONFIG",
+        message: "runtimeConfig hiện chỉ hỗ trợ undefined hoặc object rỗng.",
+      },
+    };
+  }
+
+  const setup = setupData ?? {};
+  const validationError = validateSetupKeys(
+    {
+      setGlobal: (name, value) => pyodide.globals.set(name, value),
+      deleteGlobal: (name) => pyodide.globals.delete(name),
+      runPython: (code) => pyodide.runPython(code),
+    },
+    setup,
+  );
+  if (validationError !== null) {
+    return {
+      ok: false,
+      error: validationError,
+    };
+  }
+
+  try {
+    return {
+      ok: true,
+      namespace: createPythonSetupNamespace(pyodide, setup),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: "MISSION_PREPARE_FAILED",
+        message: getErrorMessage(error, "Không thể chuẩn bị môi trường Python."),
+      },
+    };
   }
 }
 
@@ -199,6 +256,73 @@ async function runCode(requestId: string, code: string): Promise<void> {
       ),
     );
   } finally {
+    activeOperationRequestId = null;
+  }
+}
+
+async function submitCode(
+  requestId: string,
+  code: string,
+  runtimeConfig: JsonObject | undefined,
+  setupData: JsonObject | undefined,
+): Promise<void> {
+  if (runtime === null) {
+    postSubmitResult(
+      requestId,
+      executionFailure(
+        "RUNTIME_NOT_READY",
+        "Python runtime chưa sẵn sàng để nộp mã.",
+      ),
+    );
+    return;
+  }
+
+  if (activeOperationRequestId !== null) {
+    postSubmitResult(
+      requestId,
+      executionFailure(
+        "RUNTIME_BUSY",
+        "Python runtime đang xử lý một thao tác khác.",
+      ),
+    );
+    return;
+  }
+
+  activeOperationRequestId = requestId;
+  let submitNamespace: PyProxy | null = null;
+
+  try {
+    const namespaceResult = buildMissionNamespace(
+      runtime,
+      runtimeConfig,
+      setupData,
+    );
+    if (!namespaceResult.ok) {
+      postSubmitResult(
+        requestId,
+        executionFailure(
+          namespaceResult.error.code ?? "MISSION_PREPARE_FAILED",
+          namespaceResult.error.message,
+        ),
+      );
+      return;
+    }
+
+    submitNamespace = namespaceResult.namespace;
+    postSubmitResult(
+      requestId,
+      await executePython(runtime, submitNamespace, code),
+    );
+  } catch (error) {
+    postSubmitResult(
+      requestId,
+      executionFailure(
+        "PYODIDE_EXECUTION_FAILED",
+        getErrorMessage(error, "Pyodide không thể thực thi mã Python."),
+      ),
+    );
+  } finally {
+    submitNamespace?.destroy();
     activeOperationRequestId = null;
   }
 }
@@ -301,6 +425,17 @@ function postRunResult(
 ): void {
   workerScope.postMessage({
     type: "RUN_RESULT",
+    requestId,
+    result,
+  });
+}
+
+function postSubmitResult(
+  requestId: string,
+  result: RuntimeExecutionResult,
+): void {
+  workerScope.postMessage({
+    type: "SUBMIT_RESULT",
     requestId,
     result,
   });

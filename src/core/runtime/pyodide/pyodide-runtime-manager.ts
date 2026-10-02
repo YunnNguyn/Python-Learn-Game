@@ -43,9 +43,12 @@ interface PendingInitialization {
   readonly resolve: (result: RuntimeLifecycleResult) => void;
 }
 
-interface PendingRun {
+type RuntimeExecutionKind = "RUN" | "SUBMIT";
+
+interface PendingExecution {
   readonly worker: RuntimeWorkerPort;
   readonly requestId: string;
+  readonly kind: RuntimeExecutionKind;
   readonly promise: Promise<RuntimeExecutionResult>;
   readonly resolve: (result: RuntimeExecutionResult) => void;
   timeoutHandle: ReturnType<typeof setTimeout> | null;
@@ -66,7 +69,7 @@ const DEFAULT_EXECUTION_TIMEOUT_MS = 5_000;
 interface PendingTimeoutRecovery {
   readonly promise: Promise<RuntimeLifecycleResult>;
   readonly resolveLifecycle: (result: RuntimeLifecycleResult) => void;
-  readonly resolveRun: (result: RuntimeExecutionResult) => void;
+  readonly resolveExecution: (result: RuntimeExecutionResult) => void;
 }
 
 export class PyodideRuntimeManager implements RuntimeManager {
@@ -74,7 +77,7 @@ export class PyodideRuntimeManager implements RuntimeManager {
   private worker: RuntimeWorkerPort | null = null;
   private pendingInitialization: PendingInitialization | null = null;
   private pendingPreparation: PendingPreparation | null = null;
-  private pendingRun: PendingRun | null = null;
+  private pendingExecution: PendingExecution | null = null;
   private pendingTimeoutRecovery: PendingTimeoutRecovery | null = null;
   private lastSuccessfulPreparation:
     | RuntimeMissionPreparationRequest
@@ -260,7 +263,7 @@ export class PyodideRuntimeManager implements RuntimeManager {
       );
     }
 
-    if (this.pendingRun !== null || this.pendingPreparation !== null) {
+    if (this.pendingExecution !== null || this.pendingPreparation !== null) {
       return Promise.resolve(
         lifecycleFailure(
           "RUNTIME_BUSY",
@@ -429,7 +432,7 @@ export class PyodideRuntimeManager implements RuntimeManager {
       );
     }
 
-    if (this.pendingRun !== null || this.pendingPreparation !== null) {
+    if (this.pendingExecution !== null || this.pendingPreparation !== null) {
       return Promise.resolve(
         executionFailure(
           "RUNTIME_BUSY",
@@ -438,23 +441,103 @@ export class PyodideRuntimeManager implements RuntimeManager {
       );
     }
 
+    return this.startExecution("RUN", request);
+  }
+
+  submit(request: RuntimeExecutionRequest): Promise<RuntimeExecutionResult> {
+    if (this.state === "DISPOSED") {
+      return Promise.resolve(
+        executionFailure(
+          "RUNTIME_DISPOSED",
+          "Runtime manager đã được hủy và không thể nộp mã.",
+        ),
+      );
+    }
+
+    if (this.state === "RECOVERING") {
+      return Promise.resolve(
+        executionFailure(
+          "RUNTIME_RECOVERING",
+          "Runtime đang khởi tạo Worker thay thế sau khi lần chạy trước hết thời gian.",
+        ),
+      );
+    }
+
+    if (this.state !== "READY" || this.worker === null) {
+      return Promise.resolve(
+        executionFailure(
+          "RUNTIME_NOT_READY",
+          "Runtime chưa sẵn sàng. Hãy khởi tạo runtime trước khi nộp mã.",
+        ),
+      );
+    }
+
+    if (this.environmentLost) {
+      return Promise.resolve(
+        executionFailure(
+          "RUNTIME_ENVIRONMENT_LOST",
+          "Môi trường mission đã mất sau khi Worker bị thay thế. Hãy chuẩn bị lại mission trước khi nộp mã.",
+        ),
+      );
+    }
+
+    if (this.pendingExecution !== null || this.pendingPreparation !== null) {
+      return Promise.resolve(
+        executionFailure(
+          "RUNTIME_BUSY",
+          "Runtime đang xử lý một thao tác Python khác.",
+        ),
+      );
+    }
+
+    if (this.lastSuccessfulPreparation === undefined) {
+      return Promise.resolve(
+        executionFailure(
+          "RUNTIME_MISSION_NOT_PREPARED",
+          "Chưa có mission baseline được chuẩn bị thành công để Submit.",
+        ),
+      );
+    }
+
+    return this.startExecution(
+      "SUBMIT",
+      request,
+      snapshotPreparationRequest(this.lastSuccessfulPreparation),
+    );
+  }
+
+  private startExecution(
+    kind: RuntimeExecutionKind,
+    request: RuntimeExecutionRequest,
+    preparation?: RuntimeMissionPreparationRequest,
+  ): Promise<RuntimeExecutionResult> {
+    if (this.worker === null) {
+      return Promise.resolve(
+        executionFailure(
+          "RUNTIME_NOT_READY",
+          "Runtime chưa sẵn sàng để thực thi mã.",
+        ),
+      );
+    }
+
     const worker = this.worker;
     const requestId = "runtime-" + ++this.nextRequestNumber;
-    let resolveRun!: (result: RuntimeExecutionResult) => void;
+    let resolveExecution!: (result: RuntimeExecutionResult) => void;
     const promise = new Promise<RuntimeExecutionResult>((resolve) => {
-      resolveRun = resolve;
+      resolveExecution = resolve;
     });
 
-    this.pendingRun = {
+    this.pendingExecution = {
       worker,
       requestId,
+      kind,
       promise,
-      resolve: resolveRun,
+      resolve: resolveExecution,
       timeoutHandle: null,
     };
 
     worker.onmessage = (event) => {
-      if (!this.isCurrentRun(worker, requestId)) {
+      if (!this.isCurrentExecution(worker, requestId)) {
         return;
       }
 
@@ -466,13 +549,20 @@ export class PyodideRuntimeManager implements RuntimeManager {
         return;
       }
 
-      if (event.data.type === "RUN_RESULT") {
-        this.completeRun(worker, copyExecutionResult(event.data.result), false);
+      if (
+        (kind === "RUN" && event.data.type === "RUN_RESULT") ||
+        (kind === "SUBMIT" && event.data.type === "SUBMIT_RESULT")
+      ) {
+        this.completeExecution(
+          worker,
+          copyExecutionResult(event.data.result),
+          false,
+        );
         return;
       }
 
       if (event.data.type === "RUNTIME_ERROR") {
-        this.completeRun(
+        this.completeExecution(
           worker,
           executionFailure(event.data.error.code, event.data.error.message),
           true,
@@ -481,26 +571,31 @@ export class PyodideRuntimeManager implements RuntimeManager {
     };
 
     worker.onerror = (event) => {
-      if (!this.isCurrentRun(worker, requestId)) {
+      if (!this.isCurrentExecution(worker, requestId)) {
         return;
       }
 
-      this.completeRun(
+      this.completeExecution(
         worker,
         executionFailure(
           "WORKER_ERROR",
-          getErrorMessage(event, "Python runtime worker gặp lỗi khi chạy mã."),
+          getErrorMessage(
+            event,
+            kind === "RUN"
+              ? "Python runtime worker gặp lỗi khi chạy mã."
+              : "Python runtime worker gặp lỗi khi nộp mã.",
+          ),
         ),
         true,
       );
     };
 
     worker.onmessageerror = (event) => {
-      if (!this.isCurrentRun(worker, requestId)) {
+      if (!this.isCurrentExecution(worker, requestId)) {
         return;
       }
 
-      this.completeRun(
+      this.completeExecution(
         worker,
         executionFailure(
           "WORKER_MESSAGE_ERROR",
@@ -514,24 +609,34 @@ export class PyodideRuntimeManager implements RuntimeManager {
     };
 
     try {
-      worker.postMessage({
-        type: "RUN_CODE",
-        requestId,
-        code: request.code,
-      });
+      if (kind === "RUN") {
+        worker.postMessage({
+          type: "RUN_CODE",
+          requestId,
+          code: request.code,
+        });
+      } else {
+        worker.postMessage({
+          type: "SUBMIT_CODE",
+          requestId,
+          code: request.code,
+          runtimeConfig: preparation?.runtimeConfig,
+          setupData: preparation?.setupData,
+        });
+      }
 
-      const pending = this.pendingRun;
+      const pending = this.pendingExecution;
       if (
         pending !== null &&
         pending.worker === worker &&
         pending.requestId === requestId
       ) {
         pending.timeoutHandle = setTimeout(() => {
-          this.handleRunTimeout(worker, requestId);
+          this.handleExecutionTimeout(worker, requestId);
         }, this.executionTimeoutMs);
       }
     } catch (error) {
-      this.completeRun(
+      this.completeExecution(
         worker,
         executionFailure(
           "WORKER_MESSAGE_FAILED",
@@ -544,10 +649,6 @@ export class PyodideRuntimeManager implements RuntimeManager {
     return promise;
   }
 
-  submit(_request: RuntimeExecutionRequest): Promise<RuntimeExecutionResult> {
-    return Promise.resolve(notImplementedExecutionResult("submit"));
-  }
-
   dispose(): void {
     if (this.state === "DISPOSED") {
       return;
@@ -555,20 +656,20 @@ export class PyodideRuntimeManager implements RuntimeManager {
 
     const pending = this.pendingInitialization;
     const pendingPreparation = this.pendingPreparation;
-    const pendingRun = this.pendingRun;
+    const pendingExecution = this.pendingExecution;
     const pendingTimeoutRecovery = this.pendingTimeoutRecovery;
     const worker = this.worker;
 
     this.state = "DISPOSED";
     this.pendingInitialization = null;
     this.pendingPreparation = null;
-    this.pendingRun = null;
+    this.pendingExecution = null;
     this.pendingTimeoutRecovery = null;
     this.worker = null;
     this.lastSuccessfulPreparation = undefined;
     this.environmentLost = false;
 
-    clearRunTimeout(pendingRun);
+    clearExecutionTimeout(pendingExecution);
 
     if (worker !== null) {
       clearWorkerListeners(worker);
@@ -582,10 +683,12 @@ export class PyodideRuntimeManager implements RuntimeManager {
       ),
     );
 
-    pendingRun?.resolve(
+    pendingExecution?.resolve(
       executionFailure(
         "RUNTIME_DISPOSED",
-        "Runtime manager đã được hủy trong khi đang chạy mã.",
+        pendingExecution.kind === "RUN"
+          ? "Runtime manager đã được hủy trong khi đang chạy mã."
+          : "Runtime manager đã được hủy trong khi đang nộp mã.",
       ),
     );
 
@@ -602,7 +705,7 @@ export class PyodideRuntimeManager implements RuntimeManager {
         "Runtime manager đã được hủy trong khi đang khôi phục sau timeout.",
       ),
     );
-    pendingTimeoutRecovery?.resolveRun(
+    pendingTimeoutRecovery?.resolveExecution(
       executionFailure(
         "RUNTIME_DISPOSED",
         "Runtime manager đã được hủy trong khi đang khôi phục sau timeout.",
@@ -651,15 +754,15 @@ export class PyodideRuntimeManager implements RuntimeManager {
     pending.resolve(result);
   }
 
-  private isCurrentRun(
+  private isCurrentExecution(
     worker: RuntimeWorkerPort,
     requestId: string,
   ): boolean {
     return (
       this.state === "READY" &&
       this.worker === worker &&
-      this.pendingRun?.worker === worker &&
-      this.pendingRun.requestId === requestId
+      this.pendingExecution?.worker === worker &&
+      this.pendingExecution.requestId === requestId
     );
   }
 
@@ -715,12 +818,12 @@ export class PyodideRuntimeManager implements RuntimeManager {
     pending.resolve(result);
   }
 
-  private completeRun(
+  private completeExecution(
     worker: RuntimeWorkerPort,
     result: RuntimeExecutionResult,
     discardWorker: boolean,
   ): void {
-    const pending = this.pendingRun;
+    const pending = this.pendingExecution;
     if (
       pending === null ||
       pending.worker !== worker ||
@@ -730,8 +833,8 @@ export class PyodideRuntimeManager implements RuntimeManager {
       return;
     }
 
-    this.pendingRun = null;
-    clearRunTimeout(pending);
+    this.pendingExecution = null;
+    clearExecutionTimeout(pending);
     clearWorkerListeners(worker);
 
     if (discardWorker) {
@@ -743,11 +846,11 @@ export class PyodideRuntimeManager implements RuntimeManager {
     pending.resolve(result);
   }
 
-  private handleRunTimeout(
+  private handleExecutionTimeout(
     worker: RuntimeWorkerPort,
     requestId: string,
   ): void {
-    const pending = this.pendingRun;
+    const pending = this.pendingExecution;
     if (
       pending === null ||
       pending.worker !== worker ||
@@ -758,8 +861,8 @@ export class PyodideRuntimeManager implements RuntimeManager {
       return;
     }
 
-    this.pendingRun = null;
-    clearRunTimeout(pending);
+    this.pendingExecution = null;
+    clearExecutionTimeout(pending);
     clearWorkerListeners(worker);
     worker.terminate();
     this.worker = null;
@@ -775,7 +878,7 @@ export class PyodideRuntimeManager implements RuntimeManager {
     const recovery: PendingTimeoutRecovery = {
       promise: recoveryPromise,
       resolveLifecycle: resolveRecovery,
-      resolveRun: pending.resolve,
+      resolveExecution: pending.resolve,
     };
     this.pendingTimeoutRecovery = recovery;
 
@@ -791,7 +894,7 @@ export class PyodideRuntimeManager implements RuntimeManager {
       if (!result.ok) {
         this.pendingTimeoutRecovery = null;
         recovery.resolveLifecycle(result);
-        recovery.resolveRun(
+        recovery.resolveExecution(
           timeoutExecutionResult(
             "EXECUTION_TIMEOUT_RECOVERY_FAILED",
             `Mã Python đã vượt quá giới hạn ${this.executionTimeoutMs} ms và Worker thay thế không thể khởi tạo: ${result.error.message}`,
@@ -805,7 +908,7 @@ export class PyodideRuntimeManager implements RuntimeManager {
         this.environmentLost = false;
         this.pendingTimeoutRecovery = null;
         recovery.resolveLifecycle(READY_RESULT);
-        recovery.resolveRun(
+        recovery.resolveExecution(
           timeoutExecutionResult(
             "EXECUTION_TIMEOUT",
             `Mã Python đã vượt quá giới hạn ${this.executionTimeoutMs} ms. Worker đã được thay thế và runtime đã sẵn sàng lại.`,
@@ -832,7 +935,7 @@ export class PyodideRuntimeManager implements RuntimeManager {
           this.state = "READY";
           this.environmentLost = false;
           recovery.resolveLifecycle(READY_RESULT);
-          recovery.resolveRun(
+          recovery.resolveExecution(
             timeoutExecutionResult(
               "EXECUTION_TIMEOUT",
               `Mã Python đã vượt quá giới hạn ${this.executionTimeoutMs} ms. Worker đã được thay thế và runtime đã sẵn sàng lại.`,
@@ -852,7 +955,7 @@ export class PyodideRuntimeManager implements RuntimeManager {
             restoreFailureMessage,
           ),
         );
-        recovery.resolveRun(
+        recovery.resolveExecution(
           timeoutExecutionResult(
             "EXECUTION_TIMEOUT_RESTORE_FAILED",
             restoreFailureMessage,
@@ -917,7 +1020,7 @@ function clearWorkerListeners(worker: RuntimeWorkerPort): void {
   worker.onmessageerror = null;
 }
 
-function clearRunTimeout(pending: PendingRun | null): void {
+function clearExecutionTimeout(pending: PendingExecution | null): void {
   if (pending?.timeoutHandle !== null && pending?.timeoutHandle !== undefined) {
     clearTimeout(pending.timeoutHandle);
     pending.timeoutHandle = null;
@@ -948,20 +1051,6 @@ function lifecycleFailure(
   return {
     ok: false,
     error: { code, message },
-  };
-}
-
-function notImplementedExecutionResult(
-  operation: "run" | "submit",
-): RuntimeExecutionResult {
-  return {
-    status: RUNTIME_EXECUTION_STATUS.RUNTIME_ERROR,
-    stdout: "",
-    stderr: "",
-    error: {
-      code: "NOT_IMPLEMENTED",
-      message: operation + " chưa được triển khai trong PR.3.",
-    },
   };
 }
 

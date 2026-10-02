@@ -5,7 +5,7 @@ export {
   GENERATION_ATTEMPT_SEED_POLICY,
   deriveGenerationAttemptSeed,
 } from "./generation-attempt-seed";
-export type { MissionRunResult } from "./mission-engine";
+export type { MissionRunResult, MissionSubmitResult } from "./mission-engine";
 export type {
   CreateMissionInstanceInput,
   MissionGeneratorOutput,

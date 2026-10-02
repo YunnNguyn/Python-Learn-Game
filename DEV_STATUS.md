@@ -24,10 +24,10 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 Mission Pipeline — Run + Submit + Grading
 
 ```text
-MP.1 — Run pipeline
+MP.2 — Fresh-state Submit pipeline
 ```
 
-Status: **Complete / Locked**
+Status: **Awaiting Manual Browser Validation**
 
 Python Runtime status:
 
@@ -38,6 +38,9 @@ Python Runtime — Pyodide Worker
 Status: **Complete / Locked**
 
 PR.6 checkpoint `d403a34` is the locked Python Runtime baseline for the Mission Pipeline.
+MP.1 checkpoint `ec387aa` is the locked Mission Pipeline baseline for MP.2.
+
+MP.1 status: **Complete / Locked**
 
 MP.1 architecture lock:
 
@@ -64,7 +67,33 @@ MP.1 automated validation:
 - [x] static Mission Engine audit found no Pyodide implementation import, React, `content/cs116`, grader, `AttemptRecord`, mastery/progress, `WorldEvent`, package-loading, NumPy, or Submit dependency;
 - [x] no new package dependency was added.
 
-Next: **MP.2 — Fresh-state Submit pipeline**.
+MP.2 architecture lock:
+
+- MP.2 establishes the authoritative fresh-state execution path required before grading; grading itself remains deferred to MP.3.
+- `RuntimeManager.submit({ code })` is distinct from Run and executes inside an isolated fresh namespace rebuilt from the latest successful mission-preparation baseline.
+- A finite Submit does not see mutation left by prior Run calls and does not replace or mutate the active Run namespace.
+- Every Submit starts from a fresh reconstruction of the saved preparation baseline, including nested objects, lists, dictionaries, and JSON `null` mapped to Python `None`.
+- Submit timeout reuses the PR.5/PR.6 Worker replacement and environment-restoration path. Submitted learner code is never replayed during recovery.
+- `MissionEngine.submit(code)` only applies Mission Engine readiness/busy/disposal guards and delegates to `RuntimeManager.submit({ code })`; it performs no grading and creates no `AttemptRecord`, mastery/progress update, authoritative `WorldEvent`, or persistence write.
+- MP.2 adds only a development `/dev` Submit probe. The production Mission Workspace remains unchanged, with `Chạy thử` and `Nộp bài` still disabled.
+- MP.2 adds no NumPy/package-loading behavior and no `content/cs116` coupling to the generic runtime or Mission Engine.
+
+MP.2 automated validation:
+
+- [x] focused runtime-manager + Mission Engine suites passed: 2 test files, 93 tests;
+- [x] full regression suite passed: 39 test files, 728 tests;
+- [x] `npm.cmd run typecheck` passed;
+- [x] `npm.cmd run build` passed after preserving the pre-existing undeletable `dist` output under a temporary name; the original generated `dist` was restored afterward;
+- [x] `git diff --check` passed;
+- [x] `package.json` and `package-lock.json` are unchanged from MP.1 checkpoint `ec387aa`;
+- [x] production app/router and Mission Workspace files are unchanged from MP.1 checkpoint `ec387aa`; only the development `/dev` probe was extended;
+- [x] static runtime/Mission Engine audit found no `content/cs116`, `AttemptRecord`, `MasteryState`, `LearningEngine`, `WorldEvent`, browser persistence, package-loading, NumPy, `GraderRegistry`, or declarative-grading coupling;
+- [x] runtime/debug source contains no external Pyodide CDN URL;
+- [x] no new package dependency was added.
+
+Manual browser validation remains required before MP.2 can be marked Complete / Locked.
+
+Next: **MP.3 — Grading integration**.
 
 Runtime checkpoints:
 

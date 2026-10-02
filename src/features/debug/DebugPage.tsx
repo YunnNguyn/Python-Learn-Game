@@ -33,6 +33,9 @@ export function DebugPage() {
   const [runPending, setRunPending] = useState(false);
   const [executionResult, setExecutionResult] =
     useState<RuntimeExecutionResult | null>(null);
+  const [submitPending, setSubmitPending] = useState(false);
+  const [submitResult, setSubmitResult] =
+    useState<RuntimeExecutionResult | null>(null);
 
   const getRuntimeManager = (): RuntimeManager => {
     managerRef.current ??= createPyodideRuntimeManager();
@@ -117,6 +120,19 @@ export function DebugPage() {
     setRunPending(false);
   };
 
+  const submitRuntimeTest = async () => {
+    setSubmitResult(null);
+    setSubmitPending(true);
+
+    const result = await getRuntimeManager().submit({ code });
+    if (!mountedRef.current) {
+      return;
+    }
+
+    setSubmitResult(result);
+    setSubmitPending(false);
+  };
+
   return (
     <section className="page-card" aria-labelledby="debug-title">
       <p className="eyebrow">Development</p>
@@ -169,7 +185,10 @@ export function DebugPage() {
               type="button"
               onClick={prepareRuntime}
               disabled={
-                runtimeStatus !== "READY" || preparePending || runPending
+                runtimeStatus !== "READY" ||
+                preparePending ||
+                runPending ||
+                submitPending
               }
             >
               {preparePending ? "Đang chuẩn bị..." : "Chuẩn bị môi trường"}
@@ -213,9 +232,27 @@ export function DebugPage() {
               className="primary-action"
               type="button"
               onClick={runRuntimeTest}
-              disabled={runtimeStatus !== "READY" || runPending || preparePending}
+              disabled={
+                runtimeStatus !== "READY" ||
+                runPending ||
+                preparePending ||
+                submitPending
+              }
             >
               {runPending ? "Đang chạy..." : "Chạy test"}
+            </button>
+            <button
+              className="primary-action"
+              type="button"
+              onClick={submitRuntimeTest}
+              disabled={
+                runtimeStatus !== "READY" ||
+                submitPending ||
+                runPending ||
+                preparePending
+              }
+            >
+              {submitPending ? "Đang Submit..." : "Submit test"}
             </button>
           </div>
           {executionResult ? (
@@ -254,6 +291,48 @@ export function DebugPage() {
                     : ""}
                   {executionResult.error.message}
                 </p>
+              ) : null}
+            </div>
+          ) : null}
+          {submitResult ? (
+            <div className="debug-runtime-result" aria-live="polite">
+              <p>
+                <strong>Kết quả Submit:</strong> {submitResult.status}
+              </p>
+              <p>
+                <strong>stdout</strong>
+              </p>
+              <pre className="debug-runtime-output">{submitResult.stdout}</pre>
+              <p>
+                <strong>stderr</strong>
+              </p>
+              <pre className="debug-runtime-output">{submitResult.stderr}</pre>
+              {submitResult.status === "PYTHON_EXCEPTION" ? (
+                <>
+                  <p>
+                    <strong>Python exception</strong>
+                  </p>
+                  <pre className="debug-runtime-output">
+                    {[
+                      submitResult.exception.type,
+                      submitResult.exception.message,
+                      submitResult.exception.traceback,
+                    ]
+                      .filter(Boolean)
+                      .join("\n")}
+                  </pre>
+                </>
+              ) : null}
+              {submitResult.status === "RUNTIME_ERROR" ||
+              submitResult.status === "TIMEOUT" ? (
+                submitResult.error ? (
+                  <p role="alert">
+                    {submitResult.error.code
+                      ? submitResult.error.code + ": "
+                      : ""}
+                    {submitResult.error.message}
+                  </p>
+                ) : null
               ) : null}
             </div>
           ) : null}

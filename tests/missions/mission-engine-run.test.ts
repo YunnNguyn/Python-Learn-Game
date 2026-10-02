@@ -34,6 +34,7 @@ class FakeRuntimeManager implements RuntimeManager {
   readonly calls: string[] = [];
   readonly preparationRequests: RuntimeMissionPreparationRequest[] = [];
   readonly runRequests: RuntimeExecutionRequest[] = [];
+  readonly submitRequests: RuntimeExecutionRequest[] = [];
   disposeCalls = 0;
 
   initializeResult: RuntimeLifecycleResult = { ok: true };
@@ -43,10 +44,16 @@ class FakeRuntimeManager implements RuntimeManager {
     stdout: "",
     stderr: "",
   };
+  submitResult: RuntimeExecutionResult = {
+    status: "SUCCESS",
+    stdout: "",
+    stderr: "",
+  };
 
   initializeDeferred: Deferred<RuntimeLifecycleResult> | undefined;
   prepareDeferred: Deferred<RuntimeLifecycleResult> | undefined;
   runDeferred: Deferred<RuntimeExecutionResult> | undefined;
+  submitDeferred: Deferred<RuntimeExecutionResult> | undefined;
 
   initialize(): Promise<RuntimeLifecycleResult> {
     this.calls.push("initialize");
@@ -67,8 +74,10 @@ class FakeRuntimeManager implements RuntimeManager {
     return this.runDeferred?.promise ?? Promise.resolve(this.runResult);
   }
 
-  submit(): Promise<RuntimeExecutionResult> {
-    throw new Error("MP.1 must not call RuntimeManager.submit().");
+  submit(request: RuntimeExecutionRequest): Promise<RuntimeExecutionResult> {
+    this.calls.push("submit");
+    this.submitRequests.push(request);
+    return this.submitDeferred?.promise ?? Promise.resolve(this.submitResult);
   }
 
   dispose(): void {
@@ -401,6 +410,97 @@ describe("MissionEngine MP.1 Run pipeline", () => {
     ]);
   });
 
+  it("rejects Submit before a successful mission load without touching RuntimeManager.submit", async () => {
+    const runtime = new FakeRuntimeManager();
+    const engine = new MissionEngine(runtime);
+
+    await expect(engine.submit("print('early submit')")).resolves.toMatchObject({
+      execution: {
+        status: "RUNTIME_ERROR",
+        error: { code: "MISSION_NOT_READY" },
+      },
+    });
+    expect(runtime.submitRequests).toEqual([]);
+  });
+
+  it("delegates Submit code exactly and preserves the normalized execution result", async () => {
+    const runtime = new FakeRuntimeManager();
+    const { engine } = await loadReadyMission(runtime);
+    const code = "print(value)\nvalue = value + 1";
+    runtime.submitResult = {
+      status: "PYTHON_EXCEPTION",
+      stdout: "10\n",
+      stderr: "",
+      exception: {
+        type: "ValueError",
+        message: "submit failed",
+        traceback: "trace",
+      },
+    };
+
+    await expect(engine.submit(code)).resolves.toEqual({
+      execution: runtime.submitResult,
+    });
+    expect(runtime.submitRequests).toEqual([{ code }]);
+    expect(runtime.preparationRequests).toHaveLength(1);
+  });
+
+  it("keeps Run and Submit as distinct RuntimeManager operations", async () => {
+    const runtime = new FakeRuntimeManager();
+    const { engine } = await loadReadyMission(runtime);
+
+    await engine.run("run_code()");
+    await engine.submit("submit_code()");
+
+    expect(runtime.runRequests).toEqual([{ code: "run_code()" }]);
+    expect(runtime.submitRequests).toEqual([{ code: "submit_code()" }]);
+    expect(runtime.calls).toEqual([
+      "initialize",
+      "prepareMission",
+      "run",
+      "submit",
+    ]);
+  });
+
+  it("blocks Run, Submit, and mission switching while Submit is pending", async () => {
+    const runtime = new FakeRuntimeManager();
+    const { engine } = await loadReadyMission(runtime);
+    runtime.submitDeferred = deferred<RuntimeExecutionResult>();
+    const pendingSubmit = engine.submit("while True: pass");
+    const templateB = createTemplate({
+      id: "mission.template.b" as MissionTemplate["id"],
+    });
+
+    await expect(engine.run("run_during_submit()")).resolves.toMatchObject({
+      execution: {
+        status: "RUNTIME_ERROR",
+        error: { code: "MISSION_ENGINE_BUSY" },
+      },
+    });
+    await expect(engine.submit("second_submit()")).resolves.toMatchObject({
+      execution: {
+        status: "RUNTIME_ERROR",
+        error: { code: "MISSION_ENGINE_BUSY" },
+      },
+    });
+    await expect(
+      engine.loadMission(templateB, createInstance(templateB)),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: "MISSION_ENGINE_BUSY" },
+    });
+    expect(runtime.runRequests).toEqual([]);
+    expect(runtime.submitRequests).toEqual([{ code: "while True: pass" }]);
+    expect(runtime.preparationRequests).toHaveLength(1);
+
+    runtime.submitDeferred.resolve({
+      status: "SUCCESS",
+      stdout: "",
+      stderr: "",
+    });
+    await pendingSubmit;
+  });
+
   it("blocks mission switching while a Run owned by the engine is pending", async () => {
     const runtime = new FakeRuntimeManager();
     const { engine } = await loadReadyMission(runtime);
@@ -482,6 +582,12 @@ describe("MissionEngine MP.1 Run pipeline", () => {
         error: { code: "MISSION_ENGINE_DISPOSED" },
       },
     });
+    await expect(engine.submit("print('disposed')")).resolves.toMatchObject({
+      execution: {
+        status: "RUNTIME_ERROR",
+        error: { code: "MISSION_ENGINE_DISPOSED" },
+      },
+    });
     await expect(engine.loadMission(template, instance)).resolves.toMatchObject({
       ok: false,
       error: { code: "MISSION_ENGINE_DISPOSED" },
@@ -506,7 +612,7 @@ describe("MissionEngine MP.1 Run pipeline", () => {
     expect(runtime.runRequests[0]).toEqual({ code });
   });
 
-  it("keeps the Core Run engine free of Pyodide, React, grading, attempts, mastery, world-event, content, and package-loading dependencies", () => {
+  it("keeps the Core Run/Submit engine free of Pyodide, React, grading, attempts, mastery, world-event, content, and package-loading dependencies", () => {
     for (const forbidden of [
       "PyodideRuntimeManager",
       "loadPyodide",
@@ -520,7 +626,6 @@ describe("MissionEngine MP.1 Run pipeline", () => {
       "WorldEvent",
       "loadPackage",
       "numpy",
-      "submit(",
     ]) {
       expect(missionEngineSource).not.toContain(forbidden);
     }
