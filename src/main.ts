@@ -1,1 +1,14 @@
-console.info("Python Learn Game tooling bootstrap ready.");
+import { StrictMode, createElement } from "react";
+import { createRoot } from "react-dom/client";
+
+import { App } from "./app/App";
+
+const rootElement = document.getElementById("root");
+
+if (rootElement === null) {
+  throw new Error("Không tìm thấy phần tử gốc của ứng dụng.");
+}
+
+createRoot(rootElement).render(
+  createElement(StrictMode, null, createElement(App)),
+);

@@ -3,10 +3,10 @@
 ## Current Phase
 
 ```text
-Foundation 5 — Generator + Grader Registries
+App Shell — React Workspace
 ```
 
-Status: **COMPLETE / LOCKED**
+Status: **In Progress**
 
 Phase 0 remains complete and locked through the six source-of-truth documents:
 
@@ -22,45 +22,44 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 ## Current Task
 
 ```text
-F5.6 — Reference solver test loop
+AS.1 — Vite/React shell
 ```
 
-Status: **Complete**
+Status: **Awaiting Manual Browser Validation**
 
-Scope completed:
+Scope implemented:
 
-- added content-local developer/content QA reference solvers for Matrix Shape, Column Extract, and Threshold Filter;
-- each solver independently computes its result from `MissionInstance.learner.data`; hidden grading data is cross-checked only by tests and is never used as solver input;
-- Matrix Shape derives copied matrix data, `[rows, columns]`, and `ndim = 2` from a validated rectangular finite-number matrix;
-- Column Extract derives the selected column row-by-row and returns the family-specific 1D shape `[rowCount]`;
-- Threshold Filter preserves entity order while independently applying authored `GT` / `GTE` threshold semantics;
-- the production test loop composes `GeneratorRegistry` → generator → `MissionInstance` → validator where required → reference solver → trusted `GraderExecutionSnapshot` → `GraderRegistry` → `core.declarative` → PASS;
-- Threshold Filter includes a deterministic test-only retry proof using `deriveGenerationAttemptSeed`, preserving the canonical base seed on the accepted `MissionInstance`;
-- negative grading proofs cover Matrix Shape `SHAPE_ERROR`, Column Extract `VALUE_ERROR`, and Threshold Filter `VALUE_ERROR`;
-- solver purity, fresh-array/caller-mutation safety, repeated solving, and malformed learner-data rejection are covered.
+- React 19, React DOM, React Router, and the Vite React plugin are installed on top of the existing TypeScript/Vite/Vitest toolchain;
+- `src/main.ts` is the thin ReactDOM bootstrap and mounts the application into `#root` under `StrictMode`;
+- `src/app/App.tsx` owns app composition and wraps the router with a top-level render error boundary;
+- `createBrowserRouter` provides the minimal `/`, `/about`, and `*` routes;
+- `AppLayout` provides semantic header, navigation, main content, and footer structure;
+- Home, About, and in-app 404 pages use concise Vietnamese copy;
+- app-layer CSS provides the initial responsive shell without introducing a component/CSS framework;
+- `index.html` is configured for Vietnamese metadata and the React root mount;
+- no curriculum, generation, grading, Python runtime, persistence, visualization, or other domain service was bootstrapped into React.
 
 Architecture lock:
 
-- reference solvers are content-local QA/developer tools and are not part of the learner Submit runtime;
-- reference solvers derive expected behavior independently from learner-visible mission data and never read `MissionInstance.grading.data`;
-- Column Extract with an integer column index produces a 1D result with shape `[rowCount]`; this is the explicit F5.6 family-specific implementation choice;
-- deterministic semantic retry remains test-only composition at this stage; no production retry service or retry engine is introduced;
-- no ReferenceSolver registry/field, production MissionTemplate set, expected-data interpolation DSL, runtime/Pyodide integration, AttemptRecord/WorldEvent flow, UI, or persistence is added by F5.6;
-- Foundation 5 is complete and locked after this gate.
+- `src/app` owns application boot, top-level routing/layout, and the top-level render error boundary;
+- the shell contains no curriculum, generation, grading, runtime, persistence, or visualization domain logic;
+- `src/core` remains framework-independent and must not depend on React or the app layer;
+- client routing is intentionally minimal in AS.1;
+- AS.2 will define feature entry points, AS.3 will introduce Monaco, AS.4 will add mission panels, and the Python runtime remains deferred to its later phase;
+- automated checks may pass before manual browser validation, but AS.1 must not be marked complete or locked until that manual validation passes.
 
-F5.6 validation:
+AS.1 automated validation:
 
 - [x] TypeScript typecheck passed;
-- [x] focused reference-solver loop passed: 1 test file, 11 tests;
 - [x] full regression suite passed: 34 test files, 615 tests;
 - [x] Vite production build passed;
 - [x] `git diff --check` passed;
-- [x] `git diff -- package.json package-lock.json` is empty; no dependency was added;
-- [x] `src/core` has no dependency on `content/cs116`;
-- [x] CS116 reference solvers contain no `Math.random`, wall-clock/performance time, crypto randomness, Pyodide, or Node-only API dependency;
-- [x] browser-first deployment boundary remains intact; no manual user testing is required for this foundation-only task.
+- [x] static dependency audit found no forbidden `src/core` imports from app/features/content/visualization or React-family packages;
+- [x] static dependency audit found no app/features/React-family imports from `src/content`;
+- [ ] Vite dev-server smoke could not be re-run because the native shell harness fails with `helper_unknown_error: setup refresh had errors`, and the available Node REPL blocks Vite's internal `node:process` import;
+- [ ] manual browser validation is still required before AS.1 can be complete/locked.
 
-Next planned task: **AS.1 — Vite/React shell** under **App Shell — React Workspace**.
+Next planned task after AS.1 manual validation: **AS.2 — Feature boundaries**.
 
 ## Completed
 
