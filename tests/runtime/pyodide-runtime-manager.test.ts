@@ -1123,7 +1123,7 @@ describe("PR.5 execution timeout and worker replacement", () => {
     });
   });
 
-  it("marks a prepared environment lost after timeout and clears it only after successful explicit re-prepare", async () => {
+  it("automatically restores a prepared environment before resolving TIMEOUT", async () => {
     vi.useFakeTimers();
     const { manager, workers } = await createReadyHarness(25);
     const preparation = manager.prepareMission({ setupData: { value: 10 } });
@@ -1134,28 +1134,36 @@ describe("PR.5 execution timeout and worker replacement", () => {
     await preparation;
 
     const timedRun = manager.run({ code: "while True: pass" });
+    let settled = false;
+    void timedRun.then(() => {
+      settled = true;
+    });
     vi.advanceTimersByTime(25);
     workers[1].emitMessage({ type: "READY", requestId: "runtime-4" });
-    await timedRun;
+    await Promise.resolve();
 
-    await expect(manager.run({ code: "print(value)" })).resolves.toMatchObject({
-      status: "RUNTIME_ERROR",
-      error: { code: "RUNTIME_ENVIRONMENT_LOST" },
-    });
-    expect(workers[1].postedMessages).toHaveLength(1);
-
-    const reprepare = manager.prepareMission({ setupData: { value: 10 } });
-    expect(workers[1].postedMessages[1]).toMatchObject({
+    expect(settled).toBe(false);
+    expect(workers[1].postedMessages[1]).toEqual({
       type: "MISSION_PREPARE",
       requestId: "runtime-5",
+      runtimeConfig: undefined,
+      setupData: { value: 10 },
     });
     workers[1].emitMessage({
       type: "MISSION_PREPARED",
       requestId: "runtime-5",
     });
-    await expect(reprepare).resolves.toEqual({ ok: true });
+    await expect(timedRun).resolves.toMatchObject({
+      status: "TIMEOUT",
+      error: { code: "EXECUTION_TIMEOUT" },
+    });
 
     const recoveredRun = manager.run({ code: "print(value)" });
+    expect(workers[1].postedMessages[2]).toEqual({
+      type: "RUN_CODE",
+      requestId: "runtime-6",
+      code: "print(value)",
+    });
     workers[1].emitMessage({
       type: "RUN_RESULT",
       requestId: "runtime-6",
@@ -1316,6 +1324,465 @@ describe("PR.5 execution timeout and worker replacement", () => {
       error: { code: "EXECUTION_TIMEOUT" },
     });
     expect(oldWorker.terminateCount).toBe(1);
+  });
+});
+
+describe("PR.6 environment restoration", () => {
+  it("snapshots preparation at call time and restores the clean nested baseline without replaying learner code", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const request = {
+      runtimeConfig: {
+        mode: "practice",
+        options: { enabled: true },
+      },
+      setupData: {
+        value: 10,
+        config: { enabled: true, value: null },
+        items: [1, 2, 3],
+      },
+    };
+
+    const preparation = manager.prepareMission(request);
+    request.runtimeConfig.mode = "mutated";
+    request.runtimeConfig.options.enabled = false;
+    request.setupData.value = 999;
+    request.setupData.config.enabled = false;
+    request.setupData.items.push(99);
+
+    expect(workers[0].postedMessages[1]).toEqual({
+      type: "MISSION_PREPARE",
+      requestId: "runtime-2",
+      runtimeConfig: {
+        mode: "practice",
+        options: { enabled: true },
+      },
+      setupData: {
+        value: 10,
+        config: { enabled: true, value: null },
+        items: [1, 2, 3],
+      },
+    });
+    workers[0].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-2",
+    });
+    await expect(preparation).resolves.toEqual({ ok: true });
+
+    const mutationRun = manager.run({
+      code: "value = 99\nconfig['enabled'] = False\nitems.append(99)",
+    });
+    workers[0].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-3",
+      result: {
+        status: "SUCCESS",
+        stdout: "",
+        stderr: "",
+      },
+    });
+    await mutationRun;
+
+    const timedRun = manager.run({ code: "while True: pass" });
+    const staleTimedHandler = workers[0].onmessage;
+    let timedSettled = false;
+    void timedRun.then(() => {
+      timedSettled = true;
+    });
+
+    vi.advanceTimersByTime(25);
+    expect(workers).toHaveLength(2);
+    expect(workers[1].postedMessages).toEqual([
+      {
+        type: "RUNTIME_INIT",
+        requestId: "runtime-5",
+        indexURL: LOCAL_INDEX_URL,
+      },
+    ]);
+
+    staleTimedHandler?.({
+      data: {
+        type: "RUN_RESULT",
+        requestId: "runtime-4",
+        result: {
+          status: "SUCCESS",
+          stdout: "late\n",
+          stderr: "",
+        },
+      },
+    });
+    await Promise.resolve();
+    expect(timedSettled).toBe(false);
+
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-5" });
+    await Promise.resolve();
+    expect(workers[1].postedMessages[1]).toEqual({
+      type: "MISSION_PREPARE",
+      requestId: "runtime-6",
+      runtimeConfig: {
+        mode: "practice",
+        options: { enabled: true },
+      },
+      setupData: {
+        value: 10,
+        config: { enabled: true, value: null },
+        items: [1, 2, 3],
+      },
+    });
+    expect(
+      workers[1].postedMessages.some((message) => message.type === "RUN_CODE"),
+    ).toBe(false);
+
+    workers[1].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-999",
+    });
+    await Promise.resolve();
+    expect(timedSettled).toBe(false);
+
+    workers[1].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-6",
+    });
+    await expect(timedRun).resolves.toMatchObject({
+      status: "TIMEOUT",
+      error: { code: "EXECUTION_TIMEOUT" },
+    });
+
+    const recoveredRun = manager.run({ code: "print(value)" });
+    expect(workers[1].postedMessages[2]).toEqual({
+      type: "RUN_CODE",
+      requestId: "runtime-7",
+      code: "print(value)",
+    });
+    workers[1].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-7",
+      result: {
+        status: "SUCCESS",
+        stdout: "10\n",
+        stderr: "",
+      },
+    });
+    await expect(recoveredRun).resolves.toMatchObject({
+      status: "SUCCESS",
+      stdout: "10\n",
+    });
+  });
+
+  it("preserves the previous successful baseline after a failed prepare and replaces it after a later success", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+
+    const firstPreparation = manager.prepareMission({
+      setupData: { value: 10 },
+    });
+    workers[0].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-2",
+    });
+    await firstPreparation;
+
+    const failedPreparation = manager.prepareMission({
+      setupData: { value: 999 },
+    });
+    workers[0].emitMessage({
+      type: "RUNTIME_ERROR",
+      requestId: "runtime-3",
+      error: {
+        code: "INVALID_SETUP_DATA",
+        message: "rejected",
+      },
+    });
+    await expect(failedPreparation).resolves.toMatchObject({ ok: false });
+
+    const firstTimeout = manager.run({ code: "while True: pass" });
+    vi.advanceTimersByTime(25);
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-5" });
+    await Promise.resolve();
+    expect(workers[1].postedMessages[1]).toMatchObject({
+      type: "MISSION_PREPARE",
+      requestId: "runtime-6",
+      setupData: { value: 10 },
+    });
+    workers[1].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-6",
+    });
+    await firstTimeout;
+
+    const secondPreparation = manager.prepareMission({
+      setupData: { value: 20 },
+    });
+    workers[1].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-7",
+    });
+    await secondPreparation;
+
+    const secondTimeout = manager.run({ code: "while True: pass" });
+    vi.advanceTimersByTime(25);
+    workers[2].emitMessage({ type: "READY", requestId: "runtime-9" });
+    await Promise.resolve();
+    expect(workers[2].postedMessages[1]).toMatchObject({
+      type: "MISSION_PREPARE",
+      requestId: "runtime-10",
+      setupData: { value: 20 },
+    });
+    workers[2].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-10",
+    });
+    await secondTimeout;
+  });
+
+  it("treats a successful empty prepare as a restorable baseline", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const preparation = manager.prepareMission({});
+    workers[0].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-2",
+    });
+    await preparation;
+
+    const timedRun = manager.run({ code: "while True: pass" });
+    vi.advanceTimersByTime(25);
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-4" });
+    await Promise.resolve();
+
+    expect(workers[1].postedMessages[1]).toEqual({
+      type: "MISSION_PREPARE",
+      requestId: "runtime-5",
+      runtimeConfig: undefined,
+      setupData: undefined,
+    });
+    workers[1].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-5",
+    });
+    await expect(timedRun).resolves.toMatchObject({ status: "TIMEOUT" });
+  });
+
+  it("keeps the full recovery pending through restore, guards learner work, and supports manual recovery after restore failure", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+    workers[0].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-2",
+    });
+    await preparation;
+
+    const timedRun = manager.run({ code: "while True: pass" });
+    let timedSettled = false;
+    void timedRun.then(() => {
+      timedSettled = true;
+    });
+    vi.advanceTimersByTime(25);
+
+    const initializeDuringBoot = manager.initialize();
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-4" });
+    await Promise.resolve();
+    const initializeDuringRestore = manager.initialize();
+    expect(initializeDuringRestore).toBe(initializeDuringBoot);
+    expect(workers[1].postedMessages[1]).toMatchObject({
+      type: "MISSION_PREPARE",
+      requestId: "runtime-5",
+    });
+
+    await expect(
+      manager.run({ code: "print('too soon')" }),
+    ).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_RECOVERING" },
+    });
+    await expect(
+      manager.prepareMission({ setupData: { value: 20 } }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: "RUNTIME_RECOVERING" },
+    });
+    expect(workers[1].postedMessages).toHaveLength(2);
+
+    workers[1].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-wrong",
+    });
+    await Promise.resolve();
+    expect(timedSettled).toBe(false);
+
+    workers[1].emitMessage({
+      type: "RUNTIME_ERROR",
+      requestId: "runtime-5",
+      error: {
+        code: "INVALID_SETUP_DATA",
+        message: "restore rejected",
+      },
+    });
+
+    await expect(timedRun).resolves.toMatchObject({
+      status: "TIMEOUT",
+      error: { code: "EXECUTION_TIMEOUT_RESTORE_FAILED" },
+    });
+    await expect(initializeDuringBoot).resolves.toMatchObject({
+      ok: false,
+      error: { code: "EXECUTION_TIMEOUT_RESTORE_FAILED" },
+    });
+
+    await expect(manager.run({ code: "print(value)" })).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_ENVIRONMENT_LOST" },
+    });
+    expect(workers[1].postedMessages).toHaveLength(2);
+
+    const manualPreparation = manager.prepareMission({
+      setupData: { value: 20 },
+    });
+    expect(workers[1].postedMessages[2]).toMatchObject({
+      type: "MISSION_PREPARE",
+      requestId: "runtime-6",
+      setupData: { value: 20 },
+    });
+    workers[1].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-6",
+    });
+    await expect(manualPreparation).resolves.toEqual({ ok: true });
+
+    const recoveredRun = manager.run({ code: "print(value)" });
+    workers[1].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-7",
+      result: {
+        status: "SUCCESS",
+        stdout: "20\n",
+        stderr: "",
+      },
+    });
+    await expect(recoveredRun).resolves.toMatchObject({
+      status: "SUCCESS",
+      stdout: "20\n",
+    });
+  });
+
+  it("does not attempt mission restoration when replacement initialization fails", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+    workers[0].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-2",
+    });
+    await preparation;
+
+    const timedRun = manager.run({ code: "while True: pass" });
+    vi.advanceTimersByTime(25);
+    workers[1].emitMessage({
+      type: "RUNTIME_ERROR",
+      requestId: "runtime-4",
+      error: {
+        code: "PYODIDE_INIT_FAILED",
+        message: "replacement boot failed",
+      },
+    });
+
+    await expect(timedRun).resolves.toMatchObject({
+      status: "TIMEOUT",
+      error: { code: "EXECUTION_TIMEOUT_RECOVERY_FAILED" },
+    });
+    expect(workers[1].postedMessages).toEqual([
+      {
+        type: "RUNTIME_INIT",
+        requestId: "runtime-4",
+        indexURL: LOCAL_INDEX_URL,
+      },
+    ]);
+  });
+
+  it("settles worker error and messageerror during automatic restoration without retrying", async () => {
+    vi.useFakeTimers();
+
+    for (const failureKind of ["error", "messageerror"] as const) {
+      const { manager, workers } = await createReadyHarness(25);
+      const preparation = manager.prepareMission({ setupData: { value: 10 } });
+      workers[0].emitMessage({
+        type: "MISSION_PREPARED",
+        requestId: "runtime-2",
+      });
+      await preparation;
+
+      const timedRun = manager.run({ code: "while True: pass" });
+      vi.advanceTimersByTime(25);
+      workers[1].emitMessage({ type: "READY", requestId: "runtime-4" });
+      await Promise.resolve();
+
+      if (failureKind === "error") {
+        workers[1].emitError({ message: "restore worker error" });
+      } else {
+        workers[1].emitMessageError({ message: "restore decode error" });
+      }
+
+      await expect(timedRun).resolves.toMatchObject({
+        status: "TIMEOUT",
+        error: { code: "EXECUTION_TIMEOUT_RESTORE_FAILED" },
+      });
+      expect(workers).toHaveLength(2);
+      expect(workers[1].postedMessages).toHaveLength(2);
+      await expect(manager.run({ code: "print(value)" })).resolves.toMatchObject({
+        status: "RUNTIME_ERROR",
+        error: { code: "RUNTIME_ENVIRONMENT_LOST" },
+      });
+      manager.dispose();
+    }
+  });
+
+  it("disposes safely while automatic restoration is pending and ignores its late response", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+    workers[0].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-2",
+    });
+    await preparation;
+
+    const timedRun = manager.run({ code: "while True: pass" });
+    vi.advanceTimersByTime(25);
+    const replacement = workers[1];
+    replacement.emitMessage({ type: "READY", requestId: "runtime-4" });
+    await Promise.resolve();
+    expect(replacement.postedMessages[1]).toMatchObject({
+      type: "MISSION_PREPARE",
+      requestId: "runtime-5",
+    });
+
+    const recoveryInitialization = manager.initialize();
+    const lateRestoreHandler = replacement.onmessage;
+    manager.dispose();
+
+    await expect(timedRun).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_DISPOSED" },
+    });
+    await expect(recoveryInitialization).resolves.toMatchObject({
+      ok: false,
+      error: { code: "RUNTIME_DISPOSED" },
+    });
+    expect(replacement.terminateCount).toBe(1);
+
+    lateRestoreHandler?.({
+      data: {
+        type: "MISSION_PREPARED",
+        requestId: "runtime-5",
+      },
+    });
+    await Promise.resolve();
+    expect(workers).toHaveLength(2);
+    await expect(manager.initialize()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "RUNTIME_DISPOSED" },
+    });
   });
 });
 

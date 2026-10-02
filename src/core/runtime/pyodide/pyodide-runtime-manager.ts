@@ -54,6 +54,8 @@ interface PendingRun {
 interface PendingPreparation {
   readonly worker: RuntimeWorkerPort;
   readonly requestId: string;
+  readonly purpose: "CALLER" | "RESTORE";
+  readonly snapshot: RuntimeMissionPreparationRequest;
   readonly promise: Promise<RuntimeLifecycleResult>;
   readonly resolve: (result: RuntimeLifecycleResult) => void;
 }
@@ -62,7 +64,9 @@ const READY_RESULT: RuntimeLifecycleResult = { ok: true };
 const DEFAULT_EXECUTION_TIMEOUT_MS = 5_000;
 
 interface PendingTimeoutRecovery {
-  readonly resolve: (result: RuntimeExecutionResult) => void;
+  readonly promise: Promise<RuntimeLifecycleResult>;
+  readonly resolveLifecycle: (result: RuntimeLifecycleResult) => void;
+  readonly resolveRun: (result: RuntimeExecutionResult) => void;
 }
 
 export class PyodideRuntimeManager implements RuntimeManager {
@@ -72,7 +76,9 @@ export class PyodideRuntimeManager implements RuntimeManager {
   private pendingPreparation: PendingPreparation | null = null;
   private pendingRun: PendingRun | null = null;
   private pendingTimeoutRecovery: PendingTimeoutRecovery | null = null;
-  private hasPreparedMission = false;
+  private lastSuccessfulPreparation:
+    | RuntimeMissionPreparationRequest
+    | undefined;
   private environmentLost = false;
   private nextRequestNumber = 0;
   private readonly executionTimeoutMs: number;
@@ -91,6 +97,10 @@ export class PyodideRuntimeManager implements RuntimeManager {
           "Runtime manager đã được hủy và không thể khởi tạo lại.",
         ),
       );
+    }
+
+    if (this.pendingTimeoutRecovery !== null) {
+      return this.pendingTimeoutRecovery.promise;
     }
 
     if (this.state === "READY") {
@@ -259,6 +269,23 @@ export class PyodideRuntimeManager implements RuntimeManager {
       );
     }
 
+    const snapshot = snapshotPreparationRequest(request);
+    return this.startPreparation(snapshot, "CALLER");
+  }
+
+  private startPreparation(
+    snapshot: RuntimeMissionPreparationRequest,
+    purpose: "CALLER" | "RESTORE",
+  ): Promise<RuntimeLifecycleResult> {
+    if (this.worker === null) {
+      return Promise.resolve(
+        lifecycleFailure(
+          "RUNTIME_NOT_READY",
+          "Runtime chưa sẵn sàng. Hãy khởi tạo runtime trước khi chuẩn bị môi trường.",
+        ),
+      );
+    }
+
     const worker = this.worker;
     const requestId = "runtime-" + ++this.nextRequestNumber;
     let resolvePreparation!: (result: RuntimeLifecycleResult) => void;
@@ -269,6 +296,8 @@ export class PyodideRuntimeManager implements RuntimeManager {
     this.pendingPreparation = {
       worker,
       requestId,
+      purpose,
+      snapshot,
       promise,
       resolve: resolvePreparation,
     };
@@ -317,7 +346,7 @@ export class PyodideRuntimeManager implements RuntimeManager {
             "Python runtime worker gặp lỗi khi chuẩn bị môi trường.",
           ),
         ),
-        true,
+        purpose === "CALLER",
       );
     };
 
@@ -335,7 +364,7 @@ export class PyodideRuntimeManager implements RuntimeManager {
             "Không thể nhận kết quả chuẩn bị từ Python runtime worker.",
           ),
         ),
-        true,
+        purpose === "CALLER",
       );
     };
 
@@ -343,8 +372,8 @@ export class PyodideRuntimeManager implements RuntimeManager {
       worker.postMessage({
         type: "MISSION_PREPARE",
         requestId,
-        runtimeConfig: request.runtimeConfig,
-        setupData: request.setupData,
+        runtimeConfig: snapshot.runtimeConfig,
+        setupData: snapshot.setupData,
       });
     } catch (error) {
       this.completePreparation(
@@ -356,7 +385,7 @@ export class PyodideRuntimeManager implements RuntimeManager {
             "Không thể gửi yêu cầu chuẩn bị môi trường tới runtime.",
           ),
         ),
-        true,
+        purpose === "CALLER",
       );
     }
 
@@ -536,6 +565,8 @@ export class PyodideRuntimeManager implements RuntimeManager {
     this.pendingRun = null;
     this.pendingTimeoutRecovery = null;
     this.worker = null;
+    this.lastSuccessfulPreparation = undefined;
+    this.environmentLost = false;
 
     clearRunTimeout(pendingRun);
 
@@ -565,7 +596,13 @@ export class PyodideRuntimeManager implements RuntimeManager {
       ),
     );
 
-    pendingTimeoutRecovery?.resolve(
+    pendingTimeoutRecovery?.resolveLifecycle(
+      lifecycleFailure(
+        "RUNTIME_DISPOSED",
+        "Runtime manager đã được hủy trong khi đang khôi phục sau timeout.",
+      ),
+    );
+    pendingTimeoutRecovery?.resolveRun(
       executionFailure(
         "RUNTIME_DISPOSED",
         "Runtime manager đã được hủy trong khi đang khôi phục sau timeout.",
@@ -607,7 +644,7 @@ export class PyodideRuntimeManager implements RuntimeManager {
       worker.terminate();
       this.worker = null;
       this.state = "IDLE";
-    } else {
+    } else if (!pending.recovery) {
       this.state = "READY";
     }
 
@@ -630,11 +667,15 @@ export class PyodideRuntimeManager implements RuntimeManager {
     worker: RuntimeWorkerPort,
     requestId: string,
   ): boolean {
+    const pending = this.pendingPreparation;
     return (
-      this.state === "READY" &&
+      pending !== null &&
+      (pending.purpose === "RESTORE"
+        ? this.state === "RECOVERING"
+        : this.state === "READY") &&
       this.worker === worker &&
-      this.pendingPreparation?.worker === worker &&
-      this.pendingPreparation.requestId === requestId
+      pending.worker === worker &&
+      pending.requestId === requestId
     );
   }
 
@@ -648,7 +689,9 @@ export class PyodideRuntimeManager implements RuntimeManager {
       pending === null ||
       pending.worker !== worker ||
       this.worker !== worker ||
-      this.state !== "READY"
+      (pending.purpose === "RESTORE"
+        ? this.state !== "RECOVERING"
+        : this.state !== "READY")
     ) {
       return;
     }
@@ -657,8 +700,10 @@ export class PyodideRuntimeManager implements RuntimeManager {
     clearWorkerListeners(worker);
 
     if (result.ok) {
-      this.hasPreparedMission = true;
       this.environmentLost = false;
+      if (pending.purpose === "CALLER") {
+        this.lastSuccessfulPreparation = pending.snapshot;
+      }
     }
 
     if (discardWorker) {
@@ -719,12 +764,18 @@ export class PyodideRuntimeManager implements RuntimeManager {
     worker.terminate();
     this.worker = null;
 
-    this.environmentLost = this.hasPreparedMission;
-    this.hasPreparedMission = false;
+    const restorationBaseline = this.lastSuccessfulPreparation;
+    this.environmentLost = restorationBaseline !== undefined;
     this.state = "RECOVERING";
 
+    let resolveRecovery!: (result: RuntimeLifecycleResult) => void;
+    const recoveryPromise = new Promise<RuntimeLifecycleResult>((resolve) => {
+      resolveRecovery = resolve;
+    });
     const recovery: PendingTimeoutRecovery = {
-      resolve: pending.resolve,
+      promise: recoveryPromise,
+      resolveLifecycle: resolveRecovery,
+      resolveRun: pending.resolve,
     };
     this.pendingTimeoutRecovery = recovery;
 
@@ -737,10 +788,24 @@ export class PyodideRuntimeManager implements RuntimeManager {
         return;
       }
 
-      this.pendingTimeoutRecovery = null;
+      if (!result.ok) {
+        this.pendingTimeoutRecovery = null;
+        recovery.resolveLifecycle(result);
+        recovery.resolveRun(
+          timeoutExecutionResult(
+            "EXECUTION_TIMEOUT_RECOVERY_FAILED",
+            `Mã Python đã vượt quá giới hạn ${this.executionTimeoutMs} ms và Worker thay thế không thể khởi tạo: ${result.error.message}`,
+          ),
+        );
+        return;
+      }
 
-      if (result.ok) {
-        recovery.resolve(
+      if (restorationBaseline === undefined) {
+        this.state = "READY";
+        this.environmentLost = false;
+        this.pendingTimeoutRecovery = null;
+        recovery.resolveLifecycle(READY_RESULT);
+        recovery.resolveRun(
           timeoutExecutionResult(
             "EXECUTION_TIMEOUT",
             `Mã Python đã vượt quá giới hạn ${this.executionTimeoutMs} ms. Worker đã được thay thế và runtime đã sẵn sàng lại.`,
@@ -749,12 +814,51 @@ export class PyodideRuntimeManager implements RuntimeManager {
         return;
       }
 
-      recovery.resolve(
-        timeoutExecutionResult(
-          "EXECUTION_TIMEOUT_RECOVERY_FAILED",
-          `Mã Python đã vượt quá giới hạn ${this.executionTimeoutMs} ms và Worker thay thế không thể khởi tạo: ${result.error.message}`,
-        ),
+      const restoration = this.startPreparation(
+        restorationBaseline,
+        "RESTORE",
       );
+      void restoration.then((restoreResult) => {
+        if (
+          this.pendingTimeoutRecovery !== recovery ||
+          this.state === "DISPOSED"
+        ) {
+          return;
+        }
+
+        this.pendingTimeoutRecovery = null;
+
+        if (restoreResult.ok) {
+          this.state = "READY";
+          this.environmentLost = false;
+          recovery.resolveLifecycle(READY_RESULT);
+          recovery.resolveRun(
+            timeoutExecutionResult(
+              "EXECUTION_TIMEOUT",
+              `Mã Python đã vượt quá giới hạn ${this.executionTimeoutMs} ms. Worker đã được thay thế và runtime đã sẵn sàng lại.`,
+            ),
+          );
+          return;
+        }
+
+        this.state = this.worker === null ? "IDLE" : "READY";
+        this.environmentLost = true;
+        const restoreFailureMessage =
+          `Mã Python đã vượt quá giới hạn ${this.executionTimeoutMs} ms. ` +
+          `Worker thay thế đã khởi tạo nhưng môi trường mission không thể khôi phục: ${restoreResult.error.message}`;
+        recovery.resolveLifecycle(
+          lifecycleFailure(
+            "EXECUTION_TIMEOUT_RESTORE_FAILED",
+            restoreFailureMessage,
+          ),
+        );
+        recovery.resolveRun(
+          timeoutExecutionResult(
+            "EXECUTION_TIMEOUT_RESTORE_FAILED",
+            restoreFailureMessage,
+          ),
+        );
+      });
     });
   }
 }
@@ -818,6 +922,23 @@ function clearRunTimeout(pending: PendingRun | null): void {
     clearTimeout(pending.timeoutHandle);
     pending.timeoutHandle = null;
   }
+}
+
+function snapshotPreparationRequest(
+  request: RuntimeMissionPreparationRequest,
+): RuntimeMissionPreparationRequest {
+  return {
+    runtimeConfig: cloneJsonValue(request.runtimeConfig),
+    setupData: cloneJsonValue(request.setupData),
+  };
+}
+
+function cloneJsonValue<T>(value: T | undefined): T | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function lifecycleFailure(

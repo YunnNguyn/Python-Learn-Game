@@ -24,7 +24,7 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 Python Runtime — Pyodide Worker
 
 ```text
-PR.5 — Timeout and worker replacement
+PR.6 — Environment restoration
 ```
 
 Status: **Awaiting Manual Browser Validation**
@@ -166,7 +166,7 @@ PR.4 checkpoint `dfb27c0` is the locked baseline for PR.5.
 PR.5 — Timeout and worker replacement
 ```
 
-Status: **Awaiting Manual Browser Validation**
+Status: **Complete / Locked**
 
 Architecture lock:
 
@@ -202,9 +202,47 @@ PR.5 automated validation:
 - [x] `submit()` remains `NOT_IMPLEMENTED`;
 - [x] no new package dependency was added.
 
-Real browser validation with an actual infinite loop is required before PR.5 can be marked Complete / Locked.
+PR.5 manual browser validation is complete. Checkpoint `88c0100` is the locked baseline for PR.6.
 
-Next: **PR.6 — Environment restoration**.
+```text
+PR.6 — Environment restoration
+```
+
+Status: **Awaiting Manual Browser Validation**
+
+Architecture lock:
+
+- PR.6 retains the latest successful `RuntimeMissionPreparationRequest` as a manager-owned JSON snapshot for timeout restoration. The snapshot is captured synchronously at `prepareMission()` call time and is independent from later caller mutation.
+- A successful empty preparation still establishes a restoration baseline. Failed preparations do not replace the last successful baseline.
+- After a prepared Run times out, PR.6 preserves the PR.5 Worker replacement flow, waits for replacement initialization, then performs exactly one automatic `MISSION_PREPARE` using the latest successful baseline before resolving the timed Run.
+- Timed-out learner code is never replayed. Learner mutations that existed only in the terminated Worker are discarded because restoration starts from the saved clean preparation baseline.
+- `initialize()` calls made during timeout recovery share one lifecycle promise spanning both replacement boot and automatic environment restoration. `run()` and caller `prepareMission()` remain guarded by `RUNTIME_RECOVERING` until restoration settles.
+- Successful restoration returns the manager to READY and resolves the timed Run as `TIMEOUT / EXECUTION_TIMEOUT`. No manual re-prepare is required before the next Run.
+- Restoration failure resolves both the timed Run and shared recovery lifecycle with `EXECUTION_TIMEOUT_RESTORE_FAILED`, leaves the replacement Worker available when possible, marks the mission environment lost, and blocks Run with `RUNTIME_ENVIRONMENT_LOST` until a later successful explicit `prepareMission()`.
+- Replacement initialization failure preserves PR.5 semantics: no restoration attempt is made and the timed Run resolves as `TIMEOUT / EXECUTION_TIMEOUT_RECOVERY_FAILED`.
+- Generic timeout recovery with no successful preparation baseline remains unchanged: replacement initialization returns directly to READY and the timed Run resolves as `TIMEOUT / EXECUTION_TIMEOUT`.
+- `dispose()` during replacement/restoration settles both the shared recovery lifecycle and timed Run with `RUNTIME_DISPOSED`, terminates the active replacement Worker once, clears the saved baseline, and prevents late restoration messages from reviving the manager.
+- PR.6 reuses the existing `RUNTIME_INIT`, `MISSION_PREPARE`, `MISSION_PREPARED`, and `RUN_CODE / RUN_RESULT` protocol. No restore/cancel/interrupt protocol message was added.
+- Public `RuntimeManager`, runtime contracts, Worker protocol types, Mission Workspace, package dependencies, and content/domain boundaries remain unchanged from checkpoint `88c0100`.
+- PR.6 adds no Mission Pipeline execution, Submit/grading flow, NumPy/package loading, persistence, `MissionInstance` storage, learner/grading data storage, or Mission Workspace runtime wiring.
+
+PR.6 automated validation:
+
+- [x] focused runtime-manager suite passed: 1 test file, 61 tests;
+- [x] full regression suite passed: 38 test files, 696 tests;
+- [x] `npm.cmd run typecheck` passed;
+- [x] `npm.cmd run build` passed: 774 modules transformed and four local Pyodide assets copied; existing browser-externalization and large-chunk warnings remain non-failing;
+- [x] `git diff --check` passed; working-tree LF→CRLF notices are informational;
+- [x] `package.json` and `package-lock.json` are unchanged from PR.5 checkpoint `88c0100`;
+- [x] public `runtime-contracts.ts`, `runtime-manager.ts`, and `worker-protocol.ts` are unchanged from checkpoint `88c0100`;
+- [x] Worker protocol contains no restore/cancel/interrupt message and timed-out learner code is not replayed;
+- [x] runtime manager stores no `MissionInstance`, `MissionTemplate`, `learner.data`, `grading.data`, `AttemptRecord`, `WorldEvent`, content import, package-loading, NumPy, or persistence state;
+- [x] Mission Workspace is unchanged from checkpoint `88c0100` and still renders `Chạy thử` / `Nộp bài` disabled;
+- [x] no new package dependency was added.
+
+Real browser validation of environment restoration is required before Python Runtime can be marked complete.
+
+Next: **Mission Pipeline / MP.1 — Run pipeline**.
 
 ## Completed
 
