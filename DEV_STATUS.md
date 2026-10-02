@@ -24,7 +24,7 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 Python Runtime — Pyodide Worker
 
 ```text
-PR.4 — Mission setup execution
+PR.5 — Timeout and worker replacement
 ```
 
 Status: **Awaiting Manual Browser Validation**
@@ -128,7 +128,7 @@ PR.3 manual browser execution validation is complete. Checkpoint `f8e115f` remai
 PR.4 — Mission setup execution
 ```
 
-Status: **Awaiting Manual Browser Validation**
+Status: **Complete / Locked**
 
 Architecture lock:
 
@@ -160,9 +160,51 @@ PR.4 automated validation:
 - [x] no new package dependency was added;
 - [x] the development-only `/dev` probe now supports JSON mission preparation diagnostics without wiring Mission Workspace.
 
-Real Pyodide browser validation is required before PR.4 can be marked Complete / Locked.
+PR.4 checkpoint `dfb27c0` is the locked baseline for PR.5.
 
-Next: **PR.5 — Timeout and worker replacement**.
+```text
+PR.5 — Timeout and worker replacement
+```
+
+Status: **Awaiting Manual Browser Validation**
+
+Architecture lock:
+
+- PR.5 adds a concrete manager-side learner Run deadline only. `executionTimeoutMs` defaults to 5000 ms and must be a finite positive safe integer.
+- The timeout starts only after `RUN_CODE` is posted successfully. Initialization, Pyodide boot, and `prepareMission()` are not timed by this deadline.
+- A finite matching `RUN_RESULT` wins normally, clears the timer, and keeps the Worker. This includes `SUCCESS`, `PYTHON_EXCEPTION`, and finite `RUNTIME_ERROR` results.
+- When the deadline wins, the old Worker callbacks are neutralized, the Worker is terminated exactly once, the active Run correlation is invalidated, and stale messages/errors from that Worker cannot settle current work.
+- Timeout recovery creates a fresh module Worker, sends only `RUNTIME_INIT`, and waits for the replacement initialization attempt to complete before resolving the original Run.
+- Timed-out learner code is never replayed on the replacement Worker.
+- Successful replacement initialization resolves the original Run as `TIMEOUT / EXECUTION_TIMEOUT`. Failed replacement initialization preserves `TIMEOUT` with `EXECUTION_TIMEOUT_RECOVERY_FAILED`, leaves the manager non-READY, and allows a later explicit `initialize()` retry.
+- `initialize()` calls made during timeout recovery share the one replacement initialization. `run()` and `prepareMission()` return `RUNTIME_RECOVERING` while that recovery is active.
+- PR.5 tracks only whether the current Worker had a successfully prepared mission. It does not retain or replay `runtimeConfig` or `setupData`.
+- After timeout, a replacement Worker can run generic code immediately when no successful mission had been prepared. If a successful mission had been prepared, the replacement marks that environment lost and `run()` returns `RUNTIME_ENVIRONMENT_LOST` until a new explicit successful `prepareMission()`.
+- A failed preparation does not count as a prepared environment. A later successful explicit re-prepare clears the environment-lost guard.
+- Exactly one side of the matching-result/deadline race wins. Wrong request IDs do not clear the active timer.
+- `dispose()` before timeout clears the deadline and prevents replacement. `dispose()` during replacement terminates the replacement Worker and settles pending work without creating another Worker.
+- Generic Worker failures retain the existing PR.3/PR.4 behavior; PR.5 adds automatic replacement only for execution timeout.
+- PR.5 adds no cooperative interrupt/cancel protocol, no timeout logic inside the Worker, no mission setup replay, no NumPy/package work, no grading, and no Mission Workspace production wiring.
+- PR.6 owns automatic environment restoration after replacement.
+
+PR.5 automated validation:
+
+- [x] focused runtime-manager suite passed: 1 test file, 54 tests;
+- [x] full regression suite passed: 38 test files, 689 tests;
+- [x] `npm.cmd run typecheck` passed;
+- [x] `npm.cmd run build` passed: 774 modules transformed and local Pyodide assets retained; existing browser-externalization and large-chunk warnings remain non-failing;
+- [x] `git diff --check` passed; working-tree LF→CRLF notices are informational;
+- [x] `package.json` and `package-lock.json` are unchanged from PR.4 checkpoint `dfb27c0`;
+- [x] public `RuntimeManager` and `runtime-contracts.ts` remain unchanged;
+- [x] Worker protocol contains no interrupt/cancel message and timed-out learner code is not replayed;
+- [x] PR.5 stores no mission `runtimeConfig` / `setupData` for restoration;
+- [x] Mission Workspace remains unchanged from PR.4 and its production Run/Submit controls remain deferred;
+- [x] `submit()` remains `NOT_IMPLEMENTED`;
+- [x] no new package dependency was added.
+
+Real browser validation with an actual infinite loop is required before PR.5 can be marked Complete / Locked.
+
+Next: **PR.6 — Environment restoration**.
 
 ## Completed
 

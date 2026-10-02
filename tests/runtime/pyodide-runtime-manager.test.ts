@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   PyodideRuntimeManager,
@@ -36,10 +36,11 @@ class FakeWorker implements RuntimeWorkerPort {
   }
 }
 
-function createHarness() {
+function createHarness(executionTimeoutMs = 5_000) {
   const workers: FakeWorker[] = [];
   const manager = new PyodideRuntimeManager({
     indexURL: LOCAL_INDEX_URL,
+    executionTimeoutMs,
     createWorker: () => {
       const worker = new FakeWorker();
       workers.push(worker);
@@ -50,8 +51,8 @@ function createHarness() {
   return { manager, workers };
 }
 
-async function createReadyHarness() {
-  const harness = createHarness();
+async function createReadyHarness(executionTimeoutMs = 5_000) {
+  const harness = createHarness(executionTimeoutMs);
   const initialization = harness.manager.initialize();
   harness.workers[0].emitMessage({
     type: "READY",
@@ -60,6 +61,10 @@ async function createReadyHarness() {
   await initialization;
   return harness;
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("PyodideRuntimeManager initialization", () => {
   it("sends one local RUNTIME_INIT request and resolves READY", async () => {
@@ -837,6 +842,480 @@ describe("PyodideRuntimeManager mission preparation", () => {
         message: "unsupported",
       },
     });
+  });
+});
+
+describe("PR.5 execution timeout and worker replacement", () => {
+  it("validates executionTimeoutMs at construction", () => {
+    for (const executionTimeoutMs of [
+      0,
+      -1,
+      1.5,
+      Number.POSITIVE_INFINITY,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      expect(
+        () =>
+          new PyodideRuntimeManager({
+            indexURL: LOCAL_INDEX_URL,
+            executionTimeoutMs,
+            createWorker: () => new FakeWorker(),
+          }),
+      ).toThrow(RangeError);
+    }
+  });
+
+  it("does not time initialization or mission preparation", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = createHarness(10);
+    const initialization = manager.initialize();
+
+    vi.advanceTimersByTime(100);
+    expect(workers).toHaveLength(1);
+    expect(workers[0].terminateCount).toBe(0);
+
+    workers[0].emitMessage({ type: "READY", requestId: "runtime-1" });
+    await initialization;
+
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+    vi.advanceTimersByTime(100);
+    expect(workers).toHaveLength(1);
+    expect(workers[0].terminateCount).toBe(0);
+
+    workers[0].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-2",
+    });
+    await expect(preparation).resolves.toEqual({ ok: true });
+  });
+
+  it("clears the timer for normal SUCCESS without replacing the worker", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(50);
+    const run = manager.run({ code: "print('ok')" });
+
+    workers[0].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-2",
+      result: {
+        status: "SUCCESS",
+        stdout: "ok\n",
+        stderr: "",
+      },
+    });
+
+    await expect(run).resolves.toMatchObject({ status: "SUCCESS" });
+    vi.advanceTimersByTime(100);
+    expect(workers).toHaveLength(1);
+    expect(workers[0].terminateCount).toBe(0);
+  });
+
+  it("clears the timer for PYTHON_EXCEPTION without replacing the worker", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(50);
+    const run = manager.run({ code: "raise ValueError('bad')" });
+
+    workers[0].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-2",
+      result: {
+        status: "PYTHON_EXCEPTION",
+        stdout: "",
+        stderr: "",
+        exception: {
+          type: "ValueError",
+          message: "bad",
+        },
+      },
+    });
+
+    await expect(run).resolves.toMatchObject({ status: "PYTHON_EXCEPTION" });
+    vi.advanceTimersByTime(100);
+    expect(workers).toHaveLength(1);
+    expect(workers[0].terminateCount).toBe(0);
+  });
+
+  it("clears the timer for finite RUNTIME_ERROR results without replacing the worker", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(50);
+    const run = manager.run({ code: "print('finite')" });
+
+    workers[0].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-2",
+      result: {
+        status: "RUNTIME_ERROR",
+        stdout: "",
+        stderr: "",
+        error: {
+          code: "FINITE_RUNTIME_ERROR",
+          message: "finite failure",
+        },
+      },
+    });
+
+    await expect(run).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "FINITE_RUNTIME_ERROR" },
+    });
+    vi.advanceTimersByTime(100);
+    expect(workers).toHaveLength(1);
+    expect(workers[0].terminateCount).toBe(0);
+  });
+
+  it("times out one run, terminates the old worker once, initializes a replacement, and never replays code", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const oldWorker = workers[0];
+    const staleHandler = oldWorker.onmessage;
+    const run = manager.run({ code: "while True: pass" });
+    let settled = false;
+    void run.then(() => {
+      settled = true;
+    });
+
+    vi.advanceTimersByTime(25);
+
+    expect(oldWorker.terminateCount).toBe(1);
+    expect(workers).toHaveLength(2);
+    expect(workers[1].postedMessages).toEqual([
+      {
+        type: "RUNTIME_INIT",
+        requestId: "runtime-3",
+        indexURL: LOCAL_INDEX_URL,
+      },
+    ]);
+
+    staleHandler?.({
+      data: {
+        type: "RUN_RESULT",
+        requestId: "runtime-2",
+        result: {
+          status: "SUCCESS",
+          stdout: "late\n",
+          stderr: "",
+        },
+      },
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-3" });
+    await expect(run).resolves.toEqual({
+      status: "TIMEOUT",
+      stdout: "",
+      stderr: "",
+      error: {
+        code: "EXECUTION_TIMEOUT",
+        message:
+          "Mã Python đã vượt quá giới hạn 25 ms. Worker đã được thay thế và runtime đã sẵn sàng lại.",
+      },
+    });
+    expect(workers[1].postedMessages).toHaveLength(1);
+  });
+
+  it("keeps TIMEOUT when replacement initialization fails and allows an explicit fresh initialize", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const run = manager.run({ code: "while True: pass" });
+
+    vi.advanceTimersByTime(25);
+    workers[1].emitMessage({
+      type: "RUNTIME_ERROR",
+      requestId: "runtime-3",
+      error: {
+        code: "PYODIDE_INIT_FAILED",
+        message: "replacement boot failed",
+      },
+    });
+
+    await expect(run).resolves.toMatchObject({
+      status: "TIMEOUT",
+      error: {
+        code: "EXECUTION_TIMEOUT_RECOVERY_FAILED",
+      },
+    });
+    expect(workers[1].terminateCount).toBe(1);
+
+    const retry = manager.initialize();
+    expect(workers).toHaveLength(3);
+    expect(workers[2].postedMessages[0]).toMatchObject({
+      type: "RUNTIME_INIT",
+      requestId: "runtime-4",
+    });
+    workers[2].emitMessage({ type: "READY", requestId: "runtime-4" });
+    await expect(retry).resolves.toEqual({ ok: true });
+  });
+
+  it("shares one replacement initialization with initialize calls made during recovery", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const run = manager.run({ code: "while True: pass" });
+
+    vi.advanceTimersByTime(25);
+    const firstInitialize = manager.initialize();
+    const secondInitialize = manager.initialize();
+
+    expect(secondInitialize).toBe(firstInitialize);
+    expect(workers).toHaveLength(2);
+    expect(workers[1].postedMessages).toHaveLength(1);
+
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-3" });
+    await expect(firstInitialize).resolves.toEqual({ ok: true });
+    await expect(secondInitialize).resolves.toEqual({ ok: true });
+    await expect(run).resolves.toMatchObject({ status: "TIMEOUT" });
+    expect(workers).toHaveLength(2);
+  });
+
+  it("rejects run and prepareMission as RUNTIME_RECOVERING without posting learner work", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const timedRun = manager.run({ code: "while True: pass" });
+
+    vi.advanceTimersByTime(25);
+    const replacement = workers[1];
+
+    await expect(
+      manager.run({ code: "print('too soon')" }),
+    ).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_RECOVERING" },
+    });
+    await expect(
+      manager.prepareMission({ setupData: { value: 10 } }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: "RUNTIME_RECOVERING" },
+    });
+    expect(replacement.postedMessages).toHaveLength(1);
+
+    replacement.emitMessage({ type: "READY", requestId: "runtime-3" });
+    await timedRun;
+  });
+
+  it("allows generic Run after recovery when no mission had been prepared", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const timedRun = manager.run({ code: "while True: pass" });
+
+    vi.advanceTimersByTime(25);
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-3" });
+    await timedRun;
+
+    const recoveredRun = manager.run({ code: "print('recovered')" });
+    expect(workers[1].postedMessages[1]).toEqual({
+      type: "RUN_CODE",
+      requestId: "runtime-4",
+      code: "print('recovered')",
+    });
+    workers[1].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-4",
+      result: {
+        status: "SUCCESS",
+        stdout: "recovered\n",
+        stderr: "",
+      },
+    });
+    await expect(recoveredRun).resolves.toMatchObject({
+      status: "SUCCESS",
+      stdout: "recovered\n",
+    });
+  });
+
+  it("marks a prepared environment lost after timeout and clears it only after successful explicit re-prepare", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+    workers[0].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-2",
+    });
+    await preparation;
+
+    const timedRun = manager.run({ code: "while True: pass" });
+    vi.advanceTimersByTime(25);
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-4" });
+    await timedRun;
+
+    await expect(manager.run({ code: "print(value)" })).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_ENVIRONMENT_LOST" },
+    });
+    expect(workers[1].postedMessages).toHaveLength(1);
+
+    const reprepare = manager.prepareMission({ setupData: { value: 10 } });
+    expect(workers[1].postedMessages[1]).toMatchObject({
+      type: "MISSION_PREPARE",
+      requestId: "runtime-5",
+    });
+    workers[1].emitMessage({
+      type: "MISSION_PREPARED",
+      requestId: "runtime-5",
+    });
+    await expect(reprepare).resolves.toEqual({ ok: true });
+
+    const recoveredRun = manager.run({ code: "print(value)" });
+    workers[1].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-6",
+      result: {
+        status: "SUCCESS",
+        stdout: "10\n",
+        stderr: "",
+      },
+    });
+    await expect(recoveredRun).resolves.toMatchObject({
+      status: "SUCCESS",
+      stdout: "10\n",
+    });
+  });
+
+  it("does not mark the environment lost when the pre-timeout prepare failed", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const failedPreparation = manager.prepareMission({
+      runtimeConfig: { packages: ["numpy"] },
+    });
+    workers[0].emitMessage({
+      type: "RUNTIME_ERROR",
+      requestId: "runtime-2",
+      error: {
+        code: "UNSUPPORTED_RUNTIME_CONFIG",
+        message: "unsupported",
+      },
+    });
+    await failedPreparation;
+
+    const timedRun = manager.run({ code: "while True: pass" });
+    vi.advanceTimersByTime(25);
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-4" });
+    await timedRun;
+
+    const recoveredRun = manager.run({ code: "print('generic')" });
+    expect(workers[1].postedMessages[1]).toMatchObject({
+      type: "RUN_CODE",
+      requestId: "runtime-5",
+    });
+    workers[1].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-5",
+      result: {
+        status: "SUCCESS",
+        stdout: "generic\n",
+        stderr: "",
+      },
+    });
+    await expect(recoveredRun).resolves.toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("ignores a wrong RUN_RESULT request ID and leaves the timeout active", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const run = manager.run({ code: "while True: pass" });
+
+    workers[0].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-999",
+      result: {
+        status: "SUCCESS",
+        stdout: "wrong\n",
+        stderr: "",
+      },
+    });
+    vi.advanceTimersByTime(25);
+
+    expect(workers[0].terminateCount).toBe(1);
+    expect(workers).toHaveLength(2);
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-3" });
+    await expect(run).resolves.toMatchObject({ status: "TIMEOUT" });
+  });
+
+  it("settles RUNTIME_DISPOSED and never replaces the worker when disposed before timeout", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const run = manager.run({ code: "while True: pass" });
+
+    manager.dispose();
+
+    await expect(run).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_DISPOSED" },
+    });
+    vi.advanceTimersByTime(100);
+    expect(workers).toHaveLength(1);
+    expect(workers[0].terminateCount).toBe(1);
+  });
+
+  it("disposes the replacement during recovery without hanging or creating another worker", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const run = manager.run({ code: "while True: pass" });
+
+    vi.advanceTimersByTime(25);
+    expect(workers).toHaveLength(2);
+
+    manager.dispose();
+
+    await expect(run).resolves.toMatchObject({
+      status: "RUNTIME_ERROR",
+      error: { code: "RUNTIME_DISPOSED" },
+    });
+    expect(workers[0].terminateCount).toBe(1);
+    expect(workers[1].terminateCount).toBe(1);
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-3" });
+    vi.advanceTimersByTime(100);
+    expect(workers).toHaveLength(2);
+  });
+
+  it("lets a matching result just before the deadline win the race", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const run = manager.run({ code: "print('fast')" });
+
+    vi.advanceTimersByTime(24);
+    workers[0].emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-2",
+      result: {
+        status: "SUCCESS",
+        stdout: "fast\n",
+        stderr: "",
+      },
+    });
+    vi.advanceTimersByTime(1);
+
+    await expect(run).resolves.toMatchObject({ status: "SUCCESS" });
+    expect(workers).toHaveLength(1);
+    expect(workers[0].terminateCount).toBe(0);
+  });
+
+  it("lets timeout just after the deadline win and ignores a late matching result", async () => {
+    vi.useFakeTimers();
+    const { manager, workers } = await createReadyHarness(25);
+    const oldWorker = workers[0];
+    const lateHandler = oldWorker.onmessage;
+    const run = manager.run({ code: "while True: pass" });
+
+    vi.advanceTimersByTime(25);
+    lateHandler?.({
+      data: {
+        type: "RUN_RESULT",
+        requestId: "runtime-2",
+        result: {
+          status: "SUCCESS",
+          stdout: "too late\n",
+          stderr: "",
+        },
+      },
+    });
+
+    workers[1].emitMessage({ type: "READY", requestId: "runtime-3" });
+    await expect(run).resolves.toMatchObject({
+      status: "TIMEOUT",
+      error: { code: "EXECUTION_TIMEOUT" },
+    });
+    expect(oldWorker.terminateCount).toBe(1);
   });
 });
 
