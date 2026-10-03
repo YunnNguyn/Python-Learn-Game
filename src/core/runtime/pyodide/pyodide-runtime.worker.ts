@@ -40,6 +40,108 @@ let runtime: PyodideInterface | null = null;
 let activeNamespace: PyProxy | null = null;
 let activeOperationRequestId: string | null = null;
 
+const OBSERVATION_HELPER_SOURCE = `
+import json
+import math
+
+_JS_SAFE_INTEGER = 9007199254740991
+
+def __runtime_json_safe(value, ancestors):
+    if value is None or isinstance(value, (bool, str)):
+        return True, value
+
+    if isinstance(value, int):
+        if abs(value) > _JS_SAFE_INTEGER:
+            return False, None
+        return True, value
+
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return False, None
+        return True, value
+
+    if isinstance(value, (list, tuple)):
+        identity = id(value)
+        if identity in ancestors:
+            return False, None
+        ancestors.add(identity)
+        normalized = []
+        try:
+            for item in value:
+                ok, converted = __runtime_json_safe(item, ancestors)
+                if not ok:
+                    return False, None
+                normalized.append(converted)
+            return True, normalized
+        finally:
+            ancestors.discard(identity)
+
+    if isinstance(value, dict):
+        identity = id(value)
+        if identity in ancestors:
+            return False, None
+        ancestors.add(identity)
+        normalized = {}
+        try:
+            for key, item in value.items():
+                if not isinstance(key, str):
+                    return False, None
+                ok, converted = __runtime_json_safe(item, ancestors)
+                if not ok:
+                    return False, None
+                normalized[key] = converted
+            return True, normalized
+        finally:
+            ancestors.discard(identity)
+
+    return False, None
+
+def __runtime_collect(scope, names):
+    variables = {}
+    for name in names:
+        if name not in scope:
+            continue
+
+        value = scope[name]
+        value_type = type(value)
+        is_ndarray = (
+            value_type.__module__ == "numpy"
+            and value_type.__name__ == "ndarray"
+        )
+        observed = {
+            "pythonType": value_type.__name__,
+            "isNdarray": is_ndarray,
+        }
+
+        candidate = value
+        if is_ndarray:
+            try:
+                shape = [int(dimension) for dimension in value.shape]
+                if all(
+                    0 <= dimension <= _JS_SAFE_INTEGER
+                    for dimension in shape
+                ):
+                    observed["shape"] = shape
+                candidate = value.tolist()
+            except Exception:
+                candidate = value
+
+        try:
+            ok, normalized = __runtime_json_safe(candidate, set())
+            if ok:
+                observed["value"] = normalized
+        except Exception:
+            pass
+
+        variables[name] = observed
+
+    return json.dumps(
+        {"variables": variables},
+        allow_nan=False,
+        separators=(",", ":"),
+    )
+`;
+
 workerScope.onmessage = (event) => {
   if (isRuntimeInitWorkerRequest(event.data)) {
     void initializeRuntime(event.data.requestId, event.data.indexURL);
@@ -56,7 +158,11 @@ workerScope.onmessage = (event) => {
   }
 
   if (isRuntimeRunCodeWorkerRequest(event.data)) {
-    void runCode(event.data.requestId, event.data.code);
+    void runCode(
+      event.data.requestId,
+      event.data.code,
+      event.data.observeVariables,
+    );
     return;
   }
 
@@ -66,6 +172,7 @@ workerScope.onmessage = (event) => {
       event.data.code,
       event.data.runtimeConfig,
       event.data.setupData,
+      event.data.observeVariables,
     );
   }
 };
@@ -216,7 +323,11 @@ function buildMissionNamespace(
   }
 }
 
-async function runCode(requestId: string, code: string): Promise<void> {
+async function runCode(
+  requestId: string,
+  code: string,
+  observeVariables: readonly string[] | undefined,
+): Promise<void> {
   if (runtime === null) {
     postRunResult(
       requestId,
@@ -245,7 +356,7 @@ async function runCode(requestId: string, code: string): Promise<void> {
     activeNamespace ??= createPythonSetupNamespace(runtime, {});
     postRunResult(
       requestId,
-      await executePython(runtime, activeNamespace, code),
+      await executePython(runtime, activeNamespace, code, observeVariables),
     );
   } catch (error) {
     postRunResult(
@@ -265,6 +376,7 @@ async function submitCode(
   code: string,
   runtimeConfig: JsonObject | undefined,
   setupData: JsonObject | undefined,
+  observeVariables: readonly string[] | undefined,
 ): Promise<void> {
   if (runtime === null) {
     postSubmitResult(
@@ -311,7 +423,7 @@ async function submitCode(
     submitNamespace = namespaceResult.namespace;
     postSubmitResult(
       requestId,
-      await executePython(runtime, submitNamespace, code),
+      await executePython(runtime, submitNamespace, code, observeVariables),
     );
   } catch (error) {
     postSubmitResult(
@@ -331,10 +443,12 @@ async function executePython(
   pyodide: PyodideInterface,
   globals: PyProxy,
   code: string,
+  observeVariables: readonly string[] | undefined,
 ): Promise<RuntimeExecutionResult> {
   const stdoutCapture = createOutputCapture();
   const stderrCapture = createOutputCapture();
   let executionValue: unknown;
+  let result: RuntimeExecutionResult;
 
   pyodide.setStdout(stdoutCapture.writer);
   pyodide.setStderr(stderrCapture.writer);
@@ -344,7 +458,7 @@ async function executePython(
     destroyPyProxy(pyodide, executionValue);
     executionValue = undefined;
 
-    return {
+    result = {
       status: RUNTIME_EXECUTION_STATUS.SUCCESS,
       stdout: stdoutCapture.finish(),
       stderr: stderrCapture.finish(),
@@ -354,23 +468,81 @@ async function executePython(
     executionValue = undefined;
 
     if (error instanceof pyodide.ffi.PythonError) {
-      return {
+      result = {
         status: RUNTIME_EXECUTION_STATUS.PYTHON_EXCEPTION,
         stdout: stdoutCapture.finish(),
         stderr: stderrCapture.finish(),
         exception: normalizePythonException(error),
       };
+    } else {
+      result = executionFailure(
+        "PYODIDE_EXECUTION_FAILED",
+        getErrorMessage(error, "Pyodide không thể thực thi mã Python."),
+        stdoutCapture.finish(),
+        stderrCapture.finish(),
+      );
     }
-
-    return executionFailure(
-      "PYODIDE_EXECUTION_FAILED",
-      getErrorMessage(error, "Pyodide không thể thực thi mã Python."),
-      stdoutCapture.finish(),
-      stderrCapture.finish(),
-    );
   } finally {
     pyodide.setStdout();
     pyodide.setStderr();
+  }
+
+  if (
+    observeVariables !== undefined &&
+    (result.status === RUNTIME_EXECUTION_STATUS.SUCCESS ||
+      result.status === RUNTIME_EXECUTION_STATUS.PYTHON_EXCEPTION)
+  ) {
+    try {
+      return {
+        ...result,
+        serialized: await collectRuntimeObservations(
+          pyodide,
+          globals,
+          observeVariables,
+        ),
+      };
+    } catch (error) {
+      return executionFailure(
+        "RUNTIME_OBSERVATION_FAILED",
+        getErrorMessage(
+          error,
+          "Không thể chuẩn hóa quan sát biến Python.",
+        ),
+        result.stdout,
+        result.stderr,
+      );
+    }
+  }
+
+  return result;
+}
+
+async function collectRuntimeObservations(
+  pyodide: PyodideInterface,
+  globals: PyProxy,
+  observeVariables: readonly string[],
+): Promise<JsonObject> {
+  const expression = `(lambda __runtime_ns: (exec(${JSON.stringify(
+    OBSERVATION_HELPER_SOURCE,
+  )}, __runtime_ns), __runtime_ns["__runtime_collect"](globals(), ${JSON.stringify(
+    observeVariables,
+  )}))[1])({})`;
+  let serializedValue: unknown;
+
+  try {
+    serializedValue = await pyodide.runPythonAsync(expression, { globals });
+    if (typeof serializedValue !== "string") {
+      throw new Error("Runtime observation helper returned a non-string payload.");
+    }
+
+    const parsed = JSON.parse(serializedValue) as unknown;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("Runtime observation helper returned an invalid JSON object.");
+    }
+
+    return parsed as JsonObject;
+  } finally {
+    destroyPyProxy(pyodide, serializedValue);
   }
 }
 

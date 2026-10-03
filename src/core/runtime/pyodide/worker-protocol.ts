@@ -14,12 +14,14 @@ export interface RuntimeRunCodeWorkerRequest {
   readonly type: "RUN_CODE";
   readonly requestId: string;
   readonly code: string;
+  readonly observeVariables?: readonly string[];
 }
 
 export interface RuntimeSubmitCodeWorkerRequest {
   readonly type: "SUBMIT_CODE";
   readonly requestId: string;
   readonly code: string;
+  readonly observeVariables?: readonly string[];
   readonly runtimeConfig?: JsonObject;
   readonly setupData?: JsonObject;
 }
@@ -96,7 +98,8 @@ export function isRuntimeRunCodeWorkerRequest(
   return (
     value.type === "RUN_CODE" &&
     typeof value.requestId === "string" &&
-    typeof value.code === "string"
+    typeof value.code === "string" &&
+    isOptionalStringArray(value.observeVariables)
   );
 }
 
@@ -111,6 +114,7 @@ export function isRuntimeSubmitCodeWorkerRequest(
     value.type === "SUBMIT_CODE" &&
     typeof value.requestId === "string" &&
     typeof value.code === "string" &&
+    isOptionalStringArray(value.observeVariables) &&
     isOptionalJsonObject(value.runtimeConfig) &&
     isOptionalJsonObject(value.setupData)
   );
@@ -213,5 +217,14 @@ function isOptionalJsonObject(value: unknown): value is JsonObject | undefined {
   return (
     value === undefined ||
     (isRecord(value) && !Array.isArray(value))
+  );
+}
+
+function isOptionalStringArray(
+  value: unknown,
+): value is readonly string[] | undefined {
+  return (
+    value === undefined ||
+    (Array.isArray(value) && value.every((item) => typeof item === "string"))
   );
 }

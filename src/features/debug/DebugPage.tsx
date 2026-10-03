@@ -30,6 +30,7 @@ export function DebugPage() {
   const [preparationResult, setPreparationResult] =
     useState<RuntimeLifecycleResult | null>(null);
   const [code, setCode] = useState('print("Hello from Pyodide")');
+  const [observationVariable, setObservationVariable] = useState("answer");
   const [runPending, setRunPending] = useState(false);
   const [executionResult, setExecutionResult] =
     useState<RuntimeExecutionResult | null>(null);
@@ -124,7 +125,13 @@ export function DebugPage() {
     setSubmitResult(null);
     setSubmitPending(true);
 
-    const result = await getRuntimeManager().submit({ code });
+    const normalizedObservationVariable = observationVariable.trim();
+    const result = await getRuntimeManager().submit({
+      code,
+      ...(normalizedObservationVariable.length === 0
+        ? {}
+        : { observeVariables: [normalizedObservationVariable] }),
+    });
     if (!mountedRef.current) {
       return;
     }
@@ -227,6 +234,17 @@ export function DebugPage() {
               onChange={(event) => setCode(event.target.value)}
             />
           </div>
+          <div className="debug-runtime-field">
+            <label htmlFor="runtime-observation-variable">
+              <strong>Biến quan sát</strong>
+            </label>
+            <input
+              id="runtime-observation-variable"
+              type="text"
+              value={observationVariable}
+              onChange={(event) => setObservationVariable(event.target.value)}
+            />
+          </div>
           <div className="debug-runtime-actions">
             <button
               className="primary-action"
@@ -307,6 +325,18 @@ export function DebugPage() {
                 <strong>stderr</strong>
               </p>
               <pre className="debug-runtime-output">{submitResult.stderr}</pre>
+              {(submitResult.status === "SUCCESS" ||
+                submitResult.status === "PYTHON_EXCEPTION") &&
+              submitResult.serialized !== undefined ? (
+                <>
+                  <p>
+                    <strong>serialized observations</strong>
+                  </p>
+                  <pre className="debug-runtime-output">
+                    {JSON.stringify(submitResult.serialized, null, 2)}
+                  </pre>
+                </>
+              ) : null}
               {submitResult.status === "PYTHON_EXCEPTION" ? (
                 <>
                   <p>

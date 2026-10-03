@@ -614,12 +614,18 @@ export class PyodideRuntimeManager implements RuntimeManager {
           type: "RUN_CODE",
           requestId,
           code: request.code,
+          ...(request.observeVariables === undefined
+            ? {}
+            : { observeVariables: [...request.observeVariables] }),
         });
       } else {
         worker.postMessage({
           type: "SUBMIT_CODE",
           requestId,
           code: request.code,
+          ...(request.observeVariables === undefined
+            ? {}
+            : { observeVariables: [...request.observeVariables] }),
           runtimeConfig: preparation?.runtimeConfig,
           setupData: preparation?.setupData,
         });
@@ -1085,6 +1091,9 @@ function copyExecutionResult(
     return {
       ...result,
       exception: { ...result.exception },
+      ...(result.serialized === undefined
+        ? {}
+        : { serialized: cloneJsonValue(result.serialized) }),
     };
   }
 
@@ -1097,7 +1106,12 @@ function copyExecutionResult(
       : { ...result, error: { ...result.error } };
   }
 
-  return { ...result };
+  return {
+    ...result,
+    ...(result.serialized === undefined
+      ? {}
+      : { serialized: cloneJsonValue(result.serialized) }),
+  };
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {

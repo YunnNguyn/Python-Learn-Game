@@ -9,6 +9,7 @@ export {
   registerCoreGraders,
 } from "./core-grader-registration";
 export { gradeDeclaratively } from "./declarative-grader";
+export { getDeclarativeObservationVariables } from "./declarative-observation-plan";
 export { GraderRegistry } from "./grader-registry";
 export { GraderFailureCategory } from "./grader-result";
 

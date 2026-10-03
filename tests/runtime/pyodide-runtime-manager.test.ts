@@ -1854,6 +1854,109 @@ describe("MP.2 fresh-state Submit pipeline", () => {
     ]);
   });
 
+  it("forwards optional Run observations without sharing the caller array", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const observeVariables = ["answer"];
+
+    const run = manager.run({ code: "answer = 42", observeVariables });
+    observeVariables[0] = "mutated-after-send";
+
+    expect(worker.postedMessages[1]).toEqual({
+      type: "RUN_CODE",
+      requestId: "runtime-2",
+      code: "answer = 42",
+      observeVariables: ["answer"],
+    });
+
+    worker.emitMessage({
+      type: "RUN_RESULT",
+      requestId: "runtime-2",
+      result: {
+        status: "SUCCESS",
+        stdout: "",
+        stderr: "",
+        serialized: {
+          variables: {
+            answer: {
+              pythonType: "int",
+              isNdarray: false,
+              value: 42,
+            },
+          },
+        },
+      },
+    });
+
+    await expect(run).resolves.toMatchObject({
+      status: "SUCCESS",
+      serialized: {
+        variables: {
+          answer: { value: 42 },
+        },
+      },
+    });
+  });
+
+  it("forwards Submit observations and deep-copies the returned serialized payload", async () => {
+    const { manager, workers } = await createReadyHarness();
+    const worker = workers[0];
+    const preparation = manager.prepareMission({ setupData: { value: 10 } });
+    worker.emitMessage({ type: "MISSION_PREPARED", requestId: "runtime-2" });
+    await preparation;
+
+    const observeVariables = ["answer"];
+    const submit = manager.submit({ code: "answer = value + 32", observeVariables });
+    observeVariables.push("late-variable");
+
+    expect(worker.postedMessages[2]).toEqual({
+      type: "SUBMIT_CODE",
+      requestId: "runtime-3",
+      code: "answer = value + 32",
+      observeVariables: ["answer"],
+      runtimeConfig: undefined,
+      setupData: { value: 10 },
+    });
+
+    const workerResult = {
+      status: "SUCCESS" as const,
+      stdout: "",
+      stderr: "",
+      serialized: {
+        variables: {
+          answer: {
+            pythonType: "int",
+            isNdarray: false,
+            value: 42,
+          },
+        },
+      },
+    };
+    worker.emitMessage({
+      type: "SUBMIT_RESULT",
+      requestId: "runtime-3",
+      result: workerResult,
+    });
+
+    const result = await submit;
+    workerResult.serialized.variables.answer.value = 99;
+
+    expect(result.status).toBe("SUCCESS");
+    if (result.status !== "SUCCESS") {
+      throw new Error("Expected SUCCESS result");
+    }
+    expect(result.serialized).toEqual({
+      variables: {
+        answer: {
+          pythonType: "int",
+          isNdarray: false,
+          value: 42,
+        },
+      },
+    });
+    expect(result.serialized).not.toBe(workerResult.serialized);
+  });
+
   it("posts distinct SUBMIT_CODE with the saved clean baseline after a finite Run and leaves Run usable", async () => {
     const { manager, workers } = await createReadyHarness();
     const worker = workers[0];

@@ -1,10 +1,18 @@
 import type { MissionInstance, MissionTemplate } from "../domain";
 import {
+  CORE_GRADER_ID,
+  getDeclarativeObservationVariables,
+  type GraderRegistry,
+  type GraderResult,
+} from "../grading";
+import {
   RUNTIME_EXECUTION_STATUS,
+  RuntimeVariableObservationsSchema,
   type RuntimeExecutionResult,
   type RuntimeLifecycleResult,
   type RuntimeManager,
 } from "../runtime";
+import { toGraderExecutionSnapshot } from "./grader-execution-adapter";
 
 export interface MissionRunResult {
   readonly execution: RuntimeExecutionResult;
@@ -12,11 +20,13 @@ export interface MissionRunResult {
 
 export interface MissionSubmitResult {
   readonly execution: RuntimeExecutionResult;
+  readonly grading?: GraderResult;
 }
 
 interface CurrentMission {
   readonly templateId: MissionTemplate["id"];
   readonly templateVersion: number;
+  readonly grader: MissionTemplate["grader"];
   readonly instance: MissionInstance;
 }
 
@@ -25,7 +35,10 @@ export class MissionEngine {
   private activeOperation: symbol | null = null;
   private disposed = false;
 
-  constructor(private readonly runtimeManager: RuntimeManager) {}
+  constructor(
+    private readonly runtimeManager: RuntimeManager,
+    private readonly graderRegistry: GraderRegistry,
+  ) {}
 
   async loadMission(
     template: MissionTemplate,
@@ -93,6 +106,7 @@ export class MissionEngine {
       this.currentMission = {
         templateId: template.id,
         templateVersion: template.version,
+        grader: template.grader,
         instance,
       };
 
@@ -178,9 +192,93 @@ export class MissionEngine {
     this.activeOperation = operation;
 
     try {
-      return {
-        execution: await this.runtimeManager.submit({ code }),
-      };
+      const grader = this.graderRegistry.getGrader(this.currentMission.grader.id);
+      if (grader === undefined) {
+        return {
+          execution: executionFailure(
+            "GRADER_NOT_FOUND",
+            "Không tìm thấy grader đã cấu hình cho mission.",
+          ),
+        };
+      }
+
+      if (this.currentMission.grader.id !== CORE_GRADER_ID.DECLARATIVE) {
+        return {
+          execution: executionFailure(
+            "GRADER_INTEGRATION_UNSUPPORTED",
+            "Mission Engine chưa hỗ trợ lập kế hoạch quan sát cho grader này.",
+          ),
+        };
+      }
+
+      const graderConfig = this.currentMission.grader.config;
+      let observeVariables: readonly string[];
+      try {
+        if (graderConfig === undefined) {
+          throw new Error("Declarative grader config is required.");
+        }
+        observeVariables = getDeclarativeObservationVariables(graderConfig);
+      } catch {
+        return {
+          execution: executionFailure(
+            "INVALID_GRADER_CONFIG",
+            "Cấu hình declarative grader không hợp lệ.",
+          ),
+        };
+      }
+
+      const execution = await this.runtimeManager.submit({
+        code,
+        observeVariables,
+      });
+
+      let observations;
+      if (
+        execution.status === RUNTIME_EXECUTION_STATUS.SUCCESS ||
+        execution.status === RUNTIME_EXECUTION_STATUS.PYTHON_EXCEPTION
+      ) {
+        const parsed = RuntimeVariableObservationsSchema.safeParse(
+          execution.serialized,
+        );
+        if (!parsed.success) {
+          return {
+            execution: executionFailure(
+              "INVALID_RUNTIME_OBSERVATIONS",
+              "Runtime không trả về payload quan sát biến hợp lệ.",
+              execution.stdout,
+              execution.stderr,
+            ),
+          };
+        }
+        observations = parsed.data;
+      }
+
+      const graderExecution = toGraderExecutionSnapshot(
+        execution,
+        observations,
+      );
+
+      try {
+        const grading = grader.grade({
+          config: graderConfig,
+          gradingData: this.currentMission.instance.grading?.data,
+          execution: graderExecution,
+        });
+
+        return {
+          execution,
+          grading,
+        };
+      } catch {
+        return {
+          execution: executionFailure(
+            "GRADER_EXECUTION_FAILED",
+            "Grader không thể đánh giá kết quả Submit.",
+            execution.stdout,
+            execution.stderr,
+          ),
+        };
+      }
     } finally {
       if (this.activeOperation === operation) {
         this.activeOperation = null;
@@ -217,11 +315,13 @@ function lifecycleFailure(
 function executionFailure(
   code: string,
   message: string,
+  stdout = "",
+  stderr = "",
 ): RuntimeExecutionResult {
   return {
     status: RUNTIME_EXECUTION_STATUS.RUNTIME_ERROR,
-    stdout: "",
-    stderr: "",
+    stdout,
+    stderr,
     error: { code, message },
   };
 }

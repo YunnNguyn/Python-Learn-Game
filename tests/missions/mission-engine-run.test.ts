@@ -7,6 +7,11 @@ import {
   type MissionInstance,
   type MissionTemplate,
 } from "../../src/core/domain";
+import {
+  CORE_GRADER_ID,
+  GraderRegistry,
+  registerCoreGraders,
+} from "../../src/core/grading";
 import { MissionEngine } from "../../src/core/missions";
 import type {
   RuntimeExecutionRequest,
@@ -48,6 +53,7 @@ class FakeRuntimeManager implements RuntimeManager {
     status: "SUCCESS",
     stdout: "",
     stderr: "",
+    serialized: { variables: {} },
   };
 
   initializeDeferred: Deferred<RuntimeLifecycleResult> | undefined;
@@ -91,12 +97,24 @@ function createTemplate(
 ): MissionTemplate {
   return MissionTemplateSchema.parse({
     ...foundation1Fixtures.missionTemplate,
+    grader: {
+      id: CORE_GRADER_ID.DECLARATIVE,
+      config: {
+        checks: [{ type: "NO_EXCEPTION" }],
+      },
+    },
     runtime: {
       ...foundation1Fixtures.missionTemplate.runtime,
       config: { runtimeOnly: "template-config" },
     },
     ...changes,
   });
+}
+
+function createGraderRegistry(): GraderRegistry {
+  const registry = new GraderRegistry();
+  registerCoreGraders(registry);
+  return registry;
 }
 
 function createInstance(
@@ -133,7 +151,7 @@ async function loadReadyMission(
   template = createTemplate(),
   instance = createInstance(template),
 ): Promise<{ engine: MissionEngine; template: MissionTemplate; instance: MissionInstance }> {
-  const engine = new MissionEngine(runtime);
+  const engine = new MissionEngine(runtime, createGraderRegistry());
   await expect(engine.loadMission(template, instance)).resolves.toEqual({ ok: true });
   return { engine, template, instance };
 }
@@ -141,7 +159,7 @@ async function loadReadyMission(
 describe("MissionEngine MP.1 Run pipeline", () => {
   it("initializes then prepares a matching canonical mission with only runtime config and setup data", async () => {
     const runtime = new FakeRuntimeManager();
-    const engine = new MissionEngine(runtime);
+    const engine = new MissionEngine(runtime, createGraderRegistry());
     const template = createTemplate();
     const instance = createInstance(template);
 
@@ -158,7 +176,7 @@ describe("MissionEngine MP.1 Run pipeline", () => {
 
   it("does not leak learner, grading, or world payloads into runtime preparation", async () => {
     const runtime = new FakeRuntimeManager();
-    const engine = new MissionEngine(runtime);
+    const engine = new MissionEngine(runtime, createGraderRegistry());
     const template = createTemplate();
     const instance = createInstance(template);
 
@@ -182,7 +200,7 @@ describe("MissionEngine MP.1 Run pipeline", () => {
 
   it("rejects a mismatched template ID before touching RuntimeManager", async () => {
     const runtime = new FakeRuntimeManager();
-    const engine = new MissionEngine(runtime);
+    const engine = new MissionEngine(runtime, createGraderRegistry());
     const template = createTemplate();
     const instance = createInstance(template, {
       templateId: "mission.template.other" as MissionInstance["templateId"],
@@ -197,7 +215,7 @@ describe("MissionEngine MP.1 Run pipeline", () => {
 
   it("rejects a mismatched template version before touching RuntimeManager", async () => {
     const runtime = new FakeRuntimeManager();
-    const engine = new MissionEngine(runtime);
+    const engine = new MissionEngine(runtime, createGraderRegistry());
     const template = createTemplate();
     const instance = createInstance(template, {
       templateVersion: template.version + 1,
@@ -216,7 +234,7 @@ describe("MissionEngine MP.1 Run pipeline", () => {
       ok: false,
       error: { code: "INIT_FAILED", message: "init failed" },
     };
-    const engine = new MissionEngine(runtime);
+    const engine = new MissionEngine(runtime, createGraderRegistry());
     const template = createTemplate();
 
     await expect(engine.loadMission(template, createInstance(template))).resolves.toEqual(
@@ -233,7 +251,7 @@ describe("MissionEngine MP.1 Run pipeline", () => {
 
   it("preserves the previous current mission when a later preparation fails", async () => {
     const runtime = new FakeRuntimeManager();
-    const engine = new MissionEngine(runtime);
+    const engine = new MissionEngine(runtime, createGraderRegistry());
     const templateA = createTemplate({
       id: "mission.template.a" as MissionTemplate["id"],
     });
@@ -264,7 +282,7 @@ describe("MissionEngine MP.1 Run pipeline", () => {
 
   it("switches to a later mission only after successful preparation", async () => {
     const runtime = new FakeRuntimeManager();
-    const engine = new MissionEngine(runtime);
+    const engine = new MissionEngine(runtime, createGraderRegistry());
     const templateA = createTemplate({
       id: "mission.template.a" as MissionTemplate["id"],
     });
@@ -300,7 +318,7 @@ describe("MissionEngine MP.1 Run pipeline", () => {
 
   it("reloads the same mission and prepares its baseline again", async () => {
     const runtime = new FakeRuntimeManager();
-    const engine = new MissionEngine(runtime);
+    const engine = new MissionEngine(runtime, createGraderRegistry());
     const template = createTemplate();
     const instance = createInstance(template);
 
@@ -318,7 +336,7 @@ describe("MissionEngine MP.1 Run pipeline", () => {
 
   it("rejects Run before a successful mission load without touching RuntimeManager.run", async () => {
     const runtime = new FakeRuntimeManager();
-    const engine = new MissionEngine(runtime);
+    const engine = new MissionEngine(runtime, createGraderRegistry());
 
     await expect(engine.run("print('early')")).resolves.toMatchObject({
       execution: {
@@ -412,7 +430,7 @@ describe("MissionEngine MP.1 Run pipeline", () => {
 
   it("rejects Submit before a successful mission load without touching RuntimeManager.submit", async () => {
     const runtime = new FakeRuntimeManager();
-    const engine = new MissionEngine(runtime);
+    const engine = new MissionEngine(runtime, createGraderRegistry());
 
     await expect(engine.submit("print('early submit')")).resolves.toMatchObject({
       execution: {
@@ -436,12 +454,16 @@ describe("MissionEngine MP.1 Run pipeline", () => {
         message: "submit failed",
         traceback: "trace",
       },
+      serialized: { variables: {} },
     };
 
-    await expect(engine.submit(code)).resolves.toEqual({
+    await expect(engine.submit(code)).resolves.toMatchObject({
       execution: runtime.submitResult,
+      grading: {
+        passed: false,
+      },
     });
-    expect(runtime.submitRequests).toEqual([{ code }]);
+    expect(runtime.submitRequests).toEqual([{ code, observeVariables: [] }]);
     expect(runtime.preparationRequests).toHaveLength(1);
   });
 
@@ -453,7 +475,9 @@ describe("MissionEngine MP.1 Run pipeline", () => {
     await engine.submit("submit_code()");
 
     expect(runtime.runRequests).toEqual([{ code: "run_code()" }]);
-    expect(runtime.submitRequests).toEqual([{ code: "submit_code()" }]);
+    expect(runtime.submitRequests).toEqual([
+      { code: "submit_code()", observeVariables: [] },
+    ]);
     expect(runtime.calls).toEqual([
       "initialize",
       "prepareMission",
@@ -490,13 +514,16 @@ describe("MissionEngine MP.1 Run pipeline", () => {
       error: { code: "MISSION_ENGINE_BUSY" },
     });
     expect(runtime.runRequests).toEqual([]);
-    expect(runtime.submitRequests).toEqual([{ code: "while True: pass" }]);
+    expect(runtime.submitRequests).toEqual([
+      { code: "while True: pass", observeVariables: [] },
+    ]);
     expect(runtime.preparationRequests).toHaveLength(1);
 
     runtime.submitDeferred.resolve({
       status: "SUCCESS",
       stdout: "",
       stderr: "",
+      serialized: { variables: {} },
     });
     await pendingSubmit;
   });
@@ -529,7 +556,7 @@ describe("MissionEngine MP.1 Run pipeline", () => {
   it("blocks Run while mission loading is pending", async () => {
     const runtime = new FakeRuntimeManager();
     runtime.prepareDeferred = deferred<RuntimeLifecycleResult>();
-    const engine = new MissionEngine(runtime);
+    const engine = new MissionEngine(runtime, createGraderRegistry());
     const template = createTemplate();
     const load = engine.loadMission(template, createInstance(template));
     await Promise.resolve();
@@ -597,7 +624,7 @@ describe("MissionEngine MP.1 Run pipeline", () => {
 
   it("does not mutate MissionTemplate, MissionInstance, or learner code", async () => {
     const runtime = new FakeRuntimeManager();
-    const engine = new MissionEngine(runtime);
+    const engine = new MissionEngine(runtime, createGraderRegistry());
     const template = createTemplate();
     const instance = createInstance(template);
     const templateBefore = structuredClone(template);
@@ -612,13 +639,12 @@ describe("MissionEngine MP.1 Run pipeline", () => {
     expect(runtime.runRequests[0]).toEqual({ code });
   });
 
-  it("keeps the Core Run/Submit engine free of Pyodide, React, grading, attempts, mastery, world-event, content, and package-loading dependencies", () => {
+  it("keeps the Core Run/Submit engine free of Pyodide, React, direct grader implementation, attempts, mastery, world-event, content, and package-loading dependencies", () => {
     for (const forbidden of [
       "PyodideRuntimeManager",
       "loadPyodide",
       "content/cs116",
       "react",
-      "GraderRegistry",
       "gradeDeclaratively",
       "AttemptRecord",
       "MasteryState",

@@ -7,6 +7,7 @@ export interface RuntimeMissionPreparationRequest {
 
 export interface RuntimeExecutionRequest {
   readonly code: string;
+  readonly observeVariables?: readonly string[];
 }
 
 export interface RuntimeSystemError {

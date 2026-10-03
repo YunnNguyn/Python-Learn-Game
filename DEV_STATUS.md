@@ -24,7 +24,7 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 Mission Pipeline — Run + Submit + Grading
 
 ```text
-MP.2 — Fresh-state Submit pipeline
+MP.3 — Grading integration
 ```
 
 Status: **Awaiting Manual Browser Validation**
@@ -39,6 +39,7 @@ Status: **Complete / Locked**
 
 PR.6 checkpoint `d403a34` is the locked Python Runtime baseline for the Mission Pipeline.
 MP.1 checkpoint `ec387aa` is the locked Mission Pipeline baseline for MP.2.
+MP.2 checkpoint `9f33bab` is the locked Mission Pipeline baseline for MP.3.
 
 MP.1 status: **Complete / Locked**
 
@@ -91,9 +92,37 @@ MP.2 automated validation:
 - [x] runtime/debug source contains no external Pyodide CDN URL;
 - [x] no new package dependency was added.
 
-Manual browser validation remains required before MP.2 can be marked Complete / Locked.
+MP.2 status: **Complete / Locked**.
 
-Next: **MP.3 — Grading integration**.
+MP.3 architecture lock:
+
+- MP.3 connects clean-state Submit execution to the existing Grader architecture.
+- `MissionEngine` resolves the configured grader through the injected generic `GraderRegistry` and, for the built-in `core.declarative` grader, derives only the learner variable names required by authored checks.
+- `RuntimeExecutionRequest` can optionally request generic variable observations through `observeVariables?: readonly string[]`; RuntimeManager and Worker remain grading-agnostic and return normalized execution facts through the existing serialized `JsonObject` boundary.
+- Only explicitly requested variables are inspected. Missing variables are omitted from the serialized observation map.
+- Runtime observations normalize Python type names, ndarray identity/shape when already available, and JSON-safe values without importing or loading NumPy solely for observation.
+- `MissionEngine` converts normalized runtime observations plus execution failure information into `GraderExecutionSnapshot`, then calls the configured Grader with template grader config, MissionInstance `grading.data`, and the snapshot.
+- `grading.data` and grader config remain inside MissionEngine/Grader and are never sent to RuntimeManager or Worker.
+- Run remains ungraded and requests no grading observations.
+- MP.3 creates no `AttemptRecord`, updates no mastery state, emits no `WorldEvent`, renders no structured feedback, adds no dynamic gradingData interpolation DSL, loads no NumPy package, and does not wire the production Mission Workspace.
+
+MP.3 automated validation:
+
+- [x] focused MP.3/runtime/Mission Engine suites passed: 6 test files, 118 tests;
+- [x] full regression suite passed: 43 test files, 753 tests;
+- [x] `npm.cmd run typecheck` passed;
+- [x] `npm.cmd run build` passed after preserving the pre-existing locked `dist` output under a temporary name; the original generated `dist` was restored afterward;
+- [x] `git diff --check` passed;
+- [x] `package.json` and `package-lock.json` are unchanged from MP.2 checkpoint `9f33bab`;
+- [x] production app/router and Mission Workspace remain unchanged from MP.2; only the development `/dev` probe was extended with generic observation input/output;
+- [x] runtime/Worker audit found no grader config, `gradingData`, `content/cs116`, `AttemptRecord`, mastery, `WorldEvent`, or NumPy package-loading coupling;
+- [x] MissionEngine grading integration uses generic `GraderRegistry` only and contains no Pyodide implementation or CS116 content dependency;
+- [x] grading module remains React-free;
+- [x] no new package dependency was added.
+
+Manual browser grading-observation validation remains required before MP.3 can be marked Complete / Locked.
+
+Next: **MP.4 — Structured feedback rendering**.
 
 Runtime checkpoints:
 

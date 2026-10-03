@@ -1,6 +1,7 @@
 export { resolveMissionTemplate } from "./mission-template-resolver";
 export { createMissionInstance } from "./mission-instance-creation";
 export { MissionEngine } from "./mission-engine";
+export { toGraderExecutionSnapshot } from "./grader-execution-adapter";
 export {
   GENERATION_ATTEMPT_SEED_POLICY,
   deriveGenerationAttemptSeed,
