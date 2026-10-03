@@ -120,7 +120,7 @@ a {
 
 .mission-workspace__main {
   display: grid;
-  grid-template-columns: minmax(14rem, 0.75fr) minmax(0, 2fr);
+  grid-template-columns: minmax(18rem, 0.95fr) minmax(0, 2fr);
   gap: 1.5rem;
   margin-top: 2rem;
 }
@@ -146,9 +146,70 @@ a {
   margin: 0;
 }
 
+.mission-panel__subheading {
+  margin: 1rem 0 0.55rem;
+  color: #34435b;
+  font-size: 0.84rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mission-summary {
+  color: #172033 !important;
+  font-weight: 600;
+  line-height: 1.75 !important;
+}
+
 .mission-panel__secondary {
   margin-top: 0.75rem !important;
   font-size: 0.92rem;
+}
+
+.mission-panel__hint {
+  color: #5f6f89 !important;
+}
+
+.mission-inline-code {
+  display: inline-block;
+  border-radius: 0.4rem;
+  background: #edf1f8;
+  color: #184b9b;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+  padding: 0.1rem 0.35rem;
+}
+
+.mission-instruction-list {
+  margin: 0;
+  padding-left: 1.3rem;
+}
+
+.mission-instruction-list li + li {
+  margin-top: 0.45rem;
+}
+
+.mission-instruction-list li {
+  color: #34435b;
+  line-height: 1.65;
+}
+
+.mission-data-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.mission-data-entry {
+  min-width: 0;
+}
+
+.mission-data-entry__name {
+  margin: 0 0 0.45rem;
+  color: #34435b;
+  font-size: 0.84rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .mission-data-preview,
@@ -161,10 +222,9 @@ a {
   color: #263248;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 0.87rem;
-  line-height: 1.55;
+  line-height: 1.6;
   padding: 0.85rem;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  white-space: pre;
 }
 
 .mission-editor-region {

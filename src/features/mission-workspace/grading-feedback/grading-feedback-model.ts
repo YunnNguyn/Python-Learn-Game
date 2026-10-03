@@ -43,9 +43,20 @@ export function toGradingFeedbackModel(
     };
   }
 
-  const items = result.checks
-    .filter((check) => !check.passed)
-    .map((check) => toFeedbackItem(check, result));
+  const failedChecks = result.checks.filter((check) => !check.passed);
+  const runtimeFailure = failedChecks.find(
+    (check) => check.category === GraderFailureCategory.RUNTIME_ERROR,
+  );
+
+  // A runtime exception prevents downstream learner variables from being
+  // produced reliably. Showing the resulting missing/type/shape/value
+  // cascades is noisy and can mislead the learner, so runtime feedback owns
+  // the response when present.
+  const items = runtimeFailure
+    ? [runtimeFeedback(result)]
+    : deduplicateFeedbackItems(
+        failedChecks.map((check) => toFeedbackItem(check, result)),
+      );
 
   return {
     passed: false,
@@ -102,7 +113,7 @@ function runtimeFeedback(result: GraderResult): GradingFeedbackItem {
   }
 
   if (type && isLearnerPythonExceptionType(type)) {
-    const message = sanitizeExceptionMessage(runtimeError?.message);
+    const message = sanitizeExceptionMessage(runtimeError?.message, type);
     return {
       kind: "runtime",
       title: "Mã Python gặp lỗi khi chạy.",
@@ -180,17 +191,55 @@ function isLearnerPythonExceptionType(type: string): boolean {
   );
 }
 
-function sanitizeExceptionMessage(message: string | undefined): string | undefined {
-  const firstLine = message
+function sanitizeExceptionMessage(
+  message: string | undefined,
+  exceptionType: string,
+): string | undefined {
+  const lines = message
     ?.split(/\r?\n/)
     .map((line) => line.trim())
-    .find((line) => line.length > 0);
+    .filter((line) => line.length > 0);
 
-  if (!firstLine) {
+  if (!lines || lines.length === 0) {
     return undefined;
   }
 
-  return firstLine.length <= MAX_EXCEPTION_MESSAGE_LENGTH
-    ? firstLine
-    : `${firstLine.slice(0, MAX_EXCEPTION_MESSAGE_LENGTH - 1)}…`;
+  const typePrefix = `${exceptionType}:`;
+  const terminalExceptionLine = [...lines]
+    .reverse()
+    .find((line) => line.startsWith(typePrefix));
+
+  let safeMessage = terminalExceptionLine
+    ? terminalExceptionLine.slice(typePrefix.length).trim()
+    : lines.length === 1
+      ? lines[0]
+      : undefined;
+
+  if (safeMessage?.startsWith(typePrefix)) {
+    safeMessage = safeMessage.slice(typePrefix.length).trim();
+  }
+
+  if (!safeMessage) {
+    return undefined;
+  }
+
+  return safeMessage.length <= MAX_EXCEPTION_MESSAGE_LENGTH
+    ? safeMessage
+    : `${safeMessage.slice(0, MAX_EXCEPTION_MESSAGE_LENGTH - 1)}…`;
+}
+
+function deduplicateFeedbackItems(
+  items: readonly GradingFeedbackItem[],
+): GradingFeedbackItem[] {
+  const seen = new Set<string>();
+  const unique: GradingFeedbackItem[] = [];
+
+  for (const item of items) {
+    const key = JSON.stringify(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(item);
+  }
+
+  return unique;
 }

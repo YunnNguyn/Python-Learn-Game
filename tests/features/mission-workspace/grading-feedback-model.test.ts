@@ -298,4 +298,81 @@ describe("toGradingFeedbackModel", () => {
     expect(text).toContain("Kết quả chưa đạt một yêu cầu của bài.");
     expect(text).not.toContain("FUTURE_INTERNAL_DETAIL");
   });
+  it("extracts the terminal Python exception from a real traceback and hides cascade failures", () => {
+    const result: GraderResult = {
+      passed: false,
+      checks: [
+        {
+          type: DeclarativeGraderCheckType.NO_EXCEPTION,
+          passed: false,
+          category: GraderFailureCategory.RUNTIME_ERROR,
+        },
+        {
+          type: DeclarativeGraderCheckType.VARIABLE_EXISTS,
+          passed: false,
+          variable: "shape_result",
+          category: GraderFailureCategory.MISSING_VARIABLE,
+        },
+        {
+          type: DeclarativeGraderCheckType.SHAPE,
+          passed: false,
+          variable: "result",
+          category: GraderFailureCategory.SHAPE_ERROR,
+          expected: [4, 1],
+        },
+      ],
+      runtimeError: {
+        type: "AttributeError",
+        message:
+          `Traceback (most recent call last):\n  File "/lib/python314.zip/_pyodide/_base.py", line 619, in eval_code_async\nAttributeError: 'list' object has no attribute 'shape'`,
+      },
+    };
+
+    const model = toGradingFeedbackModel(result);
+    const text = JSON.stringify(model);
+
+    expect(model.items).toEqual([
+      {
+        kind: "runtime",
+        title: "Mã Python gặp lỗi khi chạy.",
+        detail: "AttributeError: 'list' object has no attribute 'shape'",
+      },
+    ]);
+    expect(text).not.toContain("Traceback");
+    expect(text).not.toContain("/lib/python314.zip");
+    expect(text).not.toContain("shape_result");
+    expect(text).not.toContain("[4, 1]");
+  });
+
+  it("deduplicates identical learner feedback while preserving first-authored order", () => {
+    const result: GraderResult = {
+      passed: false,
+      checks: [
+        {
+          type: DeclarativeGraderCheckType.VARIABLE_EXISTS,
+          passed: false,
+          variable: "result",
+          category: GraderFailureCategory.MISSING_VARIABLE,
+        },
+        {
+          type: DeclarativeGraderCheckType.PYTHON_TYPE,
+          passed: false,
+          variable: "result",
+          category: GraderFailureCategory.MISSING_VARIABLE,
+        },
+        {
+          type: DeclarativeGraderCheckType.VARIABLE_EXISTS,
+          passed: false,
+          variable: "shape_result",
+          category: GraderFailureCategory.MISSING_VARIABLE,
+        },
+      ],
+    };
+
+    expect(toGradingFeedbackModel(result).items).toEqual([
+      { kind: "missing-variable", title: "Chưa tìm thấy biến “result”." },
+      { kind: "missing-variable", title: "Chưa tìm thấy biến “shape_result”." },
+    ]);
+  });
+
 });
