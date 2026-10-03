@@ -1,4 +1,14 @@
 export { MissionWorkspacePage } from "./MissionWorkspacePage";
+export {
+  GradingFeedback,
+  toGradingFeedbackModel,
+} from "./grading-feedback";
+export type {
+  GradingFeedbackItem,
+  GradingFeedbackItemKind,
+  GradingFeedbackModel,
+  GradingFeedbackProps,
+} from "./grading-feedback";
 export { MissionControls } from "./MissionControls";
 export type { MissionControlsProps } from "./MissionControls";
 export { MissionDataPanel } from "./MissionDataPanel";

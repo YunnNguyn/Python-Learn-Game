@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { JsonObject } from "../../core/domain";
+import {
+  DeclarativeGraderCheckType,
+  GraderFailureCategory,
+  type GraderResult,
+} from "../../core/grading";
 import type {
   RuntimeExecutionResult,
   RuntimeLifecycleResult,
   RuntimeManager,
 } from "../../core/runtime";
 import { createPyodideRuntimeManager } from "../../core/runtime/pyodide";
+import { GradingFeedback } from "../mission-workspace";
 
 type RuntimeProbeStatus = "IDLE" | "INITIALIZING" | "READY" | "ERROR";
 
@@ -17,6 +23,142 @@ const DEFAULT_SETUP_JSON = `{
     "label": "demo"
   }
 }`;
+
+interface FeedbackPreviewCase {
+  readonly label: string;
+  readonly result: GraderResult;
+}
+
+const FEEDBACK_PREVIEW_CASES: readonly FeedbackPreviewCase[] = [
+  {
+    label: "PASS",
+    result: {
+      passed: true,
+      checks: [
+        {
+          type: DeclarativeGraderCheckType.VARIABLE_EXISTS,
+          passed: true,
+          variable: "result",
+        },
+      ],
+    },
+  },
+  {
+    label: "RUNTIME_ERROR",
+    result: {
+      passed: false,
+      checks: [
+        {
+          type: DeclarativeGraderCheckType.NO_EXCEPTION,
+          passed: false,
+          category: GraderFailureCategory.RUNTIME_ERROR,
+          message: "RAW_RUNTIME_CHECK_MESSAGE_MUST_NOT_RENDER",
+        },
+      ],
+      runtimeError: {
+        type: "ValueError",
+        message:
+          "boom — thông báo dài để kiểm tra wrapping an toàn trên viewport hẹp và không làm tràn thẻ phản hồi.\nTraceback: RAW_RUNTIME_TRACE_MUST_NOT_RENDER",
+      },
+    },
+  },
+  {
+    label: "MISSING_VARIABLE",
+    result: {
+      passed: false,
+      checks: [
+        {
+          type: DeclarativeGraderCheckType.VARIABLE_EXISTS,
+          passed: false,
+          variable: "result",
+          category: GraderFailureCategory.MISSING_VARIABLE,
+        },
+      ],
+    },
+  },
+  {
+    label: "TYPE_ERROR",
+    result: {
+      passed: false,
+      checks: [
+        {
+          type: DeclarativeGraderCheckType.PYTHON_TYPE,
+          passed: false,
+          variable: "result",
+          category: GraderFailureCategory.TYPE_ERROR,
+          expected: "ndarray",
+          actual: "list",
+        },
+      ],
+    },
+  },
+  {
+    label: "SHAPE_ERROR",
+    result: {
+      passed: false,
+      checks: [
+        {
+          type: DeclarativeGraderCheckType.SHAPE,
+          passed: false,
+          variable: "result",
+          category: GraderFailureCategory.SHAPE_ERROR,
+          expected: [4, 1],
+          actual: [4],
+        },
+      ],
+    },
+  },
+  {
+    label: "VALUE_ERROR",
+    result: {
+      passed: false,
+      checks: [
+        {
+          type: DeclarativeGraderCheckType.EXACT_VALUES,
+          passed: false,
+          variable: "result",
+          category: GraderFailureCategory.VALUE_ERROR,
+          expected: [1, 2, 3, 4, 5],
+          actual: [1, 2, 3, 9, 5],
+          message: "RAW_VALUE_SECRET_MUST_NOT_RENDER",
+        },
+      ],
+    },
+  },
+  {
+    label: "MULTIPLE_FAILURES",
+    result: {
+      passed: false,
+      checks: [
+        {
+          type: DeclarativeGraderCheckType.PYTHON_TYPE,
+          passed: false,
+          variable: "result",
+          category: GraderFailureCategory.TYPE_ERROR,
+          expected: "ndarray",
+          actual: "list",
+        },
+        {
+          type: DeclarativeGraderCheckType.SHAPE,
+          passed: false,
+          variable: "result",
+          category: GraderFailureCategory.SHAPE_ERROR,
+          expected: [4, 1],
+          actual: [4],
+        },
+        {
+          type: DeclarativeGraderCheckType.EXACT_VALUES,
+          passed: false,
+          variable: "result",
+          category: GraderFailureCategory.VALUE_ERROR,
+          expected: [1, 2, 3, 4, 5],
+          actual: [1, 2, 3, 9, 5],
+          message: "MULTI_VALUE_SECRET_MUST_NOT_RENDER",
+        },
+      ],
+    },
+  },
+];
 
 export function DebugPage() {
   const managerRef = useRef<RuntimeManager | null>(null);
@@ -367,6 +509,30 @@ export function DebugPage() {
             </div>
           ) : null}
         </section>
+      </section>
+
+      <section
+        className="status-block"
+        aria-labelledby="grading-feedback-preview-title"
+      >
+        <h2 id="grading-feedback-preview-title">Structured Grading Feedback</h2>
+        <p>
+          Preview phát triển cho các trạng thái phản hồi có cấu trúc từ{" "}
+          <code>GraderResult</code>.
+        </p>
+        <div className="grading-feedback-preview-grid">
+          {FEEDBACK_PREVIEW_CASES.map((previewCase) => (
+            <article
+              className="grading-feedback-preview-case"
+              key={previewCase.label}
+            >
+              <p className="grading-feedback-preview-case__label">
+                {previewCase.label}
+              </p>
+              <GradingFeedback result={previewCase.result} />
+            </article>
+          ))}
+        </div>
       </section>
     </section>
   );

@@ -24,7 +24,7 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 Mission Pipeline — Run + Submit + Grading
 
 ```text
-MP.3 — Grading integration
+MP.4 — Structured feedback rendering
 ```
 
 Status: **Awaiting Manual Browser Validation**
@@ -40,6 +40,7 @@ Status: **Complete / Locked**
 PR.6 checkpoint `d403a34` is the locked Python Runtime baseline for the Mission Pipeline.
 MP.1 checkpoint `ec387aa` is the locked Mission Pipeline baseline for MP.2.
 MP.2 checkpoint `9f33bab` is the locked Mission Pipeline baseline for MP.3.
+MP.3 checkpoint `a50155e` is the locked Mission Pipeline baseline for MP.4.
 
 MP.1 status: **Complete / Locked**
 
@@ -120,9 +121,38 @@ MP.3 automated validation:
 - [x] grading module remains React-free;
 - [x] no new package dependency was added.
 
-Manual browser grading-observation validation remains required before MP.3 can be marked Complete / Locked.
+MP.3 status: **Complete / Locked**.
 
-Next: **MP.4 — Structured feedback rendering**.
+MP.4 architecture lock:
+
+- MP.4 adds a presentation-only boundary from generic `GraderResult` to learner-facing structured feedback through a pure mapper plus a reusable React component.
+- Core grading remains UI-agnostic and unchanged; the feedback layer does not change grading semantics, runtime behavior, Worker behavior, or Mission Engine behavior.
+- Failed checks render in authored order and successful checks are omitted.
+- Structured learner feedback covers runtime failures, missing variables, type mismatches, shape mismatches, value mismatches, and a safe generic fallback for future categories.
+- Expected/actual type metadata is shown only when both sides are safe string metadata. Shape metadata is shown only for arrays of non-negative safe integer dimensions.
+- `VALUE_ERROR` never exposes expected answer payloads, learner actual payloads, or raw grader messages.
+- Raw grader messages, grader config, `gradingData`, reference-solver output/code, Hint Engine data, conceptual guidance, and semantic-result payloads are not rendered by MP.4.
+- Runtime exception rendering exposes only a learner-safe Python exception type plus a sanitized first message line; timeout and infrastructure failures use dedicated safe copy without recovery/internal details.
+- MP.4 adds only a development `/dev` preview using valid `GraderResult` fixtures. Production Mission Workspace wiring remains deferred.
+- MP.4 adds no Hint logic, `AttemptRecord`, mastery/progress update, `WorldEvent`, persistence, runtime/grader changes, or production mission wiring.
+
+MP.4 automated validation:
+
+- [x] focused feedback mapper suite passed: 1 test file, 12 tests;
+- [x] full regression suite passed: 44 test files, 765 tests;
+- [x] `npm.cmd run typecheck` passed;
+- [x] `npm.cmd run build` passed with the normal Vite production build;
+- [x] `git diff --check` passed;
+- [x] `package.json` and `package-lock.json` are unchanged from MP.3 checkpoint `a50155e`;
+- [x] `src/core/runtime`, Pyodide/Worker behavior, and `src/core/grading` are unchanged from MP.3;
+- [x] production `MissionWorkspacePage`, controls, and mission panels are unchanged from MP.3; `Chạy thử` and `Nộp bài` remain disabled;
+- [x] feedback code has no reference-solver, `gradingData`, Hint Engine, `AttemptRecord`, mastery, `WorldEvent`, or persistence coupling;
+- [x] Core grading remains React/CSS/Mission Workspace independent;
+- [x] no new package dependency was added.
+
+MP.4 status: **Awaiting Manual Browser Validation**.
+
+Next: **MP.5 — Attempt evidence envelope**.
 
 Runtime checkpoints:
 

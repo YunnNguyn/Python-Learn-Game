@@ -388,6 +388,127 @@ a {
   overflow-wrap: anywhere;
 }
 
+.grading-feedback-preview-grid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.grading-feedback-preview-case {
+  min-width: 0;
+}
+
+.grading-feedback-preview-case__label {
+  margin: 0 0 0.45rem;
+  color: #59667d;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  overflow-wrap: anywhere;
+}
+
+.grading-feedback {
+  min-width: 0;
+  border: 1px solid #dfe5ef;
+  border-left-width: 0.35rem;
+  border-radius: 0.8rem;
+  background: #ffffff;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.grading-feedback--passed {
+  border-left-color: #2d7a58;
+}
+
+.grading-feedback--failed {
+  border-left-color: #b44f4f;
+}
+
+.grading-feedback__status {
+  margin: 0 0 0.35rem !important;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.grading-feedback--passed .grading-feedback__status {
+  color: #256648;
+}
+
+.grading-feedback--failed .grading-feedback__status {
+  color: #913f3f;
+}
+
+.grading-feedback h3,
+.grading-feedback h4 {
+  overflow-wrap: anywhere;
+}
+
+.grading-feedback h3 {
+  margin: 0;
+  color: #172033;
+  font-size: 1.05rem;
+}
+
+.grading-feedback h4 {
+  margin: 0;
+  color: #263248;
+  font-size: 0.98rem;
+}
+
+.grading-feedback__items {
+  margin: 0.85rem 0 0;
+  padding-left: 1.35rem;
+}
+
+.grading-feedback__item {
+  min-width: 0;
+  padding-left: 0.15rem;
+}
+
+.grading-feedback__item + .grading-feedback__item {
+  margin-top: 0.85rem;
+}
+
+.grading-feedback__detail {
+  margin: 0.4rem 0 0 !important;
+  overflow-wrap: anywhere;
+}
+
+.grading-feedback__metadata {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
+  gap: 0.5rem;
+  margin: 0.65rem 0 0;
+}
+
+.grading-feedback__metadata > div {
+  min-width: 0;
+  border-radius: 0.55rem;
+  background: #f3f6fb;
+  padding: 0.55rem 0.65rem;
+}
+
+.grading-feedback__metadata dt {
+  color: #64718a;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.grading-feedback__metadata dd {
+  min-width: 0;
+  margin: 0.2rem 0 0;
+}
+
+.grading-feedback__metadata code,
+.grading-feedback code {
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .primary-action {
   display: inline-flex;
   min-height: 2.75rem;
