@@ -1,3 +1,4 @@
+export { CORE_RUNTIME_ID } from "./runtime-ids";
 export { RUNTIME_EXECUTION_STATUS } from "./runtime-contracts";
 export {
   RuntimeObservedValueSchema,

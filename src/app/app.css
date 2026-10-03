@@ -603,3 +603,143 @@ a {
     min-height: 450px;
   }
 }
+
+/* Phase A — real curriculum and playable mission */
+.learning-page {
+  width: min(100%, 54rem);
+}
+
+.learning-list {
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.learning-card {
+  min-width: 0;
+  border: 1px solid #e0e5ef;
+  border-radius: 0.85rem;
+  background: #f8faff;
+  padding: 1.15rem;
+}
+
+.learning-card h2 {
+  margin-bottom: 0.55rem;
+  font-size: 1.15rem;
+}
+
+.learning-card > p {
+  margin: 0;
+}
+
+.learning-card__meta,
+.learning-card__stage {
+  color: #64718a !important;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.learning-card__meta {
+  margin-bottom: 0.45rem !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.learning-card__stage {
+  margin-top: 0.65rem !important;
+}
+
+.learning-card__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.9rem;
+}
+
+.secondary-action {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  border: 1px solid #9eb0cb;
+  border-radius: 0.6rem;
+  background: #ffffff;
+  color: #274c7f;
+  font-weight: 700;
+  padding: 0.6rem 0.85rem;
+  text-decoration: none;
+}
+
+.secondary-action:hover {
+  background: #edf3ff;
+}
+
+.mission-loading {
+  width: min(100%, 46rem);
+}
+
+.mission-loading__bar {
+  width: 100%;
+  height: 0.35rem;
+  margin-top: 1.5rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7ecf4;
+}
+
+.mission-loading__bar::after {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: inherit;
+  background: #2f6fc3;
+  content: "";
+  animation: mission-loading-slide 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes mission-loading-slide {
+  from { transform: translateX(0); }
+  to { transform: translateX(165%); }
+}
+
+.mission-result-status {
+  margin: -0.25rem 0 0.8rem !important;
+  color: #34435b !important;
+  font-weight: 700;
+}
+
+.mission-result-panel h3 {
+  margin: 0.85rem 0 0.45rem;
+  color: #526079;
+  font-size: 0.85rem;
+}
+
+.mission-grading-region {
+  margin-top: 1.25rem;
+}
+
+.mission-grading-region > h2 {
+  margin-bottom: 0.75rem;
+}
+
+.mission-attempt-evidence {
+  margin-top: 1rem;
+  border: 1px solid #cfd9e8;
+  border-radius: 0.7rem;
+  background: #f3f7fd;
+  color: #34435b;
+  line-height: 1.55;
+  padding: 0.85rem 1rem;
+}
+
+@media (max-width: 40rem) {
+  .learning-card__links,
+  .secondary-action,
+  .primary-action--link {
+    width: 100%;
+  }
+
+  .secondary-action,
+  .primary-action--link {
+    text-align: center;
+  }
+}

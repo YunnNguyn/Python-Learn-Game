@@ -8,6 +8,7 @@ export interface RuntimeInitWorkerRequest {
   readonly type: "RUNTIME_INIT";
   readonly requestId: string;
   readonly indexURL: string;
+  readonly packageBaseURL?: string;
 }
 
 export interface RuntimeRunCodeWorkerRequest {
@@ -84,7 +85,9 @@ export function isRuntimeInitWorkerRequest(
   return (
     value.type === "RUNTIME_INIT" &&
     typeof value.requestId === "string" &&
-    typeof value.indexURL === "string"
+    typeof value.indexURL === "string" &&
+    (value.packageBaseURL === undefined ||
+      typeof value.packageBaseURL === "string")
   );
 }
 

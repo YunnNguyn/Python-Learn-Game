@@ -32,6 +32,7 @@ export type RuntimeWorkerFactory = () => RuntimeWorkerPort;
 export interface PyodideRuntimeManagerOptions {
   readonly createWorker: RuntimeWorkerFactory;
   readonly indexURL: string;
+  readonly packageBaseURL?: string;
   readonly executionTimeoutMs?: number;
 }
 
@@ -218,6 +219,9 @@ export class PyodideRuntimeManager implements RuntimeManager {
         type: "RUNTIME_INIT",
         requestId,
         indexURL: this.options.indexURL,
+        ...(this.options.packageBaseURL !== undefined
+          ? { packageBaseURL: this.options.packageBaseURL }
+          : {}),
       });
     } catch (error) {
       this.completeInitialization(
@@ -999,6 +1003,8 @@ class BrowserRuntimeWorkerPort implements RuntimeWorkerPort {
 
 export interface CreatePyodideRuntimeManagerOptions {
   readonly executionTimeoutMs?: number;
+  /** Override only when hosting Pyodide package wheels yourself. */
+  readonly packageBaseURL?: string;
 }
 
 export function createPyodideRuntimeManager(
@@ -1007,9 +1013,13 @@ export function createPyodideRuntimeManager(
   return new PyodideRuntimeManager({
     createWorker: () => new BrowserRuntimeWorkerPort(),
     indexURL: resolvePyodideIndexURL(),
+    packageBaseURL: options.packageBaseURL ?? DEFAULT_PYODIDE_PACKAGE_BASE_URL,
     executionTimeoutMs: options.executionTimeoutMs,
   });
 }
+
+const DEFAULT_PYODIDE_PACKAGE_BASE_URL =
+  "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/";
 
 function resolvePyodideIndexURL(): string {
   const applicationBaseURL = new URL(

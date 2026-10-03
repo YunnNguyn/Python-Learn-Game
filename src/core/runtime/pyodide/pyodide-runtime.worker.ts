@@ -144,7 +144,11 @@ def __runtime_collect(scope, names):
 
 workerScope.onmessage = (event) => {
   if (isRuntimeInitWorkerRequest(event.data)) {
-    void initializeRuntime(event.data.requestId, event.data.indexURL);
+    void initializeRuntime(
+      event.data.requestId,
+      event.data.indexURL,
+      event.data.packageBaseURL,
+    );
     return;
   }
 
@@ -180,9 +184,15 @@ workerScope.onmessage = (event) => {
 async function initializeRuntime(
   requestId: string,
   indexURL: string,
+  packageBaseURL: string | undefined,
 ): Promise<void> {
   try {
-    initializationPromise ??= loadPyodide({ indexURL });
+    initializationPromise ??= loadPyodide({
+      indexURL,
+      ...(packageBaseURL !== undefined
+        ? { packageBaseUrl: packageBaseURL }
+        : {}),
+    });
     runtime = await initializationPromise;
     activeNamespace ??= createPythonSetupNamespace(runtime, {});
 
@@ -226,9 +236,18 @@ async function prepareMission(
   let candidateNamespace: PyProxy | null = null;
 
   try {
+    const packageError = await ensureRuntimePackages(runtime, runtimeConfig);
+    if (packageError !== null) {
+      workerScope.postMessage({
+        type: "RUNTIME_ERROR",
+        requestId,
+        error: packageError,
+      });
+      return;
+    }
+
     const namespaceResult = buildMissionNamespace(
       runtime,
-      runtimeConfig,
       setupData,
     );
     if (!namespaceResult.ok) {
@@ -273,24 +292,69 @@ type MissionNamespaceResult =
       readonly error: RuntimeSystemError;
     };
 
-function buildMissionNamespace(
+async function ensureRuntimePackages(
   pyodide: PyodideInterface,
   runtimeConfig: JsonObject | undefined,
-  setupData: JsonObject | undefined,
-): MissionNamespaceResult {
-  if (
-    runtimeConfig !== undefined &&
-    Object.keys(runtimeConfig).length > 0
-  ) {
+): Promise<RuntimeSystemError | null> {
+  if (runtimeConfig === undefined || Object.keys(runtimeConfig).length === 0) {
+    return null;
+  }
+
+  const keys = Object.keys(runtimeConfig);
+  if (keys.length !== 1 || keys[0] !== "packages") {
     return {
-      ok: false,
-      error: {
-        code: "UNSUPPORTED_RUNTIME_CONFIG",
-        message: "runtimeConfig hiện chỉ hỗ trợ undefined hoặc object rỗng.",
-      },
+      code: "UNSUPPORTED_RUNTIME_CONFIG",
+      message: "runtimeConfig hiện chỉ hỗ trợ trường packages.",
     };
   }
 
+  const packages = runtimeConfig.packages;
+  if (
+    !Array.isArray(packages) ||
+    !packages.every(
+      (packageName) =>
+        typeof packageName === "string" && packageName.trim().length > 0,
+    )
+  ) {
+    return {
+      code: "INVALID_RUNTIME_CONFIG",
+      message: "runtimeConfig.packages phải là danh sách tên package hợp lệ.",
+    };
+  }
+
+  const requestedPackages = [...new Set(packages as string[])];
+  const unsupported = requestedPackages.filter(
+    (packageName) => packageName !== "numpy",
+  );
+  if (unsupported.length > 0) {
+    return {
+      code: "UNSUPPORTED_RUNTIME_PACKAGE",
+      message: `Package chưa được bật cho nội dung production: ${unsupported.join(", ")}.`,
+    };
+  }
+
+  if (requestedPackages.length === 0) {
+    return null;
+  }
+
+  try {
+    await pyodide.loadPackage(requestedPackages);
+    return null;
+  } catch (error) {
+    return {
+      code: "RUNTIME_PACKAGE_LOAD_FAILED",
+      message: getErrorMessage(
+        error,
+        `Không thể tải package Python: ${requestedPackages.join(", ")}.`,
+      ),
+    };
+  }
+}
+
+function buildMissionNamespace(
+  pyodide: PyodideInterface,
+  setupData: JsonObject | undefined,
+): MissionNamespaceResult {
   const setup = setupData ?? {};
   const validationError = validateSetupKeys(
     {
@@ -404,9 +468,20 @@ async function submitCode(
   let submitNamespace: PyProxy | null = null;
 
   try {
+    const packageError = await ensureRuntimePackages(runtime, runtimeConfig);
+    if (packageError !== null) {
+      postSubmitResult(
+        requestId,
+        executionFailure(
+          packageError.code ?? "MISSION_PREPARE_FAILED",
+          packageError.message,
+        ),
+      );
+      return;
+    }
+
     const namespaceResult = buildMissionNamespace(
       runtime,
-      runtimeConfig,
       setupData,
     );
     if (!namespaceResult.ok) {

@@ -22,3 +22,15 @@ export {
   type MatrixShapeReferenceResult,
   type ThresholdFilterReferenceResult,
 } from "./reference-solvers";
+
+export {
+  CS116_PRODUCTION_ACTIVITY_VS01,
+  CS116_PRODUCTION_CONTENT,
+  CS116_PRODUCTION_COURSE,
+  CS116_PRODUCTION_IDS,
+  CS116_PRODUCTION_LESSON,
+  CS116_PRODUCTION_PACK,
+  CS116_PRODUCTION_TEMPLATE_VS01,
+  CS116_PRODUCTION_WORLD,
+} from "./production-content";
+export { registerCs116ProductionContent } from "./register-cs116-content";

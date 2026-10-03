@@ -3,10 +3,10 @@
 ## Current Phase
 
 ```text
-Mission Pipeline — Run + Submit + Grading
+Fast Track Phase A — First Real Playable Mission
 ```
 
-Status: **In Progress**
+Status: **Awaiting Manual Browser Validation**
 
 Phase 0 remains complete and locked through the six source-of-truth documents:
 
@@ -21,13 +21,11 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 
 ## Current Task
 
-Mission Pipeline — Run + Submit + Grading
-
 ```text
-MP.4 — Structured feedback rendering
+Phase A — First Real Playable Mission
 ```
 
-Status: **Awaiting Manual Browser Validation**
+Status: **Implementation Complete / Awaiting Manual Browser Validation**
 
 Python Runtime status:
 
@@ -150,9 +148,9 @@ MP.4 automated validation:
 - [x] Core grading remains React/CSS/Mission Workspace independent;
 - [x] no new package dependency was added.
 
-MP.4 status: **Awaiting Manual Browser Validation**.
+MP.4 status: **Complete / Locked**.
 
-Next: **MP.5 — Attempt evidence envelope**.
+MP.5 Attempt evidence is integrated into Fast Track Phase A rather than shipped as a separate manual gate.
 
 Runtime checkpoints:
 
@@ -1360,6 +1358,54 @@ Phase 0 validation:
 - [x] full Recovery Run and Free Practice implementation are sequenced after the first vertical-slice playtest;
 - [x] deferred future systems are not required before the NumPy vertical slice;
 - [x] no production application/runtime code was added.
+
+## Fast Track Phase A — Integration Record
+
+Phase A turns the previously isolated engine pieces into the first real learner path:
+
+```text
+/learn
+→ registered course/world/lesson/activity
+→ VS-01 generated MissionInstance
+→ Pyodide + NumPy
+→ Run experimental state
+→ fresh-state Submit
+→ generated hidden-data resolution
+→ declarative grading
+→ structured learner feedback
+→ immutable AttemptRecord evidence
+```
+
+Phase A architecture locks:
+
+- `app/` is the composition root that creates Content, Generator, and Grader registries and validates the built-in content pack before registration.
+- CS116 remains content; the product identity remains Python for ML/AI.
+- VS-01 is the first production `LearningActivity` + `MissionTemplate`; the existing generator produces its real instance.
+- Runtime config v1 supports only `packages`, currently allowing `numpy`; package loading is owned by the Pyodide Worker, not MissionEngine/content logic.
+- Core Pyodide boot assets remain local. NumPy is fetched on demand from the official Pyodide jsDelivr package base in Phase A; fully local wheel hosting is deferred.
+- Generated hidden values are resolved at the MissionEngine/grading integration boundary using exact `$gradingData` references, then validated by the existing canonical declarative grader schema. The grader itself remains unaware of MissionInstance.
+- Every learner Submit through `MissionAttemptSession` creates exactly one frozen `AttemptRecord`, including failed submissions. Persistence/mastery remain Phase B.
+- Production Mission Workspace now consumes the generated mission instance, enables Run/Submit only after runtime preparation, renders real stdout/stderr/errors and real structured grading feedback.
+- Run remains experimental. Submit remains fresh-state and authoritative.
+- No Phaser, mastery, persistence, hint engine, retry variant, or review system is introduced in Phase A.
+
+Phase A automated validation in the ChatGPT patch environment:
+
+- [x] full source TypeScript check passed with the available Linux TypeScript 5.8 compiler;
+- [x] changed source remains dependency-layer compliant by static review;
+- [x] no package dependency was added;
+- [ ] Vitest/Vite could not execute in the Linux patch container because the uploaded Windows `node_modules` contains Windows-only TypeScript/Rolldown native optional bindings; run the normal project scripts after applying on Windows.
+
+Manual acceptance gate:
+
+- open `/learn` and navigate to VS-01 without typing route IDs;
+- wait for NumPy preparation;
+- Run a correct solution and verify stdout/runtime behavior;
+- Submit the correct solution and verify `Đạt`;
+- submit an incorrect shape/value and verify structured feedback without hidden-answer leakage;
+- verify the recorded submission counter increments once per Submit.
+
+Next after Phase A PASS: **Phase B — Learning Loop (IndexedDB, mastery, hints, retry/review, progress)**.
 
 ## Source-of-Truth Ownership
 

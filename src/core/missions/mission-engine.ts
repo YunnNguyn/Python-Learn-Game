@@ -2,6 +2,7 @@ import type { MissionInstance, MissionTemplate } from "../domain";
 import {
   CORE_GRADER_ID,
   getDeclarativeObservationVariables,
+  resolveDeclarativeGraderConfig,
   type GraderRegistry,
   type GraderResult,
 } from "../grading";
@@ -211,12 +212,17 @@ export class MissionEngine {
         };
       }
 
-      const graderConfig = this.currentMission.grader.config;
+      const authoredGraderConfig = this.currentMission.grader.config;
+      let graderConfig;
       let observeVariables: readonly string[];
       try {
-        if (graderConfig === undefined) {
+        if (authoredGraderConfig === undefined) {
           throw new Error("Declarative grader config is required.");
         }
+        graderConfig = resolveDeclarativeGraderConfig(
+          authoredGraderConfig,
+          this.currentMission.instance.grading?.data,
+        );
         observeVariables = getDeclarativeObservationVariables(graderConfig);
       } catch {
         return {

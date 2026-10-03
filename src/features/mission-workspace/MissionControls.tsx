@@ -3,6 +3,7 @@ export interface MissionControlsProps {
   readonly submitDisabled?: boolean;
   readonly onRun?: () => void;
   readonly onSubmit?: () => void;
+  readonly note?: string;
 }
 
 export function MissionControls({
@@ -10,6 +11,7 @@ export function MissionControls({
   submitDisabled = false,
   onRun,
   onSubmit,
+  note = "Chạy thử giữ trạng thái thực nghiệm; Nộp bài luôn chấm trên môi trường sạch.",
 }: MissionControlsProps) {
   return (
     <section className="mission-controls" aria-labelledby="mission-actions-title">
@@ -37,7 +39,7 @@ export function MissionControls({
         </button>
       </div>
       <p id="mission-runtime-note" className="mission-controls__note">
-        Trình chạy Python sẽ được kết nối ở bước tiếp theo.
+        {note}
       </p>
     </section>
   );

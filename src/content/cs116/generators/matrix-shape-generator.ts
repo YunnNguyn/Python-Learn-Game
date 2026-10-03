@@ -154,6 +154,10 @@ export const matrixShapeGenerator: MissionGenerator = {
     return {
       learner: {
         objective: objectiveFor(parsed.mode),
+        context:
+          parsed.mode === "CREATE_AND_INSPECT"
+            ? "Dữ liệu `matrix` đã có sẵn. Tạo ndarray vào `result`, sau đó lưu `result.shape` vào `shape_result` và `result.ndim` vào `ndim_result`."
+            : "Dùng dữ liệu matrix đã cho để xác định shape và ndim của mảng.",
         data: { matrix },
       },
       runtime: {
@@ -163,6 +167,7 @@ export const matrixShapeGenerator: MissionGenerator = {
         data: {
           expectedShape: [rows, columns],
           expectedNdim: 2,
+          expectedValues: matrix.map((row) => [...row]),
         },
       },
       world: {
