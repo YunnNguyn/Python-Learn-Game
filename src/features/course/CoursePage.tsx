@@ -1,11 +1,13 @@
 import { Link, useParams } from "react-router-dom";
 
-import { useApplicationServices } from "../../app/services";
+import { useApplicationServices, useLearningProgress } from "../../app/services";
 import type { CourseId } from "../../core/domain";
+import { getWorldCompletion } from "../progress";
 
 export function CoursePage() {
   const { courseId } = useParams();
   const { content } = useApplicationServices();
+  const { learning } = useLearningProgress();
   const course = courseId ? content.getCourse(courseId as CourseId) : undefined;
 
   if (course === undefined) {
@@ -31,9 +33,13 @@ export function CoursePage() {
         {course.worldIds.map((worldId) => {
           const world = content.getWorld(worldId);
           if (!world) return null;
+          const progress = getWorldCompletion(content, learning, world);
           return (
             <article className="learning-card" key={world.id}>
-              <p className="learning-card__meta">Chủ đề</p>
+              <div className="learning-card__heading-row">
+                <p className="learning-card__meta">Chủ đề</p>
+                <span className="progress-pill">{progress.completed}/{progress.total} hoàn thành</span>
+              </div>
               <h2>{world.title}</h2>
               {world.description ? <p>{world.description}</p> : null}
               <div className="learning-card__links">

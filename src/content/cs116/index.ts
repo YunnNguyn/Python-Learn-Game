@@ -34,3 +34,10 @@ export {
   CS116_PRODUCTION_WORLD,
 } from "./production-content";
 export { registerCs116ProductionContent } from "./register-cs116-content";
+
+export {
+  CS116_HINT_SET_ID,
+  CS116_PRODUCTION_HINT_SETS,
+  CS116_VS01_HINT_SET,
+  registerCs116Hints,
+} from "./production-hints";

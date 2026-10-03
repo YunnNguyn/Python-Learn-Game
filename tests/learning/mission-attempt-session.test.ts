@@ -3,13 +3,16 @@ import { describe, expect, it } from "vitest";
 import {
   AttemptRecordSchema,
   Difficulty,
+  HintLevel,
   LearningActivityType,
   LearningStage,
+  type AttemptRecord,
   type LearningActivity,
   type MissionInstance,
   type MissionTemplate,
 } from "../../src/core/domain";
 import type { GraderRegistry } from "../../src/core/grading";
+import { HintEngine, type HintSet } from "../../src/core/hints";
 import { MissionAttemptSession } from "../../src/core/learning";
 import { MissionEngine } from "../../src/core/missions";
 import type { RuntimeManager } from "../../src/core/runtime";
@@ -76,9 +79,23 @@ describe("Phase A AttemptRecord envelope", () => {
       new Date("2026-10-03T10:01:00.000Z"),
       new Date("2026-10-03T10:02:00.000Z"),
     ];
+    const persisted: AttemptRecord[] = [];
+    const hintSet: HintSet = {
+      id: "hints.test" as never,
+      hints: [
+        { level: HintLevel.H1, text: "concept" },
+        { level: HintLevel.H2, text: "strategy" },
+        { level: HintLevel.H3, text: "syntax" },
+        { level: HintLevel.H4, text: "pseudo" },
+      ],
+    };
     const session = new MissionAttemptSession(activity, template, instance, engine, {
       now: () => times.shift()!,
+      hintEngine: new HintEngine(hintSet),
+      onAttemptRecord: (record) => { persisted.push(record); },
     });
+
+    session.revealNextHint();
 
     const first = await session.submit("pass");
     const second = await session.submit("pass again");
@@ -87,6 +104,8 @@ describe("Phase A AttemptRecord envelope", () => {
     expect(first.attemptRecord.submissionIndex).toBe(1);
     expect(second.attemptRecord.submissionIndex).toBe(2);
     expect(session.getAttempts()).toHaveLength(2);
+    expect(persisted).toHaveLength(2);
+    expect(first.attemptRecord.hintsUsed).toEqual([HintLevel.H1]);
     expect(AttemptRecordSchema.parse(first.attemptRecord)).toEqual(first.attemptRecord);
     expect(Object.isFrozen(first.attemptRecord)).toBe(true);
   });

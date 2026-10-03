@@ -803,3 +803,338 @@ a {
     text-align: center;
   }
 }
+
+/* Phase B — persistent learning loop, hints, progress and retry */
+.learning-card__heading-row,
+.mission-heading-row,
+.mission-hint-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.progress-pill {
+  flex: 0 0 auto;
+  border: 1px solid #cbd5e5;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #526079;
+  font-size: 0.76rem;
+  font-weight: 750;
+  line-height: 1;
+  padding: 0.45rem 0.65rem;
+}
+
+.progress-pill--complete {
+  border-color: #a8d3be;
+  background: #eff9f3;
+  color: #246448;
+}
+
+.review-recommendations {
+  margin-top: 1.5rem;
+  border: 1px solid #d7e2f2;
+  border-radius: 0.85rem;
+  background: #f4f8ff;
+  padding: 1rem;
+}
+
+.review-recommendations h2 {
+  margin-bottom: 0;
+}
+
+.review-recommendations__list {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.review-recommendation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid #dde6f4;
+  padding-top: 0.75rem;
+}
+
+.review-recommendation:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.review-recommendation p {
+  margin: 0.2rem 0 0;
+  font-size: 0.88rem;
+}
+
+.activity-page {
+  width: min(100%, 54rem);
+}
+
+.activity-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.activity-progress-card {
+  display: grid;
+  gap: 0.25rem;
+  border: 1px solid #e0e5ef;
+  border-radius: 0.75rem;
+  background: #f8faff;
+  padding: 0.85rem 1rem;
+}
+
+.activity-progress-card span {
+  color: #64718a;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.activity-progress-card strong {
+  color: #172033;
+  font-size: 1.1rem;
+}
+
+.activity-concepts,
+.attempt-history,
+.settings-section {
+  margin-top: 1.5rem;
+  border-top: 1px solid #e4e9f1;
+  padding-top: 1.25rem;
+}
+
+.activity-concepts__list,
+.attempt-history__list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.activity-concept-row,
+.attempt-history__item {
+  border: 1px solid #e0e5ef;
+  border-radius: 0.7rem;
+  background: #f8faff;
+  padding: 0.75rem 0.85rem;
+}
+
+.activity-concept-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.activity-concept-row strong {
+  color: #255f47;
+}
+
+.attempt-history__item > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.attempt-history__item p {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+}
+
+.attempt-pass {
+  color: #256648;
+}
+
+.attempt-fail {
+  color: #913f3f;
+}
+
+.mission-heading-row h1 {
+  margin-top: 0;
+}
+
+.mission-back-link {
+  flex: 0 0 auto;
+}
+
+.mission-draft-notice {
+  margin: 0.85rem 0 0 !important;
+  border-left: 0.25rem solid #5484c7;
+  border-radius: 0.55rem;
+  background: #f0f5fd;
+  color: #355477 !important;
+  font-size: 0.88rem;
+  padding: 0.65rem 0.8rem;
+}
+
+.mission-hint-panel {
+  margin-top: 1rem;
+  background: #fbfcff;
+}
+
+.mission-hint-panel__header > div {
+  min-width: 0;
+}
+
+.mission-hint-button {
+  flex: 0 0 auto;
+  min-height: 2.5rem;
+  border: 1px solid #9eb0cb;
+  border-radius: 0.6rem;
+  background: #ffffff;
+  color: #274c7f;
+  cursor: pointer;
+  font-weight: 750;
+  padding: 0.6rem 0.85rem;
+}
+
+.mission-hint-button:hover:not(:disabled) {
+  background: #edf3ff;
+}
+
+.mission-hint-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.mission-hint-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mission-hint-item {
+  border: 1px solid #dce4ef;
+  border-radius: 0.65rem;
+  background: #ffffff;
+  padding: 0.75rem 0.85rem;
+}
+
+.mission-hint-item p {
+  margin: 0;
+}
+
+.mission-hint-item__label {
+  margin-bottom: 0.35rem !important;
+  color: #315d95 !important;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.mission-hint-empty {
+  margin-top: 0.75rem !important;
+  color: #64718a !important;
+  font-size: 0.88rem;
+}
+
+.mission-result-panel__content--error {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mission-attempt-evidence {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.mission-retry-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.secondary-action--button {
+  cursor: pointer;
+}
+
+.settings-page {
+  width: min(100%, 46rem);
+}
+
+.settings-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.settings-stats > div {
+  border: 1px solid #e0e5ef;
+  border-radius: 0.7rem;
+  background: #f8faff;
+  padding: 0.75rem 0.85rem;
+}
+
+.settings-stats dt {
+  color: #64718a;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.settings-stats dd {
+  margin: 0.25rem 0 0;
+  color: #172033;
+  font-weight: 800;
+}
+
+.danger-action {
+  min-height: 2.5rem;
+  border: 1px solid #c77777;
+  border-radius: 0.6rem;
+  background: #ffffff;
+  color: #923f3f;
+  cursor: pointer;
+  font-weight: 750;
+  padding: 0.6rem 0.85rem;
+}
+
+.danger-action:hover:not(:disabled) {
+  background: #fff3f3;
+}
+
+.settings-message {
+  margin-bottom: 0 !important;
+  color: #256648 !important;
+  font-weight: 700;
+}
+
+@media (max-width: 48rem) {
+  .learning-card__heading-row,
+  .mission-heading-row,
+  .mission-hint-panel__header,
+  .mission-attempt-evidence,
+  .review-recommendation {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mission-back-link,
+  .mission-hint-button,
+  .review-recommendation .secondary-action {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .activity-progress-grid,
+  .settings-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .mission-retry-actions {
+    width: 100%;
+  }
+
+  .mission-retry-actions > * {
+    flex: 1 1 10rem;
+    justify-content: center;
+  }
+}

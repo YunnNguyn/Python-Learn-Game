@@ -1,12 +1,12 @@
 import {
   AttemptRecordSchema,
-  HintLevel,
   type AttemptRecord,
   type AttemptRecordId,
   type LearningActivity,
   type MissionInstance,
   type MissionTemplate,
 } from "../domain";
+import { HintEngine, type RevealedHint } from "../hints";
 import { RUNTIME_EXECUTION_STATUS } from "../runtime";
 import {
   type MissionRunResult,
@@ -20,16 +20,20 @@ export interface MissionSubmitWithAttempt extends MissionSubmitResult {
 
 export interface MissionAttemptSessionOptions {
   readonly now?: () => Date;
+  readonly hintEngine?: HintEngine;
+  readonly onAttemptRecord?: (record: AttemptRecord) => void | Promise<void>;
 }
 
 /**
- * Lightweight in-memory learning-evidence envelope for one loaded activity.
- * Persistence/mastery are intentionally deferred; every Submit still creates one immutable record.
+ * Session-local Run/Submit evidence coordinator for one loaded activity.
+ * Every Submit creates one immutable AttemptRecord and may forward it to durable learning storage.
  */
 export class MissionAttemptSession {
   private readonly startedAt: string;
   private readonly now: () => Date;
   private readonly attemptRecords: AttemptRecord[] = [];
+  private readonly hintEngine: HintEngine;
+  private readonly onAttemptRecord?: (record: AttemptRecord) => void | Promise<void>;
   private runCount = 0;
   private submissionIndex = 0;
   private runtimeErrorCount = 0;
@@ -43,6 +47,8 @@ export class MissionAttemptSession {
     options: MissionAttemptSessionOptions = {},
   ) {
     this.now = options.now ?? (() => new Date());
+    this.hintEngine = options.hintEngine ?? new HintEngine(null);
+    this.onAttemptRecord = options.onAttemptRecord;
     this.startedAt = this.now().toISOString();
   }
 
@@ -82,7 +88,7 @@ export class MissionAttemptSession {
         passed: result.grading?.passed === true,
         submissionIndex: this.submissionIndex,
         runCountBeforeSubmit,
-        hintsUsed: [] as HintLevel[],
+        hintsUsed: [...this.hintEngine.getUsedLevels()],
         runtimeErrorCount: this.runtimeErrorCount,
         graderSummary: {
           executionStatus: result.execution.status,
@@ -97,11 +103,29 @@ export class MissionAttemptSession {
     );
 
     this.attemptRecords.push(attemptRecord);
+    await this.onAttemptRecord?.(attemptRecord);
     return { ...result, attemptRecord };
   }
 
   getAttempts(): readonly AttemptRecord[] {
     return [...this.attemptRecords];
+  }
+
+  revealNextHint(): RevealedHint | null {
+    this.assertActive();
+    return this.hintEngine.revealNext();
+  }
+
+  getRevealedHints(): readonly RevealedHint[] {
+    return this.hintEngine.getRevealed();
+  }
+
+  getRemainingHintCount(): number {
+    return this.hintEngine.getRemainingCount();
+  }
+
+  hasHints(): boolean {
+    return this.hintEngine.hasHints();
   }
 
   dispose(): void {

@@ -1,23 +1,40 @@
 import {
   CS116_PRODUCTION_CONTENT,
   registerCs116Generators,
+  registerCs116Hints,
   registerCs116ProductionContent,
 } from "../../content/cs116";
 import { ContentRegistry, validateContent } from "../../core/content";
 import {
   Difficulty,
   LearningActivityType,
+  type HintLevel,
   type LearningActivityId,
 } from "../../core/domain";
 import { GeneratorRegistry } from "../../core/generators";
 import { GraderRegistry, registerCoreGraders } from "../../core/grading";
-import { MissionAttemptSession } from "../../core/learning";
+import { HintEngine, HintRegistry } from "../../core/hints";
+import { LearningEngine, MissionAttemptSession } from "../../core/learning";
 import { generateMissionInstance, MissionEngine } from "../../core/missions";
+import {
+  createBrowserLearningPersistence,
+  type LearningPersistence,
+} from "../../core/persistence";
 import { CORE_RUNTIME_ID, type RuntimeSystemError } from "../../core/runtime";
 import { createPyodideRuntimeManager } from "../../core/runtime/pyodide";
 
 export interface PlayableMissionSession {
   readonly session: MissionAttemptSession;
+  readonly initialCode: string;
+  readonly variantIndex: number;
+  readonly resumedDraft: boolean;
+}
+
+export interface CreateMissionSessionOptions {
+  readonly seed?: string;
+  readonly variantIndex?: number;
+  readonly resumeDraft?: boolean;
+  readonly resetCode?: boolean;
 }
 
 export type CreateMissionSessionResult =
@@ -28,22 +45,42 @@ export interface ApplicationServices {
   readonly content: ContentRegistry;
   readonly generators: GeneratorRegistry;
   readonly graders: GraderRegistry;
-  createMissionSession(activityId: string): Promise<CreateMissionSessionResult>;
+  readonly hints: HintRegistry;
+  readonly learning: LearningEngine;
+  createMissionSession(
+    activityId: string,
+    options?: CreateMissionSessionOptions,
+  ): Promise<CreateMissionSessionResult>;
+  saveMissionDraft(input: {
+    readonly activityId: LearningActivityId;
+    readonly seed: string;
+    readonly variantIndex: number;
+    readonly code: string;
+    readonly hintsUsed: readonly HintLevel[];
+  }): Promise<void>;
+  deleteMissionDraft(activityId: LearningActivityId): Promise<void>;
+  clearLearningData(): Promise<void>;
+  getPersistenceKind(): "indexeddb" | "memory";
 }
 
 export function createApplicationServices(): ApplicationServices {
   const content = new ContentRegistry();
   const generators = new GeneratorRegistry();
   const graders = new GraderRegistry();
+  const hints = new HintRegistry();
+  const persistence = createBrowserLearningPersistence();
+  const learning = new LearningEngine(persistence);
 
   registerCs116Generators(generators);
   registerCoreGraders(graders);
+  registerCs116Hints(hints);
 
   const validation = validateContent(CS116_PRODUCTION_CONTENT, {
     extensionCapabilities: {
       generatorIds: generators.getGeneratorIds(),
       graderIds: graders.getGraderIds(),
       runtimeIds: [CORE_RUNTIME_ID.PYODIDE],
+      hintSetIds: hints.getHintSetIds(),
     },
     schemaSupport: { supportedSchemaVersions: [1] },
   });
@@ -57,12 +94,17 @@ export function createApplicationServices(): ApplicationServices {
   }
 
   registerCs116ProductionContent(content);
+  void learning.initialize();
 
   return {
     content,
     generators,
     graders,
-    async createMissionSession(activityId) {
+    hints,
+    learning,
+
+    async createMissionSession(activityId, options = {}) {
+      await learning.initialize();
       const activity = content.getActivity(activityId as LearningActivityId);
       if (activity === undefined) {
         return failure(
@@ -90,18 +132,38 @@ export function createApplicationServices(): ApplicationServices {
         );
       }
 
+      const draft =
+        options.seed === undefined && options.resumeDraft !== false
+          ? await persistence.getMissionDraft(activity.id)
+          : null;
+      const variantIndex = options.variantIndex ?? draft?.variantIndex ?? 0;
+      const seed =
+        options.seed ??
+        draft?.seed ??
+        deriveActivityVariantSeed(activity.id, template.version, variantIndex);
+
       let instance;
       try {
         instance = generateMissionInstance({
           template,
           generatorRegistry: generators,
-          baseSeed: `first-play:${activity.id}:v${template.version}`,
+          baseSeed: seed,
           difficulty: Difficulty.EASY,
         }).instance;
       } catch (error) {
         return failure(
           "MISSION_GENERATION_FAILED",
           getErrorMessage(error, "Không thể tạo dữ liệu cho nhiệm vụ."),
+        );
+      }
+
+      const hintSet = template.hintSetId
+        ? hints.getHintSet(template.hintSetId)
+        : undefined;
+      if (template.hintSetId && !hintSet) {
+        return failure(
+          "HINT_SET_NOT_FOUND",
+          "Không tìm thấy bộ gợi ý của nhiệm vụ.",
         );
       }
 
@@ -113,14 +175,65 @@ export function createApplicationServices(): ApplicationServices {
         return { ok: false, error: loaded.error };
       }
 
+      const session = new MissionAttemptSession(activity, template, instance, engine, {
+        hintEngine: new HintEngine(hintSet ?? null, resumedDraftHintLevels(draft, seed)),
+        onAttemptRecord: (record) => learning.recordAttempt(record),
+      });
+      const starterCode =
+        instance.learner.starterCode ?? template.starterCode ?? "# Viết mã Python tại đây\n";
+      const resumedDraft =
+        !options.resetCode && draft !== null && draft.seed === seed;
+
       return {
         ok: true,
         value: {
-          session: new MissionAttemptSession(activity, template, instance, engine),
+          session,
+          initialCode: resumedDraft ? draft.code : starterCode,
+          variantIndex,
+          resumedDraft,
         },
       };
     },
+
+    async saveMissionDraft(input) {
+      await persistence.saveMissionDraft({
+        ...input,
+        updatedAt: new Date().toISOString(),
+      });
+    },
+
+    deleteMissionDraft(activityId) {
+      return persistence.deleteMissionDraft(activityId);
+    },
+
+    async clearLearningData() {
+      await learning.clearAttempts();
+      await persistence.clearMissionDrafts();
+    },
+
+    getPersistenceKind() {
+      return persistence.kind;
+    },
   };
+}
+
+function resumedDraftHintLevels(
+  draft: Awaited<ReturnType<LearningPersistence["getMissionDraft"]>>,
+  seed: string,
+) {
+  return draft?.seed === seed ? draft.hintsUsed : [];
+}
+
+export function deriveActivityVariantSeed(
+  activityId: LearningActivityId,
+  templateVersion: number,
+  variantIndex: number,
+): string {
+  if (!Number.isSafeInteger(variantIndex) || variantIndex < 0) {
+    throw new RangeError("variantIndex must be a non-negative safe integer.");
+  }
+
+  return `play:${activityId}:v${templateVersion}:variant:${variantIndex}`;
 }
 
 function failure(code: string, message: string): CreateMissionSessionResult {

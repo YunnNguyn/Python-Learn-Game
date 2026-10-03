@@ -17,6 +17,7 @@ import {
 import { CORE_GRADER_ID, DeclarativeGraderCheckType } from "../../core/grading";
 import { CORE_RUNTIME_ID } from "../../core/runtime";
 import { CS116_GENERATOR_ID } from "./generators";
+import { CS116_HINT_SET_ID } from "./production-hints";
 import { CS116_VERTICAL_SLICE_CONCEPTS } from "./vertical-slice-concepts";
 
 export const CS116_PRODUCTION_IDS = {
@@ -151,6 +152,7 @@ export const CS116_PRODUCTION_TEMPLATE_VS01: MissionTemplate =
         ],
       },
     },
+    hintSetId: CS116_HINT_SET_ID.VS01,
     runtime: {
       id: CORE_RUNTIME_ID.PYODIDE,
       config: {

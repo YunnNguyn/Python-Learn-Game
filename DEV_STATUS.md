@@ -1421,3 +1421,62 @@ Use each document for its owning concern:
 | `DEV_STATUS.md` | current operational status, locks, risks, open decisions |
 
 
+
+## Fast Track Phase B — Learning Loop Record
+
+Phase B turns the first playable mission into a durable learning loop:
+
+```text
+Submit
+→ immutable AttemptRecord
+→ IndexedDB repository
+→ LearningEngine
+→ activity progress / concept mastery
+→ review recommendation
+```
+
+and adds learner continuity:
+
+```text
+edit code / reveal hints
+→ local mission draft
+→ reload browser
+→ restore seed + code + used hints
+```
+
+Phase B architecture locks:
+
+- attempt history remains the durable source evidence; mastery is derived from the sequence of attempts rather than stored as an authoritative percentage;
+- browser persistence lives behind `LearningPersistence`; IndexedDB is the normal implementation and a memory fallback keeps the app usable when IndexedDB is unavailable;
+- MissionAttemptSession still creates exactly one immutable AttemptRecord per Submit and now forwards it to the LearningEngine persistence boundary;
+- Guided success derives PRACTICING evidence; two distinct successful INDEPENDENT seeds without H3/H4 derive INDEPENDENT; TRANSFER and delayed REVIEW/RETENTION evidence raise later states; later failures never erase historical mastery;
+- H1 → H4 hints are progressive and separate from grader feedback; every revealed hint is included in subsequent AttemptRecord evidence;
+- mission drafts persist activity seed, variant index, code and used-hint prefix so an unfinished mission can resume after reload;
+- Retry Same Instance recreates the exact seed on a fresh runtime; Retry Variant increments a deterministic variant index and generates a fresh valid task with the same learning intent;
+- minimal concept-based review selection prioritizes recent failures, weak concepts, weak prerequisites and stale evidence without introducing a second practice engine;
+- course, lesson and activity UI consume LearningEngine progress queries; Settings can clear local attempts and drafts explicitly;
+- no Phaser, WorldEvent visualization, Recovery Run composition or Free Practice session builder is introduced in Phase B.
+
+Phase B automated validation in the patch environment:
+
+- [x] `npm run typecheck` passes with the uploaded project dependencies;
+- [x] all new persistence/learning/hint/UI contracts compile under strict TypeScript;
+- [x] no package dependency was added;
+- [ ] Vitest/Vite cannot execute in the Linux patch container because the uploaded Windows `node_modules` contains Windows-only Rolldown native bindings; run normal test/build scripts on Windows after applying.
+
+Phase B manual acceptance gate:
+
+- submit a failed mission and verify the attempt remains visible after page reload;
+- reveal H1/H2, reload before Submit, verify the draft code and revealed hints are restored;
+- submit after using hints and verify the attempt history records the used hint levels;
+- pass VS-01 and verify lesson/course progress changes to completed and the three concepts show PRACTICING;
+- use “Làm lại cùng đề” and verify the input matrix is identical;
+- use “Tạo đề mới” and verify the input matrix changes while the learning objective stays the same;
+- after a recent failed attempt, return to `/learn` and verify an “Ôn tập đề xuất” card appears;
+- open Settings, verify IndexedDB + attempt count, then optionally test clearing local progress.
+
+Next after Phase B PASS: **Phase C — Semantic Visualization (WorldEvent bridge + Phaser Sensor Control Room)**.
+
+Phase B tooling note:
+
+- Vite development cache is redirected from `node_modules/.vite` to project-local `.vite-cache` to avoid the recurring Windows/CodexSandbox ownership EPERM issue; `.vite-cache/` is gitignored.
