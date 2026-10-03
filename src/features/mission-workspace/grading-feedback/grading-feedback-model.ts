@@ -211,7 +211,7 @@ function sanitizeExceptionMessage(
 
   let safeMessage = terminalExceptionLine
     ? terminalExceptionLine.slice(typePrefix.length).trim()
-    : lines.length === 1
+    : isSafeStandaloneExceptionLine(lines[0])
       ? lines[0]
       : undefined;
 
@@ -226,6 +226,26 @@ function sanitizeExceptionMessage(
   return safeMessage.length <= MAX_EXCEPTION_MESSAGE_LENGTH
     ? safeMessage
     : `${safeMessage.slice(0, MAX_EXCEPTION_MESSAGE_LENGTH - 1)}…`;
+}
+
+
+function isSafeStandaloneExceptionLine(line: string | undefined): line is string {
+  if (!line) {
+    return false;
+  }
+
+  const normalized = line.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  return !(
+    normalized.startsWith("Traceback") ||
+    normalized.startsWith("File ") ||
+    normalized.startsWith("at ") ||
+    normalized.includes("_pyodide/_base.py") ||
+    normalized.includes("pyodide-runtime.worker")
+  );
 }
 
 function deduplicateFeedbackItems(
