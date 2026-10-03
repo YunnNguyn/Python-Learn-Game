@@ -1,18 +1,34 @@
 # Technical Architecture — Extensible Learning Game
 
+> **2026-10-03 architecture-direction lock — supersedes Phaser/visualization-first requirements below.**
+> The required production separation is now `learning/runtime core` + `content` + `meta progression` + `React features`. Semantic visualization remains optional and deferred. No Phaser dependency is required for the learning workspace. `LearningEngine` and graders must not know about Robot Workshop, pets, gardens, or future social systems. Meta progression consumes durable learning evidence after it is recorded and persists its own state independently.
+
+Required dependency/data direction for gamification:
+
+```text
+AttemptRecord
+→ LearningEngine
+→ MetaProgressionEngine / reward policy
+→ inventory + daily goals + workshop state
+→ React meta-game features
+```
+
+`core/meta-progression/` may depend on neutral domain evidence such as `AttemptRecord`, but must not import React features or CS116-specific content. Robot/Pet/Garden systems must not call graders or mutate mastery.
+
 ## 1. Architectural Goal
 
 The architecture must let CS116 ship as the first content package while keeping the learning engine reusable for later Python, Data Science, Machine Learning, PyTorch, Computer Vision, NLP, and Kaggle content.
 
-The primary separation is:
+The primary production separation is:
 
 ```text
-ENGINE
+LEARNING / RUNTIME CORE
 CONTENT
-VISUALIZATION
+META PROGRESSION
+REACT FEATURES
 ```
 
-The Core Engine owns generic learning behavior. Content defines what is learned and how activities are configured. Visualization translates semantic outcomes into visible reactions.
+The Core Engine owns generic learning behavior. Content defines what is learned and how activities are configured. Meta progression consumes durable learning evidence to provide optional rewards without changing grading or mastery. React features compose these systems for the learner. Specialized visualization remains an optional extension, not a required layer.
 
 ### Extensibility acceptance rule
 
@@ -30,13 +46,13 @@ Target:
 
 Similarly:
 
-> Adding a normal lesson should primarily involve registering concepts, activities, missions, and progression—not modifying runtime, React routing, mastery logic, or Phaser core.
+> Adding a normal lesson should primarily involve registering concepts, activities, missions, and progression—not modifying runtime, React routing, mastery logic, or meta-progression internals.
 
 These are architectural acceptance tests, not a requirement to build a general-purpose plugin marketplace.
 
 ## 2. Planned Technology Stack
 
-Current proposed stack:
+Current production stack:
 
 ```text
 Vite
@@ -44,9 +60,10 @@ TypeScript
 React
 Monaco Editor
 Pyodide in Web Worker
-Phaser for 2D game-world visualization
-IndexedDB for local persistence
+IndexedDB for local learning + meta-progression persistence
 ```
+
+A renderer such as Phaser may be introduced later only for a concrete optional mini-game that benefits from it; it is not part of the learning-workspace baseline.
 
 Initial project does not need:
 

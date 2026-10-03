@@ -1,5 +1,20 @@
 # Roadmap — From Design Lock to NumPy Vertical Slice
 
+> **2026-10-03 fast-track roadmap lock — supersedes the older visualization-first phase order below.**
+
+Current production sequence:
+
+```text
+Phase A — First Real Playable Mission                         COMPLETE / LOCKED
+Phase B — Persistent Learning Loop                           COMPLETE / LOCKED
+Phase C — Reward & Meta-Game Foundation + Robot Workshop v1 CURRENT
+Phase D — Complete CS116 NumPy vertical slice VS-01..VS-07
+Phase E — Meta-game expansion only after the learning slice is healthy
+Phase F — Optional accounts / friends / cups after a backend exists
+```
+
+Phase C explicitly does **not** add Phaser or require per-mission game-world visualization. Its acceptance target is an idempotent reward pipeline, persisted inventory, bounded daily goals, anti-farming rules, and one real optional mini-system that consumes rewards without affecting grading/mastery.
+
 ## Roadmap Rules
 
 This roadmap decomposes implementation into small tasks that can be assigned to Codex separately.
@@ -12,26 +27,20 @@ Rules:
 4. Do not expand the NumPy world before the vertical slice proves the full pipeline.
 5. Do not implement deferred marketplace, cloud, multiplayer, no-code authoring, or extra runtime systems.
 
-Canonical phase order:
+Historical foundation order and current production phase order:
 
 ```text
-Phase 0 — Design Lock
-Foundation 1 — Domain Types + Schemas
-Foundation 2 — Content Registry + Validator
-Foundation 3 — Concept Graph + Activity Registry
-Foundation 4 — Mission Template / Instance + Seeded RNG
-Foundation 5 — Generator + Grader Registries
-App Shell — React Workspace
-Python Runtime — Pyodide Worker
-Mission Pipeline — Run + Submit + Grading
-Visualization Bridge — Semantic Events + Phaser
-Learning System — Attempt History + Mastery
-Review / Retry Variant — Vertical Slice Minimum
-NumPy Vertical Slice
-Playtest
-Post-Playtest Review Expansion — Recovery Run + Free Practice
-Expand NumPy World
+Phase 0 + Foundations 1–5 — COMPLETE / LOCKED
+App Shell + Python Runtime + Mission Pipeline — COMPLETE / LOCKED
+Phase A — First Real Playable Mission — COMPLETE / LOCKED
+Phase B — Persistent Learning Loop — COMPLETE / LOCKED
+Phase C — Reward & Meta-Game Foundation + Robot Workshop v1 — CURRENT
+Phase D — Complete NumPy Vertical Slice VS-01..VS-07
+Playtest / polish
+Then expand curriculum and optional meta-game systems
 ```
+
+The older Visualization Bridge section later in this document is retained as design history/reference only and is not on the active critical path.
 
 ## Phase 0 — Design Lock
 

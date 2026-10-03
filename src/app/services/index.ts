@@ -10,3 +10,5 @@ export {
   useApplicationServices,
 } from "./ApplicationServicesContext";
 export { useLearningProgress } from "./use-learning-progress";
+
+export { useMetaProgression } from "./use-meta-progression";

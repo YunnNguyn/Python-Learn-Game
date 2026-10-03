@@ -1,8 +1,24 @@
 # Product Spec — Python/ML Learning Game
 
+> **2026-10-03 product-direction lock — supersedes visualization-first requirements below.**
+> **2026-10-03 UI theme lock:** the production web app uses a native dark interface by default (dark slate surfaces, light text, blue accent). This is the official product theme rather than a browser-extension transformation; Monaco remains dark to match the surrounding workspace.
+> The production product is first and foremost a focused Python/ML learning and exercise web app. Ordinary missions do **not** need a game-world or semantic visualization. Run/Submit, grading, mastery, review, and learning clarity stay primary. Gamification lives beside the learning loop as optional meta progression: learning evidence can grant durable rewards used by systems such as Robot Workshop, collections, pets, gardens, daily goals, and later social cups. A visualization may still be added when it materially teaches a concept, but Phaser/game-world reaction is no longer a product acceptance requirement.
+
+Current high-level loop:
+
+```text
+learn / practice / review
+→ immutable AttemptRecord
+→ Learning Engine (progress + mastery)
+→ Reward / Meta Progression Engine
+→ inventory / daily goals / optional mini-systems
+```
+
+The reward layer must never change grader outcomes or mastery evidence. Repeated easy submissions must not provide an unlimited farming path.
+
 ## 1. Product Vision
 
-Build an extensible browser-based programming learning game in which the learner's own code directly changes a meaningful game or data visualization.
+Build an extensible browser-based Python/ML learning application in which the learner writes real code, receives structured feedback, builds durable mastery, and can optionally use learning rewards in separate meta-game systems.
 
 The initial learning path is:
 
@@ -17,21 +33,21 @@ The first production curriculum is **CS116 — Python Programming for Machine Le
 
 The central product rule is:
 
-> Player-written code must directly affect the game world.
+> The learner must do the programming work, and feedback must stay grounded in the learner's actual execution and submission evidence.
 
 A representative loop is:
 
 ```text
 mission data
-→ player writes Python
+→ learner writes Python
 → code executes
 → grader evaluates result
-→ semantic WorldEvent
-→ visualization reacts
-→ learning evidence is recorded
+→ immutable learning evidence is recorded
+→ mastery/review updates
+→ bounded optional rewards are granted
 ```
 
-The visualization exists to communicate what the computation means. It is part of the learning feedback loop, not decoration around a quiz.
+Visualization is optional and should be used only when it materially improves understanding. Gamification should live around the learning loop rather than forcing every programming task into a game scene.
 
 ## 2. Target Learner
 

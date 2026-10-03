@@ -10,6 +10,7 @@ import { LearningStage, type AttemptRecord } from "../../core/domain";
 import type { GraderResult } from "../../core/grading";
 import type { RevealedHint } from "../../core/hints";
 import type { MissionAttemptSession } from "../../core/learning";
+import type { RewardGrant } from "../../core/meta-progression";
 import {
   RUNTIME_EXECUTION_STATUS,
   type RuntimeExecutionResult,
@@ -19,6 +20,7 @@ import { MissionDataPanel } from "./MissionDataPanel";
 import { MissionHintPanel } from "./MissionHintPanel";
 import { MissionObjectivePanel } from "./MissionObjectivePanel";
 import { MissionOutputPanel } from "./MissionOutputPanel";
+import { MissionRewardPanel } from "./MissionRewardPanel";
 import { PythonEditor } from "./PythonEditor";
 import { GradingFeedback } from "./grading-feedback";
 
@@ -39,6 +41,7 @@ export function MissionWorkspacePage() {
   const [execution, setExecution] = useState<RuntimeExecutionResult | null>(null);
   const [grading, setGrading] = useState<GraderResult | null>(null);
   const [attempt, setAttempt] = useState<AttemptRecord | null>(null);
+  const [rewardGrants, setRewardGrants] = useState<readonly RewardGrant[]>([]);
   const [revealedHints, setRevealedHints] = useState<readonly RevealedHint[]>([]);
   const [draftSuppressed, setDraftSuppressed] = useState(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
@@ -52,6 +55,7 @@ export function MissionWorkspacePage() {
     setExecution(null);
     setGrading(null);
     setAttempt(null);
+    setRewardGrants([]);
     setRevealedHints([]);
     setDraftSuppressed(false);
     setDraftNotice(null);
@@ -118,6 +122,7 @@ export function MissionWorkspacePage() {
     setExecution(null);
     setGrading(null);
     setAttempt(null);
+    setRewardGrants([]);
     setDraftSuppressed(false);
     setDraftNotice(next.resumedDraft ? "Đã khôi phục bản nháp và đề đang làm trước đó." : null);
     setLoading(false);
@@ -131,6 +136,7 @@ export function MissionWorkspacePage() {
     setOperation("run");
     setGrading(null);
     setAttempt(null);
+    setRewardGrants([]);
     try {
       const result = await session.run(code);
       setExecution(result.execution);
@@ -149,6 +155,9 @@ export function MissionWorkspacePage() {
       setExecution(result.execution);
       setGrading(result.grading ?? null);
       setAttempt(result.attemptRecord);
+      setRewardGrants(
+        services.metaProgression.getRewardGrantsForAttempt(result.attemptRecord.id),
+      );
       if (result.attemptRecord.passed) {
         setDraftSuppressed(true);
         setDraftNotice(null);
@@ -316,6 +325,8 @@ export function MissionWorkspacePage() {
           <GradingFeedback result={grading} />
         </section>
       ) : null}
+
+      {rewardGrants.length > 0 ? <MissionRewardPanel grants={rewardGrants} /> : null}
 
       {attempt ? (
         <section className="mission-attempt-evidence" aria-live="polite">

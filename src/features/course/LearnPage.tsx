@@ -1,12 +1,21 @@
 import { Link } from "react-router-dom";
 
-import { useApplicationServices, useLearningProgress } from "../../app/services";
+import {
+  useApplicationServices,
+  useLearningProgress,
+  useMetaProgression,
+} from "../../app/services";
 import { ReviewReason, type LearningActivityId } from "../../core/domain";
+import {
+  InventoryItemId,
+  inventoryItemLabel,
+} from "../../core/meta-progression";
 import { getCourseCompletion } from "../progress";
 
 export function LearnPage() {
   const { content } = useApplicationServices();
   const { learning, snapshot } = useLearningProgress();
+  const { snapshot: metaSnapshot } = useMetaProgression();
   const courses = content.getCourses();
   const reviewRecommendations = snapshot.ready
     ? learning.getReviewRecommendations(content.getConcepts(), content.getActivities())
@@ -21,6 +30,29 @@ export function LearnPage() {
         Học theo lộ trình thực hành. Mỗi lần Nộp bài được lưu cục bộ để theo dõi tiến độ,
         gợi ý phần cần ôn và giữ lịch sử học ngay cả khi bạn đóng trình duyệt.
       </p>
+
+      <section className="meta-summary-card" aria-labelledby="meta-summary-title">
+        <div className="meta-summary-card__header">
+          <div>
+            <p className="learning-card__meta">Phần thưởng học tập</p>
+            <h2 id="meta-summary-title">Xưởng robot</h2>
+            <p>
+              KPI hôm nay: {metaSnapshot.dailyGoalsCompleted}/{metaSnapshot.dailyGoalsTotal}.
+              Vật liệu nhận từ việc học được dùng riêng cho hệ thống phụ.
+            </p>
+          </div>
+          <Link className="secondary-action" to="/workshop">
+            Mở xưởng
+          </Link>
+        </div>
+        <div className="meta-summary-inventory">
+          {Object.values(InventoryItemId).map((itemId) => (
+            <span key={itemId}>
+              <strong>{metaSnapshot.inventory[itemId]}</strong> {inventoryItemLabel(itemId)}
+            </span>
+          ))}
+        </div>
+      </section>
 
       {uniqueReviews.length > 0 ? (
         <section className="review-recommendations" aria-labelledby="review-title">

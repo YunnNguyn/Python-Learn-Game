@@ -15,6 +15,10 @@ import { GeneratorRegistry } from "../../core/generators";
 import { GraderRegistry, registerCoreGraders } from "../../core/grading";
 import { HintEngine, HintRegistry } from "../../core/hints";
 import { LearningEngine, MissionAttemptSession } from "../../core/learning";
+import {
+  createBrowserMetaProgressionPersistence,
+  MetaProgressionEngine,
+} from "../../core/meta-progression";
 import { generateMissionInstance, MissionEngine } from "../../core/missions";
 import {
   createBrowserLearningPersistence,
@@ -47,6 +51,8 @@ export interface ApplicationServices {
   readonly graders: GraderRegistry;
   readonly hints: HintRegistry;
   readonly learning: LearningEngine;
+  readonly metaProgression: MetaProgressionEngine;
+  initialize(): Promise<void>;
   createMissionSession(
     activityId: string,
     options?: CreateMissionSessionOptions,
@@ -61,6 +67,7 @@ export interface ApplicationServices {
   deleteMissionDraft(activityId: LearningActivityId): Promise<void>;
   clearLearningData(): Promise<void>;
   getPersistenceKind(): "indexeddb" | "memory";
+  getMetaProgressionPersistenceKind(): "indexeddb" | "memory";
 }
 
 export function createApplicationServices(): ApplicationServices {
@@ -70,6 +77,10 @@ export function createApplicationServices(): ApplicationServices {
   const hints = new HintRegistry();
   const persistence = createBrowserLearningPersistence();
   const learning = new LearningEngine(persistence);
+  const metaProgression = new MetaProgressionEngine(
+    createBrowserMetaProgressionPersistence(),
+  );
+  let initializePromise: Promise<void> | null = null;
 
   registerCs116Generators(generators);
   registerCoreGraders(graders);
@@ -94,7 +105,17 @@ export function createApplicationServices(): ApplicationServices {
   }
 
   registerCs116ProductionContent(content);
-  void learning.initialize();
+
+  function initialize(): Promise<void> {
+    initializePromise ??= (async () => {
+      await learning.initialize();
+      await metaProgression.initialize();
+      await metaProgression.reconcileAttempts(learning.getAttempts());
+    })();
+    return initializePromise;
+  }
+
+  void initialize();
 
   return {
     content,
@@ -102,9 +123,11 @@ export function createApplicationServices(): ApplicationServices {
     graders,
     hints,
     learning,
+    metaProgression,
+    initialize,
 
     async createMissionSession(activityId, options = {}) {
-      await learning.initialize();
+      await initialize();
       const activity = content.getActivity(activityId as LearningActivityId);
       if (activity === undefined) {
         return failure(
@@ -177,7 +200,10 @@ export function createApplicationServices(): ApplicationServices {
 
       const session = new MissionAttemptSession(activity, template, instance, engine, {
         hintEngine: new HintEngine(hintSet ?? null, resumedDraftHintLevels(draft, seed)),
-        onAttemptRecord: (record) => learning.recordAttempt(record),
+        onAttemptRecord: async (record) => {
+          await learning.recordAttempt(record);
+          await metaProgression.recordAttempt(record);
+        },
       });
       const starterCode =
         instance.learner.starterCode ?? template.starterCode ?? "# Viết mã Python tại đây\n";
@@ -207,12 +233,18 @@ export function createApplicationServices(): ApplicationServices {
     },
 
     async clearLearningData() {
+      await initialize();
       await learning.clearAttempts();
       await persistence.clearMissionDrafts();
+      await metaProgression.clearAll();
     },
 
     getPersistenceKind() {
       return persistence.kind;
+    },
+
+    getMetaProgressionPersistenceKind() {
+      return metaProgression.getPersistenceKind();
     },
   };
 }

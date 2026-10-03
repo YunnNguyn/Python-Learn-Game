@@ -20,6 +20,9 @@ export function AppLayout() {
             <NavLink className={navigationClassName} to="/learn">
               Học
             </NavLink>
+            <NavLink className={navigationClassName} to="/workshop">
+              Xưởng robot
+            </NavLink>
             <NavLink className={navigationClassName} to="/about">
               Giới thiệu
             </NavLink>

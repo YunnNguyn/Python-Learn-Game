@@ -6,6 +6,7 @@ import { DebugPage } from "../features/debug";
 import { HomePage } from "../features/home";
 import { LessonPage } from "../features/lesson";
 import { SettingsPage } from "../features/settings";
+import { RobotWorkshopPage } from "../features/workshop";
 import { AppLayout } from "./AppLayout";
 import { AboutPage } from "./pages/AboutPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -42,6 +43,10 @@ export const appRouter = createBrowserRouter([
 
           return { Component: MissionWorkspacePage };
         },
+      },
+      {
+        path: "workshop",
+        element: <RobotWorkshopPage />,
       },
       {
         path: "settings",

@@ -22,3 +22,5 @@ export { MissionOutputPanel } from "./MissionOutputPanel";
 export type { MissionOutputPanelProps } from "./MissionOutputPanel";
 export { PythonEditor } from "./PythonEditor";
 export type { PythonEditorProps } from "./PythonEditor";
+
+export { MissionRewardPanel } from "./MissionRewardPanel";

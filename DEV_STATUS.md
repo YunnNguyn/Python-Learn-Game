@@ -1,12 +1,16 @@
-﻿# Development Status
+- Official UI theme is now native dark mode; Dark Reader or another browser color-inversion extension is not part of the product styling contract.
+
+# Development Status
 
 ## Current Phase
 
 ```text
-Fast Track Phase A — First Real Playable Mission
+Phase C — Reward & Meta-Game Foundation + Robot Workshop v1
 ```
 
-Status: **Awaiting Manual Browser Validation**
+Status: **Implementation Complete / Awaiting Local Automated + Manual Validation**
+
+2026-10-03 direction lock: Phase A (first playable mission) and Phase B (persistent learning loop) are complete and locked. The previous Phaser/Sensor Control Room Phase C was abandoned and removed. Current Phase C keeps the learning workspace focused and adds a separate local-first meta-progression loop: immutable AttemptRecord evidence → bounded reward policy → persisted inventory/daily goals → Robot Workshop v1. LearningEngine, grader, mastery, hints, and mission runtime remain independent of robot/meta-game state. No Phaser dependency is part of this phase.
 
 Phase 0 remains complete and locked through the six source-of-truth documents:
 
@@ -22,10 +26,22 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 ## Current Task
 
 ```text
-Phase A — First Real Playable Mission
+Phase C — Reward & Meta-Game Foundation + Robot Workshop v1
 ```
 
-Status: **Implementation Complete / Awaiting Manual Browser Validation**
+Status: **Implementation Complete / Awaiting Local Automated + Manual Validation**
+
+Phase C acceptance scope:
+
+- idempotent rewards from immutable AttemptRecords;
+- anti-farming: first-activity/focused bonuses are lifetime-once, daily bonuses are date-bounded;
+- separate persisted material inventory;
+- three daily KPI goals with one completion bonus per day;
+- Robot Workshop v1 with six consumptive part recipes and explicit Scout-01 assembly;
+- reward reconciliation for existing Phase B attempts without retroactively farming old daily rewards;
+- learning/grading/mastery systems remain robot-agnostic;
+- no Phaser or per-mission visualization dependency.
+
 
 Python Runtime status:
 

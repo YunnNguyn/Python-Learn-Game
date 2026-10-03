@@ -1,5 +1,8 @@
 # Mission System — Learning, Generation, Grading, and Replay
 
+> **2026-10-03 mission-direction lock.**
+> Mission success is defined by learning quality, runtime behavior, structured grading, durable AttemptRecords, mastery, and review—not by a game-world reaction. Per-mission visualization is optional. After a Submit produces and durably records its immutable AttemptRecord, a separate meta-progression system may consume that evidence to grant bounded rewards. Reward logic must not alter the AttemptRecord, grader result, mastery derivation, hint evidence, or retry semantics.
+
 ## 1. Purpose and Ownership
 
 This document owns the behavior of:
