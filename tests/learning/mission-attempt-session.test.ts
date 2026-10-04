@@ -109,4 +109,37 @@ describe("Phase A AttemptRecord envelope", () => {
     expect(AttemptRecordSchema.parse(first.attemptRecord)).toEqual(first.attemptRecord);
     expect(Object.isFrozen(first.attemptRecord)).toBe(true);
   });
+
+  it("exposes runtime interruption without creating an AttemptRecord", async () => {
+    const { activity, template, instance } = createFixture();
+    let interruptCount = 0;
+    const runtime = {
+      initialize: async () => ({ ok: true } as const),
+      prepareMission: async () => ({ ok: true } as const),
+      run: async () => ({ status: "SUCCESS", stdout: "", stderr: "" } as const),
+      submit: async () => ({
+        status: "SUCCESS",
+        stdout: "",
+        stderr: "",
+        serialized: { variables: {} },
+      } as const),
+      interrupt: async () => {
+        interruptCount += 1;
+        return { ok: true } as const;
+      },
+      dispose() {},
+    } satisfies RuntimeManager;
+    const grader = {
+      getGrader: () => ({ grade: () => ({ passed: true, checks: [] }) }),
+    } as unknown as GraderRegistry;
+    const engine = new MissionEngine(runtime, grader);
+    await engine.loadMission(template, instance);
+    const session = new MissionAttemptSession(activity, template, instance, engine);
+
+    expect(session.canInterrupt()).toBe(true);
+    await expect(session.interrupt()).resolves.toEqual({ ok: true });
+    expect(interruptCount).toBe(1);
+    expect(session.getAttempts()).toHaveLength(0);
+  });
+
 });

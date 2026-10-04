@@ -205,6 +205,40 @@ const GUIDES: Readonly<Record<string, MissionLessonGuide>> = {
       "Cuối cùng rà lại tên biến và kiểu dữ liệu đầu ra.",
     ],
   },
+  "cs116.local.numpy.lc01": {
+    title: "Bài học nhanh cho LC-01",
+    summary: "Không có cú pháp NumPy mới. Điểm mới là cùng một main.py giờ được chạy bằng Python cài trên máy của bạn thay vì Pyodide trong trình duyệt.",
+    library: "numpy trên Local Python",
+    methods: ["import numpy as np", "np.array(...)", "[:, idx]"],
+    newTopics: [
+      {
+        label: "Local Python runtime",
+        explanation: "Các bài Data/ML nặng sẽ chạy trong child process bằng Python thật trên máy. Nhờ đó code có thể dùng package native, CPU/RAM và về sau là GPU khi framework hỗ trợ.",
+      },
+      {
+        label: "main.py",
+        explanation: "IDE vẫn giữ workflow một file. Run/Submit gửi nội dung editor vào workspace local dưới tên main.py; lỗi Python vì vậy vẫn báo đúng dòng trong file này.",
+      },
+    ],
+    reviewTopics: [
+      {
+        label: "Trích cột NumPy",
+        explanation: "Bài này cố ý dùng lại kỹ năng đã học để bạn chỉ phải chú ý tới runtime mới.",
+        syntax: "result = telemetry[:, targetColumnIndex]",
+      },
+    ],
+    workflow: [
+      "Đảm bảo Local Python Runtime đang chạy trước khi mở bài.",
+      "Dùng dữ liệu matrix và targetColumnIndex đã được nạp sẵn như ở các mission trước.",
+      "Chạy thử để kiểm tra, sau đó Submit để grader quan sát result trên môi trường local sạch.",
+      "Nếu code chạy lâu hoặc mắc vòng lặp, dùng Dừng tiến trình; ứng dụng và runtime service vẫn tiếp tục sống.",
+    ],
+    commonMistakes: [
+      "Local runtime chưa được khởi động nên bài không thể tạo session.",
+      "Python local chưa cài NumPy nên import báo ModuleNotFoundError.",
+      "Nhầm lấy một hàng thay vì toàn bộ cột với cú pháp [:, index].",
+    ],
+  },
 };
 
 export function getMissionLessonGuide(activityId: string): MissionLessonGuide | null {
@@ -260,6 +294,17 @@ const QUICK_CHECKS: Readonly<Record<string, MissionQuickCheckDefinition>> = {
     options: ["Viết ngay một dòng code thật dài", "Xác định đề đang kiểm tra thao tác nào", "Mở H4 trước", "Đổi toàn bộ dữ liệu thành list"],
     correctOptionIndex: 1,
     explanation: "Nhận diện nhóm kỹ năng trước giúp bạn chọn đúng mẫu thao tác: tạo ndarray, đọc shape, indexing hay filtering.",
+  },
+  "cs116.local.numpy.lc01": {
+    question: "Điểm khác quan trọng nhất của Local Python so với Pyodide trong app là gì?",
+    options: [
+      "Local Python chỉ chạy được print",
+      "Local Python dùng Python và tài nguyên thật trên máy",
+      "Local Python không thể dùng NumPy",
+      "Local Python bắt buộc phải viết notebook",
+    ],
+    correctOptionIndex: 1,
+    explanation: "Local Python chạy learner code trong child process của Python cài trên máy, nên có thể dùng package native và tài nguyên local; notebook không phải yêu cầu.",
   },
 };
 

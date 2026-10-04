@@ -9,9 +9,11 @@ Phase A — First Real Playable Mission                         COMPLETE / LOCKE
 Phase B — Persistent Learning Loop                           COMPLETE / LOCKED
 Phase C — Reward & Meta-Game Foundation + Robot Workshop v1 COMPLETE / LOCKED
 Phase D — Complete CS116 NumPy vertical slice VS-01..VS-07 COMPLETE / LOCKED
-Phase E — Alpha Learning Experience                         CURRENT
-Phase F — Curriculum expansion + optional meta-game systems
-Phase G — Optional accounts / friends / cups after a backend exists
+Phase E — Alpha Learning Experience                         COMPLETE / LOCKED
+Phase F — Local Python IDE Runtime                            CURRENT
+Phase G — Challenge / Exam Submission Platform
+Phase H — Curriculum expansion on dual runtimes
+Phase I — Optional accounts / friends / cups after a backend exists
 ```
 
 Phase C explicitly does **not** add Phaser or require per-mission game-world visualization. Its acceptance target is an idempotent reward pipeline, persisted inventory, bounded daily goals, anti-farming rules, and one real optional mini-system that consumes rewards without affecting grading/mastery.
@@ -37,8 +39,9 @@ Phase A — First Real Playable Mission — COMPLETE / LOCKED
 Phase B — Persistent Learning Loop — COMPLETE / LOCKED
 Phase C — Reward & Meta-Game Foundation + Robot Workshop v1 — COMPLETE / LOCKED
 Phase D — Complete NumPy Vertical Slice VS-01..VS-07 — COMPLETE / LOCKED
-Phase E — Alpha Learning Experience — CURRENT
-Then expand curriculum and optional meta-game systems
+Phase E — Alpha Learning Experience — COMPLETE / LOCKED
+Phase F — Local Python IDE Runtime — CURRENT
+Then add Challenge/Exam submission and expand curriculum on top of the proven dual-runtime path
 ```
 
 The older Visualization Bridge section later in this document is retained as design history/reference only and is not on the active critical path.
@@ -59,6 +62,47 @@ Current scope:
 - laptop/mobile/accessibility polish.
 
 Acceptance: a new learner can follow VS-01 → VS-07 without guessing what to do next, cannot accidentally skip the instructional sequence through normal navigation, can still resume old progress, and can move from lesson → practice with minimal scrolling.
+
+## Phase F — Local Python IDE Runtime
+
+Goal: keep the existing single-file IDE workflow while allowing Data/ML exercises to execute with the learner's real local Python environment and machine resources. No custom notebook editor is planned.
+
+Active architecture:
+
+```text
+MissionTemplate.runtime
+        │
+        ├── core.pyodide       → short/light browser exercises
+        └── core.local_python  → pandas / sklearn / training / local files
+```
+
+Phase F implementation slices:
+
+1. **F1 Runtime protocol + service foundation — COMPLETE / LOCKED**
+   - register `core.local_python`;
+   - local loopback HTTP service;
+   - subprocess-per-execution isolation;
+   - setup-data injection and normalized observations;
+   - timeout and process-tree interruption;
+   - `/dev` smoke-test harness.
+2. **F2 IDE integration — IMPLEMENTED / VALIDATION GATE**
+   - runtime-aware status;
+   - Run / Stop / Submit against local runtime;
+   - learner-facing recovery when service is unavailable.
+3. **F3 Workspace + data files — NEXT**
+   - read-only exercise datasets;
+   - one editable `main.py`;
+   - generated artifacts such as CSV/PNG/model files.
+4. **F4 Native Data/ML expansion**
+   - extend the proven Local Python mission path from the LC-01 NumPy bridge into pandas, matplotlib and scikit-learn exercises using the same MissionEngine, grader, AttemptRecord and reward boundaries.
+
+Phase F does **not** build a notebook editor or a general multi-file IDE. Add multi-file editing only if later curriculum proves it necessary.
+
+Acceptance: a local-compute mission can run learner `main.py` in a child process, use installed native packages/CPU/GPU when available, be stopped without killing the app, return normalized grading observations, and recover cleanly for the next run.
+
+## Phase G — Challenge / Exam Submission Platform
+
+Large open-ended challenges are evaluated by their required artifact rather than by forcing a notebook format. Typical ML challenges accept `submission.csv`, validate schema/IDs/dtypes, compute the configured metric, and preserve submission history/best score. Local IDE code remains one valid way to produce that artifact, but external VS Code/Jupyter workflows remain acceptable.
 
 ## Phase 0 — Design Lock
 

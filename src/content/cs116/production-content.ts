@@ -27,6 +27,7 @@ export const CS116_PRODUCTION_IDS = {
   lessonArrayCore: "python-ml.numpy.array-shape",
   lessonIndexFilter: "python-ml.numpy.index-filter",
   lessonTransferReview: "python-ml.numpy.transfer-review",
+  lessonLocalRuntime: "python-ml.numpy.local-runtime",
   activityVs01: "cs116.numpy.vs01",
   activityVs02: "cs116.numpy.vs02",
   activityVs03: "cs116.numpy.vs03",
@@ -34,6 +35,7 @@ export const CS116_PRODUCTION_IDS = {
   activityVs05: "cs116.numpy.vs05",
   activityVs06: "cs116.numpy.vs06",
   activityVs07: "cs116.numpy.vs07",
+  activityLc01: "cs116.local.numpy.lc01",
   templateVs01: "cs116.numpy.vs01",
   templateVs02: "cs116.numpy.vs02",
   templateVs03: "cs116.numpy.vs03",
@@ -41,6 +43,7 @@ export const CS116_PRODUCTION_IDS = {
   templateVs05: "cs116.numpy.vs05",
   templateVs06: "cs116.numpy.vs06",
   templateVs07: "cs116.numpy.vs07",
+  templateLc01: "cs116.local.numpy.lc01",
 } as const;
 
 const [
@@ -56,7 +59,7 @@ const [
 export const CS116_PRODUCTION_PACK: ContentPackManifest =
   ContentPackManifestSchema.parse({
     id: CS116_PRODUCTION_IDS.pack,
-    version: "0.2.0",
+    version: "0.3.0",
     schemaVersion: 1,
     title: "Nội dung Python cho ML/AI — gói CS116",
     description:
@@ -77,11 +80,12 @@ export const CS116_PRODUCTION_WORLD: World = WorldSchema.parse({
   id: CS116_PRODUCTION_IDS.world,
   title: "NumPy — Mảng và thao tác dữ liệu",
   description:
-    "Làm chủ ndarray, shape, indexing, boolean filtering và kết hợp điều kiện thông qua bảy nhiệm vụ ngắn.",
+    "Làm chủ ndarray, shape, indexing, boolean filtering và kết hợp điều kiện qua các nhiệm vụ ngắn, rồi chuyển sang một bài bridge chạy bằng Python local.",
   lessonIds: [
     CS116_PRODUCTION_IDS.lessonArrayCore,
     CS116_PRODUCTION_IDS.lessonIndexFilter,
     CS116_PRODUCTION_IDS.lessonTransferReview,
+    CS116_PRODUCTION_IDS.lessonLocalRuntime,
   ],
 });
 
@@ -124,6 +128,15 @@ export const CS116_PRODUCTION_LESSON_TRANSFER_REVIEW: Lesson = LessonSchema.pars
     CS116_PRODUCTION_IDS.activityVs06,
     CS116_PRODUCTION_IDS.activityVs07,
   ],
+});
+
+export const CS116_PRODUCTION_LESSON_LOCAL_RUNTIME: Lesson = LessonSchema.parse({
+  id: CS116_PRODUCTION_IDS.lessonLocalRuntime,
+  title: "Bài 4 — NumPy trên Python local",
+  description:
+    "Dùng chính kỹ năng NumPy đã học trong một main.py chạy bằng Python thật trên máy, làm cầu nối sang pandas, scikit-learn và model training.",
+  conceptIds: [numpyIndexColumn!.id, numpyShape!.id],
+  activityIds: [CS116_PRODUCTION_IDS.activityLc01],
 });
 
 function codeActivity(input: {
@@ -213,6 +226,16 @@ export const CS116_PRODUCTION_ACTIVITY_VS07 = codeActivity({
   conceptIds: CS116_VERTICAL_SLICE_CONCEPTS.map((concept) => concept.id),
   stage: LearningStage.REVIEW,
   missionTemplateId: CS116_PRODUCTION_IDS.templateVs07,
+});
+
+export const CS116_PRODUCTION_ACTIVITY_LC01 = codeActivity({
+  id: CS116_PRODUCTION_IDS.activityLc01,
+  title: "LC-01 — NumPy trên máy thật",
+  description:
+    "Chạy một bài indexing quen thuộc bằng Local Python để xác nhận main.py, NumPy native và grader đều hoạt động trên tài nguyên máy thật.",
+  conceptIds: [numpyIndexColumn!.id, numpyShape!.id],
+  stage: LearningStage.TRANSFER,
+  missionTemplateId: CS116_PRODUCTION_IDS.templateLc01,
 });
 
 const gradingDataRef = (path: string) => ({ $gradingData: path });
@@ -396,6 +419,48 @@ export const CS116_PRODUCTION_TEMPLATE_VS03: MissionTemplate =
     hintSetId: CS116_HINT_SET_ID.VS03,
     runtime: numpyRuntime,
     starterCode: `import numpy as np\n\ntelemetry = np.array(matrix)\n\n# Lấy toàn bộ cột targetColumnIndex vào result.\nresult = \n`,
+  });
+
+export const CS116_PRODUCTION_TEMPLATE_LC01: MissionTemplate =
+  MissionTemplateSchema.parse({
+    id: CS116_PRODUCTION_IDS.templateLc01,
+    version: 1,
+    conceptIds: [numpyIndexColumn!.id, numpyShape!.id],
+    allowedStages: [LearningStage.TRANSFER],
+    generator: {
+      id: CS116_GENERATOR_ID.COLUMN_EXTRACT,
+      config: {
+        baseRows: 5,
+        baseColumns: 4,
+        valueMin: 10,
+        valueMaxExclusive: 100,
+      },
+    },
+    grader: {
+      id: CORE_GRADER_ID.DECLARATIVE,
+      config: {
+        checks: [
+          { type: DeclarativeGraderCheckType.NO_EXCEPTION },
+          ...resultNdarrayChecks(),
+          {
+            type: DeclarativeGraderCheckType.SHAPE,
+            variable: "result",
+            expected: gradingDataRef("expectedShape"),
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "result",
+            expected: gradingDataRef("expectedValues"),
+          },
+        ],
+      },
+    },
+    hintSetId: CS116_HINT_SET_ID.VS03,
+    runtime: {
+      id: CORE_RUNTIME_ID.LOCAL_PYTHON,
+      config: { executionTimeoutSeconds: 60 },
+    },
+    starterCode: `import numpy as np\n\n# matrix và targetColumnIndex đã được nạp sẵn.\ntelemetry = np.array(matrix)\n\n# Dùng NumPy indexing để lấy toàn bộ cột được yêu cầu.\nresult = \n`,
   });
 
 function thresholdTemplate(input: {
@@ -646,6 +711,7 @@ export const CS116_PRODUCTION_CONTENT = {
     CS116_PRODUCTION_LESSON_ARRAY_CORE,
     CS116_PRODUCTION_LESSON_INDEX_FILTER,
     CS116_PRODUCTION_LESSON_TRANSFER_REVIEW,
+    CS116_PRODUCTION_LESSON_LOCAL_RUNTIME,
   ] as const,
   activities: [
     CS116_PRODUCTION_ACTIVITY_VS01,
@@ -655,6 +721,7 @@ export const CS116_PRODUCTION_CONTENT = {
     CS116_PRODUCTION_ACTIVITY_VS05,
     CS116_PRODUCTION_ACTIVITY_VS06,
     CS116_PRODUCTION_ACTIVITY_VS07,
+    CS116_PRODUCTION_ACTIVITY_LC01,
   ] as const,
   missionTemplates: [
     CS116_PRODUCTION_TEMPLATE_VS01,
@@ -664,5 +731,6 @@ export const CS116_PRODUCTION_CONTENT = {
     CS116_PRODUCTION_TEMPLATE_VS05,
     CS116_PRODUCTION_TEMPLATE_VS06,
     CS116_PRODUCTION_TEMPLATE_VS07,
+    CS116_PRODUCTION_TEMPLATE_LC01,
   ] as const,
 };

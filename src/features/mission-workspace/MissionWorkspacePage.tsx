@@ -7,10 +7,14 @@ import {
   type PlayableMissionSession,
 } from "../../app/services";
 import { LearningStage, type AttemptRecord } from "../../core/domain";
-import type { RuntimeExecutionResult } from "../../core/runtime";
 import type { GraderResult } from "../../core/grading";
 import type { RevealedHint } from "../../core/hints";
 import type { MissionAttemptSession } from "../../core/learning";
+import {
+  CORE_RUNTIME_ID,
+  type RuntimeExecutionResult,
+  type RuntimeSystemError,
+} from "../../core/runtime";
 import { MissionControls } from "./MissionControls";
 import { MissionDataPanel } from "./MissionDataPanel";
 import { MissionHintPanel } from "./MissionHintPanel";
@@ -32,7 +36,8 @@ export function MissionWorkspacePage() {
   const services = useApplicationServices();
   const sessionRef = useRef<MissionAttemptSession | null>(null);
   const [bundle, setBundle] = useState<PlayableMissionSession | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<RuntimeSystemError | null>(null);
+  const [loadRetryToken, setLoadRetryToken] = useState(0);
   const [loading, setLoading] = useState(true);
   const [code, setCode] = useState("");
   const [operation, setOperation] = useState<WorkspaceOperation>(null);
@@ -44,6 +49,8 @@ export function MissionWorkspacePage() {
   const [draftSuppressed, setDraftSuppressed] = useState(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<MissionWorkspaceTab>("lesson");
+  const [stopPending, setStopPending] = useState(false);
+  const [runtimeActionNotice, setRuntimeActionNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,9 +65,11 @@ export function MissionWorkspacePage() {
     setDraftSuppressed(false);
     setDraftNotice(null);
     setActiveTab("lesson");
+    setStopPending(false);
+    setRuntimeActionNotice(null);
 
     if (!routeId) {
-      setLoadError("Không xác định được bài thực hành cần mở.");
+      setLoadError({ code: "MISSION_ROUTE_MISSING", message: "Không xác định được bài thực hành cần mở." });
       setLoading(false);
       return () => undefined;
     }
@@ -72,7 +81,7 @@ export function MissionWorkspacePage() {
       }
 
       if (!result.ok) {
-        setLoadError(result.error.message);
+        setLoadError(result.error);
         setLoading(false);
         return;
       }
@@ -87,9 +96,12 @@ export function MissionWorkspacePage() {
       sessionRef.current?.dispose();
       sessionRef.current = null;
     };
-  }, [routeId, services]);
+  }, [routeId, services, loadRetryToken]);
 
   const session = bundle?.session ?? null;
+  const isLocalRuntime = session?.template.runtime.id === CORE_RUNTIME_ID.LOCAL_PYTHON;
+  const canInterrupt = session?.canInterrupt() === true;
+  const executionActive = operation === "run" || operation === "submit";
 
   useEffect(() => {
     if (!bundle || !session || draftSuppressed || loading) return;
@@ -109,16 +121,28 @@ export function MissionWorkspacePage() {
 
   const runtimeNote = useMemo(() => {
     if (loading || operation === "reload") return "Đang chuẩn bị một môi trường Python sạch...";
+    if (isLocalRuntime) {
+      if (stopPending) return "Đang yêu cầu Local Python dừng tiến trình con...";
+      if (operation === "run") return "Đang chạy main.py bằng Python cài trên máy của bạn. Có thể dừng tiến trình nếu cần.";
+      if (operation === "submit") return "Đang chạy Submit bằng Local Python, quan sát biến và chấm trên môi trường sạch.";
+      return "Local Python dùng tài nguyên máy thật. Run và Submit chạy trong child process riêng; Stop không làm tắt ứng dụng.";
+    }
     if (operation === "run") return "Đang chạy mã trong trạng thái thực nghiệm...";
     if (operation === "submit") return "Đang chạy Submit sạch, chấm bài và lưu bằng chứng học tập...";
     return "Chạy thử dùng để khám phá; Nộp bài luôn chấm trên baseline sạch và lưu tiến độ.";
-  }, [loading, operation]);
+  }, [isLocalRuntime, loading, operation, stopPending]);
 
   useEffect(() => {
     if (activeTab !== "practice" || !session) return;
 
     const handleShortcut = (event: KeyboardEvent) => {
-      if (event.isComposing || !(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
+      if (event.isComposing) return;
+      if (event.key === "Escape" && executionActive && canInterrupt) {
+        event.preventDefault();
+        void handleStop();
+        return;
+      }
+      if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
       event.preventDefault();
       if (operationRef.current !== null) return;
       if (event.shiftKey) {
@@ -130,7 +154,7 @@ export function MissionWorkspacePage() {
 
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [activeTab, session, code]);
+  }, [activeTab, canInterrupt, code, executionActive, session, stopPending]);
 
   function applyPlayableSession(next: PlayableMissionSession) {
     setBundle(next);
@@ -141,6 +165,8 @@ export function MissionWorkspacePage() {
     setAttempt(null);
     setDraftSuppressed(false);
     setDraftNotice(next.resumedDraft ? "Đã khôi phục bản nháp và đề đang làm trước đó." : null);
+    setRuntimeActionNotice(null);
+    setStopPending(false);
     setLoading(false);
     setOperation(null);
     setActiveTab("lesson");
@@ -153,12 +179,14 @@ export function MissionWorkspacePage() {
     setOperation("run");
     setGrading(null);
     setAttempt(null);
+    setRuntimeActionNotice(null);
     try {
       const result = await session.run(code);
       setExecution(result.execution);
     } finally {
       operationRef.current = null;
       setOperation(null);
+      setStopPending(false);
     }
   }
 
@@ -166,6 +194,7 @@ export function MissionWorkspacePage() {
     if (!session || operationRef.current !== null) return;
     operationRef.current = "submit";
     setOperation("submit");
+    setRuntimeActionNotice(null);
     try {
       const result = await session.submit(code);
       setExecution(result.execution);
@@ -179,7 +208,20 @@ export function MissionWorkspacePage() {
     } finally {
       operationRef.current = null;
       setOperation(null);
+      setStopPending(false);
     }
+  }
+
+  async function handleStop() {
+    if (!session || !session.canInterrupt() || !executionActive || stopPending) return;
+    setStopPending(true);
+    const result = await session.interrupt();
+    setRuntimeActionNotice(
+      result.ok
+        ? "Đã gửi lệnh dừng tiến trình Python. Đang chờ worker kết thúc sạch."
+        : `${result.error.code ?? "RUNTIME_ERROR"}: ${result.error.message}`,
+    );
+    if (!result.ok) setStopPending(false);
   }
 
   function handleRevealHint() {
@@ -205,6 +247,7 @@ export function MissionWorkspacePage() {
     setOperation("reload");
     setLoading(true);
     setLoadError(null);
+    setRuntimeActionNotice(null);
     const previousSeed = session.instance.seed;
     const previousVariantIndex = bundle.variantIndex;
 
@@ -227,7 +270,7 @@ export function MissionWorkspacePage() {
 
     const result = await services.createMissionSession(routeId, options);
     if (!result.ok) {
-      setLoadError(result.error.message);
+      setLoadError(result.error);
       setBundle(null);
       setLoading(false);
       setOperation(null);
@@ -245,12 +288,29 @@ export function MissionWorkspacePage() {
   }
 
   if (loadError) {
+    const localRuntimeUnavailable = loadError.code === "LOCAL_RUNTIME_UNAVAILABLE";
     return (
       <section className="page-card" aria-labelledby="mission-title">
         <p className="eyebrow">Thực hành</p>
         <h1 id="mission-title">Không thể mở nhiệm vụ</h1>
-        <p className="page-lead">{loadError}</p>
-        <Link className="primary-action primary-action--link" to="/learn">
+        <p className="page-lead">{loadError.message}</p>
+        {localRuntimeUnavailable ? (
+          <section className="mission-runtime-recovery" aria-labelledby="mission-runtime-recovery-title">
+            <h2 id="mission-runtime-recovery-title">Local Python chưa chạy</h2>
+            <p>
+              Mở một terminal tại project và chạy dịch vụ local trước. Dịch vụ chỉ bind vào máy của bạn và sẽ dùng cho các bài Data/ML cần CPU, RAM hoặc GPU thật.
+            </p>
+            <pre className="mission-code-sample">local-runtime\start-runtime.cmd</pre>
+            <button
+              className="primary-action"
+              type="button"
+              onClick={() => setLoadRetryToken((value) => value + 1)}
+            >
+              Thử kết nối lại
+            </button>
+          </section>
+        ) : null}
+        <Link className="secondary-action mission-error-back-link" to="/learn">
           Về không gian học
         </Link>
       </section>
@@ -263,7 +323,7 @@ export function MissionWorkspacePage() {
         <p className="eyebrow">Thực hành</p>
         <h1 id="mission-title">Đang chuẩn bị nhiệm vụ</h1>
         <p className="page-lead">
-          Đang khởi động Python, tải NumPy và khôi phục tiến độ nếu có. Lần mở đầu tiên có thể mất vài giây.
+          Đang chuẩn bị Python runtime, dữ liệu nhiệm vụ và khôi phục tiến độ nếu có. Lần mở đầu tiên có thể mất vài giây.
         </p>
         <div className="mission-loading__bar" aria-hidden="true" />
       </section>
@@ -293,49 +353,46 @@ export function MissionWorkspacePage() {
       {draftNotice ? <p className="mission-draft-notice">{draftNotice}</p> : null}
 
       <nav className="mission-tab-nav" aria-label="Khu vực nội dung của nhiệm vụ">
-        <button
-          className={tabClassName(activeTab === "lesson")}
-          type="button"
-          onClick={() => setActiveTab("lesson")}
-        >
-          Bài học
-        </button>
-        <button
-          className={tabClassName(activeTab === "prompt")}
-          type="button"
-          onClick={() => setActiveTab("prompt")}
-        >
-          Đề bài
-        </button>
-        <button
-          className={tabClassName(activeTab === "data")}
-          type="button"
-          onClick={() => setActiveTab("data")}
-        >
-          Dữ liệu
-        </button>
-        <button
-          className={tabClassName(activeTab === "practice")}
-          type="button"
-          onClick={() => setActiveTab("practice")}
-        >
-          Làm bài
-        </button>
+        <button className={tabClassName(activeTab === "lesson")} type="button" onClick={() => setActiveTab("lesson")}>Bài học</button>
+        <button className={tabClassName(activeTab === "prompt")} type="button" onClick={() => setActiveTab("prompt")}>Đề bài</button>
+        <button className={tabClassName(activeTab === "data")} type="button" onClick={() => setActiveTab("data")}>Dữ liệu</button>
+        <button className={tabClassName(activeTab === "practice")} type="button" onClick={() => setActiveTab("practice")}>Làm bài</button>
       </nav>
 
       {activeTab === "practice" ? (
         <>
+          <section className="mission-runtime-strip" aria-label="Python runtime">
+            <div>
+              <span className={`mission-runtime-badge ${isLocalRuntime ? "mission-runtime-badge--local" : ""}`}>
+                {isLocalRuntime ? "Local Python" : "Pyodide"}
+              </span>
+              <strong>{isLocalRuntime ? "main.py · tài nguyên máy thật" : "Python trong trình duyệt"}</strong>
+            </div>
+            <span className="mission-runtime-state">
+              {stopPending ? "STOPPING" : executionActive ? "RUNNING" : "READY"}
+            </span>
+          </section>
+
+          {runtimeActionNotice ? <p className="mission-runtime-notice">{runtimeActionNotice}</p> : null}
+
           <MissionControls
             runDisabled={operation !== null}
             submitDisabled={operation !== null}
+            stopVisible={canInterrupt}
+            stopDisabled={!executionActive || stopPending}
+            stopPending={stopPending}
             onRun={() => void handleRun()}
             onSubmit={() => void handleSubmit()}
+            onStop={() => void handleStop()}
             note={runtimeNote}
           />
 
           <div className="mission-workspace__main mission-workspace__main--practice">
             <section className="mission-editor-region" aria-labelledby="mission-editor-title">
-              <h2 id="mission-editor-title">Trình soạn thảo</h2>
+              <div className="mission-editor-heading">
+                <h2 id="mission-editor-title">main.py</h2>
+                {isLocalRuntime ? <span>Local workspace</span> : null}
+              </div>
               <PythonEditor value={code} onChange={setCode} readOnly={operation !== null} />
             </section>
           </div>
@@ -363,21 +420,11 @@ export function MissionWorkspacePage() {
               <div>
                 <strong>Đã lưu lần nộp #{attempt.submissionIndex}.</strong>{" "}
                 {attempt.passed ? "Kết quả đạt yêu cầu." : "Kết quả chưa đạt; bạn có thể sửa và nộp lại."}
-                {attempt.hintsUsed.length > 0
-                  ? ` Gợi ý đã dùng: ${attempt.hintsUsed.join(", ")}.`
-                  : " Không dùng gợi ý."}
+                {attempt.hintsUsed.length > 0 ? ` Gợi ý đã dùng: ${attempt.hintsUsed.join(", ")}.` : " Không dùng gợi ý."}
               </div>
               <div className="mission-retry-actions">
-                <button
-                  className="secondary-action secondary-action--button"
-                  type="button"
-                  onClick={() => void handleRetry("same")}
-                >
-                  Làm lại cùng đề
-                </button>
-                <button className="primary-action" type="button" onClick={() => void handleRetry("variant")}>
-                  Tạo đề mới
-                </button>
+                <button className="secondary-action secondary-action--button" type="button" onClick={() => void handleRetry("same")}>Làm lại cùng đề</button>
+                <button className="primary-action" type="button" onClick={() => void handleRetry("variant")}>Tạo đề mới</button>
               </div>
             </section>
           ) : null}
@@ -393,10 +440,7 @@ export function MissionWorkspacePage() {
 
       {activeTab === "prompt" ? (
         <div className="mission-tab-content mission-tab-content--prompt">
-          <MissionObjectivePanel
-            objective={session.activity.description ?? session.instance.learner.objective}
-            context={session.instance.learner.context}
-          />
+          <MissionObjectivePanel objective={session.activity.description ?? session.instance.learner.objective} context={session.instance.learner.context} />
         </div>
       ) : null}
 

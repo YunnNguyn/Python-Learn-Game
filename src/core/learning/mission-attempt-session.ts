@@ -128,6 +128,15 @@ export class MissionAttemptSession {
     return this.hintEngine.hasHints();
   }
 
+  canInterrupt(): boolean {
+    return !this.disposed && this.engine.canInterrupt();
+  }
+
+  interrupt() {
+    this.assertActive();
+    return this.engine.interrupt();
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

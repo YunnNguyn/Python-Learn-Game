@@ -31,20 +31,21 @@ describe("Phase D production CS116 vertical slice", () => {
       extensionCapabilities: {
         generatorIds: generators.getGeneratorIds(),
         graderIds: graders.getGraderIds(),
-        runtimeIds: [CORE_RUNTIME_ID.PYODIDE],
+        runtimeIds: [CORE_RUNTIME_ID.PYODIDE, CORE_RUNTIME_ID.LOCAL_PYTHON],
         hintSetIds: CS116_PRODUCTION_HINT_SETS.map((hintSet) => hintSet.id),
       },
       schemaSupport: { supportedSchemaVersions: [1] },
     });
 
     expect(result).toEqual({ valid: true, issues: [] });
-    expect(CS116_PRODUCTION_CONTENT.lessons).toHaveLength(3);
-    expect(CS116_PRODUCTION_CONTENT.activities).toHaveLength(7);
-    expect(CS116_PRODUCTION_CONTENT.missionTemplates).toHaveLength(7);
+    expect(CS116_PRODUCTION_CONTENT.lessons).toHaveLength(4);
+    expect(CS116_PRODUCTION_CONTENT.activities).toHaveLength(8);
+    expect(CS116_PRODUCTION_CONTENT.missionTemplates).toHaveLength(8);
     expect(CS116_PRODUCTION_CONTENT.worlds[0]!.lessonIds).toEqual([
       CS116_PRODUCTION_IDS.lessonArrayCore,
       CS116_PRODUCTION_IDS.lessonIndexFilter,
       CS116_PRODUCTION_IDS.lessonTransferReview,
+      CS116_PRODUCTION_IDS.lessonLocalRuntime,
     ]);
   });
 
@@ -64,10 +65,18 @@ describe("Phase D production CS116 vertical slice", () => {
     }
   });
 
-  it("requires NumPy for every playable vertical-slice mission", () => {
-    for (const template of CS116_PRODUCTION_CONTENT.missionTemplates) {
+  it("keeps the seven vertical-slice missions on Pyodide and the bridge mission on Local Python", () => {
+    const verticalSliceTemplates = CS116_PRODUCTION_CONTENT.missionTemplates.slice(0, 7);
+    for (const template of verticalSliceTemplates) {
+      expect(template.runtime.id).toBe(CORE_RUNTIME_ID.PYODIDE);
       expect(template.runtime.config).toEqual({ packages: ["numpy"] });
     }
+
+    const localTemplate = CS116_PRODUCTION_CONTENT.missionTemplates[7]!;
+    expect(localTemplate.id).toBe(CS116_PRODUCTION_IDS.templateLc01);
+    expect(localTemplate.runtime.id).toBe(CORE_RUNTIME_ID.LOCAL_PYTHON);
+    expect(localTemplate.runtime.config).toEqual({ executionTimeoutSeconds: 60 });
+
     expect(CS116_PRODUCTION_TEMPLATE_VS01.runtime.config).toEqual({
       packages: ["numpy"],
     });
@@ -144,6 +153,7 @@ describe("Phase D production CS116 vertical slice", () => {
       "INDEPENDENT",
       "TRANSFER",
       "REVIEW",
+      "TRANSFER",
     ]);
   });
 });

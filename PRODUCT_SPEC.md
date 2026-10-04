@@ -133,7 +133,7 @@ The initial product will eventually include:
 - concept-aware learning progression;
 - code activities and other learning activity types;
 - Monaco-based editing;
-- Python execution through Pyodide in a Web Worker;
+- Python execution through a runtime boundary: Pyodide in a Web Worker for light exercises and an optional Local Python service for Data/ML/native-compute exercises;
 - deterministic mission generation;
 - reusable grading;
 - structured feedback and progressive hints;
@@ -367,3 +367,18 @@ The learning product must make the next useful action obvious without turning na
 
 The Learn dashboard should surface one primary "today" action, prioritizing a recent failure/weak review when relevant and otherwise continuing the next unlocked activity. Lightweight conceptual self-checks may appear in lesson content, but they are formative only: they never create AttemptRecords, mastery evidence, or rewards. Run/Submit keyboard shortcuts are supported in the practice tab to keep coding flow fast.
 
+
+## Local Python / Challenge Direction
+
+The product keeps a **single-file Python IDE** as the default coding surface. It does not require or embed a custom notebook environment. Most lessons, including many ML training exercises, should remain solvable in one `main.py`.
+
+Runtime choice is content-driven and hidden behind `RuntimeManager`:
+
+- `core.pyodide` — short, lightweight, browser-isolated exercises;
+- `core.local_python` — pandas/scikit-learn/native packages, larger datasets, model training, filesystem artifacts, and future GPU-aware work.
+
+For open-ended exams/challenges, the evaluator may grade an output artifact such as `submission.csv` instead of inspecting the learner's source. A learner may produce that artifact in the built-in IDE or with an external tool. Notebook files may be accepted later as optional external artifacts, but notebook authoring is not a product requirement.
+
+### Local Python learner experience (Phase F2)
+
+Local-compute activities use the same lesson → prompt → data → single-file IDE flow as browser exercises. The practice tab identifies the active runtime, treats the editable source as `main.py`, exposes Run/Submit consistently, and shows Stop only when the runtime supports interruption. Stopping execution is runtime control, not a submission and not mastery evidence. If the loopback service is unavailable, the learner receives a concrete startup command and can retry the connection without leaving the mission. The first bridge activity (`LC-01`) intentionally reuses already-learned NumPy indexing so runtime behavior can be validated without introducing a new ML concept at the same time.

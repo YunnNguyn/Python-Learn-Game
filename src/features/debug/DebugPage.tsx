@@ -13,6 +13,7 @@ import type {
 } from "../../core/runtime";
 import { createPyodideRuntimeManager } from "../../core/runtime/pyodide";
 import { GradingFeedback } from "../mission-workspace";
+import { LocalRuntimeDebugPanel } from "./LocalRuntimeDebugPanel";
 
 type RuntimeProbeStatus = "IDLE" | "INITIALIZING" | "READY" | "ERROR";
 
@@ -287,6 +288,8 @@ export function DebugPage() {
       <p className="eyebrow">Development</p>
       <h1 id="debug-title">Công cụ phát triển</h1>
       <p className="page-lead">Các ranh giới tính năng và định tuyến đang hoạt động.</p>
+
+      <LocalRuntimeDebugPanel />
 
       <section className="status-block debug-runtime-card" aria-label="Python runtime diagnostics">
         <section className="debug-runtime-section" aria-labelledby="runtime-probe-title">

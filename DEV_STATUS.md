@@ -5,10 +5,10 @@
 ## Current Phase
 
 ```text
-Phase E — Alpha Learning Experience
+Phase F — Local Python IDE Runtime
 ```
 
-Status: **Implementation Complete / Awaiting Local Automated + Manual Validation**
+Status: **F1 COMPLETE / LOCKED; F2 implemented and awaiting Windows automated + learner-facing validation.**
 
 2026-10-04 Phase E direction: the seven-activity NumPy slice is considered complete/locked. The current phase focuses on daily learning UX rather than new NumPy content: linear unlock guidance, a today recommendation, lightweight self-checks that do not create AttemptRecords, direct service-level lock enforcement, keyboard shortcuts, and responsive practice ergonomics. Existing attempts keep access even if they predate the unlock policy.
 2026-10-03 direction lock: Phase A (first playable mission), Phase B (persistent learning loop), and the core Phase C reward/meta-progression loop are complete and locked. The abandoned Phaser/Sensor Control Room branch remains removed. Phase D productionizes the complete seven-activity CS116 NumPy slice while preserving the same learning/runtime boundaries: deterministic generated data, reusable declarative grading, H1–H4 hints, durable AttemptRecords, review selection, and optional meta rewards. No Phaser dependency is part of the learning path.
@@ -27,10 +27,10 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 ## Current Task
 
 ```text
-Phase D — Complete CS116 NumPy Vertical Slice VS-01..VS-07
+Phase F2 — Learner-facing Local Python IDE integration
 ```
 
-Status: **Implementation Complete / Awaiting Local Automated + Manual Validation**
+Status: **Implementation Complete / Awaiting Windows automated + manual validation**
 
 Phase D implementation scope:
 
@@ -1510,3 +1510,55 @@ Next after Phase B PASS: **Phase C — Semantic Visualization (WorldEvent bridge
 Phase B tooling note:
 
 - Vite development cache is redirected from `node_modules/.vite` to project-local `.vite-cache` to avoid the recurring Windows/CodexSandbox ownership EPERM issue; `.vite-cache/` is gitignored.
+
+## Phase F — Local Python Runtime Foundation
+
+Status: **F1 COMPLETE / LOCKED. F2 learner-facing IDE integration is implemented and awaiting Windows validation.**
+
+Architecture lock:
+
+```text
+short/light exercise → core.pyodide
+Data/ML/native compute → core.local_python → loopback service → child Python process
+open-ended challenge → required output artifact (often CSV)
+```
+
+Notebook authoring is explicitly out of scope. The built-in coding surface remains a single `main.py` unless later curriculum demonstrates a recurring multi-file need.
+
+F1 implementation:
+
+- added stable runtime ID `core.local_python`;
+- ApplicationServices validates both runtime capabilities and selects the runtime from `MissionTemplate.runtime.id`;
+- added browser `LocalPythonRuntimeManager` with health/session/prepare/run/submit/interrupt/dispose protocol;
+- added a stdlib-only loopback service under `local-runtime/`; no Python package install is required just to boot the service;
+- learner code runs in a subprocess, not the HTTP service process;
+- setup data is injected into `main.py` globals;
+- Submit observations normalize Python type, ndarray flag, shape and JSON-safe value into the existing grader contract;
+- Python tracebacks compile learner source as `main.py`, preserving useful learner line numbers;
+- per-mission execution timeout is configurable through `executionTimeoutSeconds` (1–3600, default 300);
+- Stop terminates the active process tree on Windows/POSIX and leaves the service alive;
+- service binds to loopback only and browser CORS accepts only localhost/loopback origins;
+- `/dev` now contains a Local Python Runtime smoke harness;
+- added TypeScript protocol/manager tests and stdlib Python worker tests.
+
+Patch-environment validation:
+
+- [x] `npm run typecheck` passes after excluding obsolete abandoned visualization files that are not part of the user's clean repo;
+- [x] `python -m unittest discover -s local-runtime/tests -v` passes (3/3);
+- [x] live HTTP smoke test: health → create session → prepare → Submit → observe `answer=15`;
+- [x] live interruption smoke test: long sleep process is stopped and returns `EXECUTION_INTERRUPTED`;
+- [x] Windows learner manual gate confirmed Stop leaves stdout at `start`, omits `done`, returns `RUNTIME_ERROR`, and keeps the service `READY`;
+- [x] F2 patch-environment live smoke: Local Python executes NumPy column indexing and returns ndarray observations through the existing runtime contract;
+- [ ] Vitest cannot execute in the Linux patch container because uploaded `node_modules` contains Windows executable/native bindings; run project tests on Windows.
+
+F2 implementation:
+
+- normal Mission Workspace now displays runtime identity/state and uses the same Run/Submit flow for Pyodide and Local Python;
+- interrupt capability is exposed through MissionEngine and MissionAttemptSession without creating AttemptRecords;
+- Local Python missions show a Stop control while Run/Submit is active, plus `Esc` as a stop shortcut;
+- missing local service has learner-facing recovery with the exact startup command and an in-place reconnect action;
+- local execution persists editor source as service-owned `main.py`; worker execution reads that file while keeping traceback line numbers learner-facing;
+- added `LC-01 — NumPy trên máy thật`, a post-slice bridge exercise that reuses learned NumPy indexing but runs through `core.local_python`;
+- the original canonical VS-01..VS-07 vertical slice remains unchanged and continues using Pyodide.
+
+Next F3 gate: service-owned read-only datasets plus generated artifact discovery/download for CSV/PNG/model outputs.

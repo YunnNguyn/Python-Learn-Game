@@ -16,5 +16,7 @@ export interface RuntimeManager {
 
   submit(request: RuntimeExecutionRequest): Promise<RuntimeExecutionResult>;
 
+  interrupt?(): Promise<RuntimeLifecycleResult>;
+
   dispose(): void;
 }

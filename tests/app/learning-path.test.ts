@@ -38,7 +38,7 @@ function progressReader(
 }
 
 describe("linear learning path", () => {
-  it("keeps the seven production activities in curriculum order", () => {
+  it("keeps the NumPy slice followed by the local-runtime bridge in curriculum order", () => {
     const content = createContent();
 
     expect(getOrderedActivityIds(content)).toEqual([
@@ -49,6 +49,7 @@ describe("linear learning path", () => {
       CS116_PRODUCTION_IDS.activityVs05,
       CS116_PRODUCTION_IDS.activityVs06,
       CS116_PRODUCTION_IDS.activityVs07,
+      CS116_PRODUCTION_IDS.activityLc01,
     ]);
   });
 
@@ -149,4 +150,19 @@ describe("linear learning path", () => {
       reason: "NEXT",
     });
   });
+  it("keeps the canonical review mission as the post-completion recommendation", () => {
+    const content = createContent();
+    const overrides = Object.fromEntries(
+      getOrderedActivityIds(content).map((activityId) => [
+        String(activityId),
+        { attemptCount: 1, successfulAttemptCount: 1, completed: true },
+      ]),
+    );
+
+    expect(getNextStudyActivity(content, progressReader(overrides))).toEqual({
+      activityId: CS116_PRODUCTION_IDS.activityVs07,
+      reason: "COMPLETE_REVIEW",
+    });
+  });
+
 });

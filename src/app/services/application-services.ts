@@ -26,6 +26,7 @@ import {
   type LearningPersistence,
 } from "../../core/persistence";
 import { CORE_RUNTIME_ID, type RuntimeSystemError } from "../../core/runtime";
+import { createLocalPythonRuntimeManager } from "../../core/runtime/local-python";
 import { createPyodideRuntimeManager } from "../../core/runtime/pyodide";
 import { getActivityAccess } from "../learning-path";
 
@@ -92,7 +93,7 @@ export function createApplicationServices(): ApplicationServices {
     extensionCapabilities: {
       generatorIds: generators.getGeneratorIds(),
       graderIds: graders.getGraderIds(),
-      runtimeIds: [CORE_RUNTIME_ID.PYODIDE],
+      runtimeIds: [CORE_RUNTIME_ID.PYODIDE, CORE_RUNTIME_ID.LOCAL_PYTHON],
       hintSetIds: hints.getHintSetIds(),
     },
     schemaSupport: { supportedSchemaVersions: [1] },
@@ -198,7 +199,13 @@ export function createApplicationServices(): ApplicationServices {
         );
       }
 
-      const runtime = createPyodideRuntimeManager();
+      const runtime = createRuntimeManager(template.runtime.id);
+      if (runtime === null) {
+        return failure(
+          "RUNTIME_UNSUPPORTED",
+          "Mission đang yêu cầu một Python runtime mà ứng dụng chưa hỗ trợ.",
+        );
+      }
       const engine = new MissionEngine(runtime, graders);
       const loaded = await engine.loadMission(template, instance);
       if (!loaded.ok) {
@@ -255,6 +262,16 @@ export function createApplicationServices(): ApplicationServices {
       return metaProgression.getPersistenceKind();
     },
   };
+}
+
+function createRuntimeManager(runtimeId: string) {
+  if (runtimeId === CORE_RUNTIME_ID.PYODIDE) {
+    return createPyodideRuntimeManager();
+  }
+  if (runtimeId === CORE_RUNTIME_ID.LOCAL_PYTHON) {
+    return createLocalPythonRuntimeManager();
+  }
+  return null;
 }
 
 function resumedDraftHintLevels(

@@ -1,5 +1,5 @@
 import type { ContentRegistry } from "../core/content";
-import type { LearningActivityId } from "../core/domain";
+import { LearningStage, type LearningActivityId } from "../core/domain";
 import type { ActivityProgress } from "../core/learning";
 
 export interface ActivityProgressReader {
@@ -110,7 +110,10 @@ export function getNextStudyActivity(
     };
   }
 
-  const finalActivityId = ordered.at(-1);
+  const finalReviewActivityId = [...ordered]
+    .reverse()
+    .find((activityId) => content.getActivity(activityId)?.stage === LearningStage.REVIEW);
+  const finalActivityId = finalReviewActivityId ?? ordered.at(-1);
   return finalActivityId
     ? { activityId: finalActivityId, reason: "COMPLETE_REVIEW" }
     : null;

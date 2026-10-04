@@ -3,3 +3,5 @@ dist/
 .npm-cache/
 *.local
 .vite-cache/
+
+local-runtime/.workspaces/

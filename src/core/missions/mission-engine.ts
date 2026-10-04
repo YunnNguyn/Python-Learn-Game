@@ -292,6 +292,28 @@ export class MissionEngine {
     }
   }
 
+  canInterrupt(): boolean {
+    return !this.disposed && typeof this.runtimeManager.interrupt === "function";
+  }
+
+  async interrupt(): Promise<RuntimeLifecycleResult> {
+    if (this.disposed) {
+      return lifecycleFailure(
+        "MISSION_ENGINE_DISPOSED",
+        "Mission Engine đã được hủy và không thể dừng tiến trình.",
+      );
+    }
+
+    if (this.runtimeManager.interrupt === undefined) {
+      return lifecycleFailure(
+        "RUNTIME_INTERRUPT_UNSUPPORTED",
+        "Runtime hiện tại không hỗ trợ dừng tiến trình đang chạy.",
+      );
+    }
+
+    return this.runtimeManager.interrupt();
+  }
+
   dispose(): void {
     if (this.disposed) {
       return;

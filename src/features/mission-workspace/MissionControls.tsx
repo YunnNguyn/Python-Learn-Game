@@ -1,16 +1,24 @@
 export interface MissionControlsProps {
   readonly runDisabled?: boolean;
   readonly submitDisabled?: boolean;
+  readonly stopVisible?: boolean;
+  readonly stopDisabled?: boolean;
+  readonly stopPending?: boolean;
   readonly onRun?: () => void;
   readonly onSubmit?: () => void;
+  readonly onStop?: () => void;
   readonly note?: string;
 }
 
 export function MissionControls({
   runDisabled = false,
   submitDisabled = false,
+  stopVisible = false,
+  stopDisabled = true,
+  stopPending = false,
   onRun,
   onSubmit,
+  onStop,
   note = "Chạy thử giữ trạng thái thực nghiệm; Nộp bài luôn chấm trên môi trường sạch.",
 }: MissionControlsProps) {
   return (
@@ -39,6 +47,17 @@ export function MissionControls({
         >
           Nộp bài <kbd className="mission-shortcut">Ctrl/⌘ + Shift + Enter</kbd>
         </button>
+        {stopVisible ? (
+          <button
+            className="mission-action-button mission-action-button--stop"
+            type="button"
+            disabled={stopDisabled}
+            onClick={onStop}
+            aria-describedby="mission-runtime-note"
+          >
+            {stopPending ? "Đang dừng..." : "Dừng tiến trình"}
+          </button>
+        ) : null}
       </div>
       <p id="mission-runtime-note" className="mission-controls__note">
         {note}

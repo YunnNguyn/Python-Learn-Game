@@ -908,3 +908,7 @@ Target:
 
 New activity types, grader primitives, or generator capabilities should be added only when multiple real content cases justify them.
 
+
+### Runtime interruption
+
+Interruption is a control-plane operation, not learning evidence. A runtime may advertise interruption support through `RuntimeManager.interrupt`. `MissionEngine` and `MissionAttemptSession` expose that capability without bypassing the active Run/Submit operation. Interrupting Run creates no attempt. Interrupting Submit still allows the in-flight Submit to resolve normally, after which the existing rule applies: exactly one immutable `AttemptRecord` is created for that Submit, typically with runtime failure evidence.

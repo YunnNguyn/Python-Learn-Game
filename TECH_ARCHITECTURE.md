@@ -59,7 +59,8 @@ Vite
 TypeScript
 React
 Monaco Editor
-Pyodide in Web Worker
+Pyodide in Web Worker for browser-light exercises
+Local Python loopback service + child processes for native/Data/ML exercises
 IndexedDB for local learning + meta-progression persistence
 ```
 
@@ -354,20 +355,24 @@ Responsibilities:
 - restore the mission environment;
 - normalize runtime responses.
 
-This boundary leaves room for a different future runtime without implementing one now.
+This boundary now routes between multiple runtime implementations without changing MissionEngine or graders.
 
-### 4.11 Python/Pyodide Runtime
+### 4.11 Python Runtime Implementations
 
-Initial runtime:
+Production runtime IDs:
 
 ```text
-Pyodide
-inside a Web Worker
+core.pyodide
+core.local_python
 ```
 
-Pyodide-specific code stays behind the Runtime Manager/worker adapter.
+`core.pyodide` runs inside a Web Worker and remains the default for short/light exercises. Pyodide-specific code stays behind the Runtime Manager/worker adapter.
 
-The main thread must not execute learner Python in a way that allows an infinite loop to freeze the application.
+`core.local_python` connects only to a loopback service on the learner machine. The service executes each Run/Submit in a child Python process, injects mission setup data, captures stdout/stderr/tracebacks, serializes the same observation contract used by graders, and supports timeout/process-tree interruption. Learner code never executes inside the browser main thread or inside the long-lived local HTTP service process itself.
+
+Local runtime workspaces are service-owned and sandboxed by path rather than accepting arbitrary browser-supplied filesystem paths. The development server binds to loopback only; future packaged launchers may start/stop it automatically.
+
+The product does not require a custom notebook runtime. The default learner unit remains one editable Python script plus read-only datasets and generated artifacts when needed.
 
 ### 4.12 World Event Bridge
 
@@ -1099,3 +1104,7 @@ Before implementation phases are considered complete, verify:
 - future content packs can register into the same learning architecture.
 - no deferred future system is required to reach the NumPy vertical slice.
 
+
+### Phase F2 learner-facing runtime control
+
+`MissionEngine` exposes runtime interruption as a capability rather than hard-coding Local Python. `MissionAttemptSession.interrupt()` forwards the control request but does not create an `AttemptRecord`; only Submit preserves the one-submit/one-attempt invariant. A Local Python Run or Submit remains active until its child process resolves after interruption. The loopback service writes the current editor source to its session-owned `main.py` before launching the worker, and the worker reads that source file for execution. Browser code never supplies an arbitrary workspace path. VS-01..VS-07 remain `core.pyodide`; the LC-01 bridge is the first normal curriculum activity routed through `core.local_python`.

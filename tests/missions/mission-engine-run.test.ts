@@ -60,6 +60,8 @@ class FakeRuntimeManager implements RuntimeManager {
   prepareDeferred: Deferred<RuntimeLifecycleResult> | undefined;
   runDeferred: Deferred<RuntimeExecutionResult> | undefined;
   submitDeferred: Deferred<RuntimeExecutionResult> | undefined;
+  interruptResult: RuntimeLifecycleResult = { ok: true };
+  interruptCalls = 0;
 
   initialize(): Promise<RuntimeLifecycleResult> {
     this.calls.push("initialize");
@@ -84,6 +86,12 @@ class FakeRuntimeManager implements RuntimeManager {
     this.calls.push("submit");
     this.submitRequests.push(request);
     return this.submitDeferred?.promise ?? Promise.resolve(this.submitResult);
+  }
+
+  interrupt(): Promise<RuntimeLifecycleResult> {
+    this.calls.push("interrupt");
+    this.interruptCalls += 1;
+    return Promise.resolve(this.interruptResult);
   }
 
   dispose(): void {
@@ -656,4 +664,34 @@ describe("MissionEngine MP.1 Run pipeline", () => {
       expect(missionEngineSource).not.toContain(forbidden);
     }
   });
+  it("forwards interrupt while a run is active without disposing the mission", async () => {
+    const runtime = new FakeRuntimeManager();
+    runtime.runDeferred = deferred<RuntimeExecutionResult>();
+    const { engine } = await loadReadyMission(runtime);
+
+    const running = engine.run("while True: pass");
+    expect(engine.canInterrupt()).toBe(true);
+    await expect(engine.interrupt()).resolves.toEqual({ ok: true });
+    expect(runtime.interruptCalls).toBe(1);
+
+    runtime.runDeferred.resolve({
+      status: "RUNTIME_ERROR",
+      stdout: "start\n",
+      stderr: "",
+      error: { code: "EXECUTION_INTERRUPTED", message: "stopped" },
+    });
+
+    await expect(running).resolves.toMatchObject({
+      execution: {
+        status: "RUNTIME_ERROR",
+        error: { code: "EXECUTION_INTERRUPTED" },
+      },
+    });
+
+    runtime.runDeferred = undefined;
+    await expect(engine.run("print('recovered')")).resolves.toEqual({
+      execution: runtime.runResult,
+    });
+  });
+
 });
