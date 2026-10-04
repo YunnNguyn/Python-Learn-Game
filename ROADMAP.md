@@ -8,9 +8,10 @@ Current production sequence:
 Phase A — First Real Playable Mission                         COMPLETE / LOCKED
 Phase B — Persistent Learning Loop                           COMPLETE / LOCKED
 Phase C — Reward & Meta-Game Foundation + Robot Workshop v1 COMPLETE / LOCKED
-Phase D — Complete CS116 NumPy vertical slice VS-01..VS-07 CURRENT
-Phase E — Meta-game expansion only after the learning slice is healthy
-Phase F — Optional accounts / friends / cups after a backend exists
+Phase D — Complete CS116 NumPy vertical slice VS-01..VS-07 COMPLETE / LOCKED
+Phase E — Alpha Learning Experience                         CURRENT
+Phase F — Curriculum expansion + optional meta-game systems
+Phase G — Optional accounts / friends / cups after a backend exists
 ```
 
 Phase C explicitly does **not** add Phaser or require per-mission game-world visualization. Its acceptance target is an idempotent reward pipeline, persisted inventory, bounded daily goals, anti-farming rules, and one real optional mini-system that consumes rewards without affecting grading/mastery.
@@ -35,12 +36,29 @@ App Shell + Python Runtime + Mission Pipeline — COMPLETE / LOCKED
 Phase A — First Real Playable Mission — COMPLETE / LOCKED
 Phase B — Persistent Learning Loop — COMPLETE / LOCKED
 Phase C — Reward & Meta-Game Foundation + Robot Workshop v1 — COMPLETE / LOCKED
-Phase D — Complete NumPy Vertical Slice VS-01..VS-07 — CURRENT
-Playtest / polish
+Phase D — Complete NumPy Vertical Slice VS-01..VS-07 — COMPLETE / LOCKED
+Phase E — Alpha Learning Experience — CURRENT
 Then expand curriculum and optional meta-game systems
 ```
 
 The older Visualization Bridge section later in this document is retained as design history/reference only and is not on the active critical path.
+
+
+## Phase E — Alpha Learning Experience
+
+Goal: turn the complete NumPy slice into a coherent daily learning product before expanding content.
+
+Current scope:
+
+- derived linear activity unlock/progression without mutating AttemptRecord semantics;
+- preserve access to legacy activities that already have attempts;
+- "Hôm nay nên học gì?" recommendation on the learning dashboard;
+- lightweight self-check inside the lesson tab, deliberately separate from mastery/grading evidence;
+- keyboard shortcuts and sticky run/submit controls for faster practice;
+- locked-state UX at lesson, activity and mission-service boundaries;
+- laptop/mobile/accessibility polish.
+
+Acceptance: a new learner can follow VS-01 → VS-07 without guessing what to do next, cannot accidentally skip the instructional sequence through normal navigation, can still resume old progress, and can move from lesson → practice with minimal scrolling.
 
 ## Phase 0 — Design Lock
 

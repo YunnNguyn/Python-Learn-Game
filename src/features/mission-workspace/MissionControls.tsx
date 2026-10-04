@@ -25,8 +25,9 @@ export function MissionControls({
           disabled={runDisabled}
           onClick={onRun}
           aria-describedby="mission-runtime-note"
+          aria-keyshortcuts="Control+Enter Meta+Enter"
         >
-          Chạy thử
+          Chạy thử <kbd className="mission-shortcut">Ctrl/⌘ + Enter</kbd>
         </button>
         <button
           className="mission-action-button mission-action-button--submit"
@@ -34,8 +35,9 @@ export function MissionControls({
           disabled={submitDisabled}
           onClick={onSubmit}
           aria-describedby="mission-runtime-note"
+          aria-keyshortcuts="Control+Shift+Enter Meta+Shift+Enter"
         >
-          Nộp bài
+          Nộp bài <kbd className="mission-shortcut">Ctrl/⌘ + Shift + Enter</kbd>
         </button>
       </div>
       <p id="mission-runtime-note" className="mission-controls__note">

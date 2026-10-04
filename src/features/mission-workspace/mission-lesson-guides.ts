@@ -210,3 +210,59 @@ const GUIDES: Readonly<Record<string, MissionLessonGuide>> = {
 export function getMissionLessonGuide(activityId: string): MissionLessonGuide | null {
   return GUIDES[activityId] ?? null;
 }
+
+export interface MissionQuickCheckDefinition {
+  readonly question: string;
+  readonly options: readonly string[];
+  readonly correctOptionIndex: number;
+  readonly explanation: string;
+}
+
+const QUICK_CHECKS: Readonly<Record<string, MissionQuickCheckDefinition>> = {
+  "cs116.numpy.vs01": {
+    question: "Nếu `matrix` đang là list Python, cách phù hợp nhất để tạo NumPy ndarray là gì?",
+    options: ["result = matrix", "result = np.array(matrix)", "result = matrix.shape", "result = np.shape"],
+    correctOptionIndex: 1,
+    explanation: "`np.array(matrix)` tạo ndarray mới từ dữ liệu list. Chỉ gán `result = matrix` thì kiểu dữ liệu vẫn là list.",
+  },
+  "cs116.numpy.vs02": {
+    question: "Thuộc tính nào cho biết số chiều của một ndarray?",
+    options: [".shape", ".ndim", ".size", ".dtype"],
+    correctOptionIndex: 1,
+    explanation: "`.ndim` trả về số chiều, còn `.shape` trả về kích thước của từng chiều.",
+  },
+  "cs116.numpy.vs03": {
+    question: "Cú pháp nào lấy toàn bộ hàng của cột thứ 2 (index 1) trong ndarray 2 chiều `matrix`?",
+    options: ["matrix[1]", "matrix[:, 1]", "matrix[1, :]", "matrix[:1]"],
+    correctOptionIndex: 1,
+    explanation: "Dấu `:` ở vị trí hàng nghĩa là lấy tất cả hàng; `1` ở vị trí cột chọn cột index 1.",
+  },
+  "cs116.numpy.vs04": {
+    question: "Biểu thức `values > threshold` với `values` là ndarray sẽ tạo ra gì?",
+    options: ["Một số duy nhất", "Một list string", "Một mảng boolean cùng cấu trúc", "Một lỗi Python"],
+    correctOptionIndex: 2,
+    explanation: "NumPy thực hiện so sánh theo từng phần tử và trả về boolean mask.",
+  },
+  "cs116.numpy.vs05": {
+    question: "Sau khi đã có `mask`, cách thường dùng để lọc `values` là gì?",
+    options: ["values(mask)", "values[mask]", "mask[values]", "values.mask"],
+    correctOptionIndex: 1,
+    explanation: "Boolean mask được dùng trực tiếp trong cú pháp indexing: `values[mask]`.",
+  },
+  "cs116.numpy.vs06": {
+    question: "Khi ghép hai điều kiện boolean NumPy theo kiểu cả hai cùng đúng, nên dùng biểu thức nào?",
+    options: ["condition_a and condition_b", "condition_a & condition_b", "condition_a + condition_b", "condition_a == condition_b"],
+    correctOptionIndex: 1,
+    explanation: "Với ndarray boolean, dùng toán tử phần tử `&`. Mỗi phép so sánh nên đặt trong ngoặc khi viết cùng một biểu thức.",
+  },
+  "cs116.numpy.vs07": {
+    question: "Khi gặp bài tổng hợp, bước đầu tiên nên làm gì?",
+    options: ["Viết ngay một dòng code thật dài", "Xác định đề đang kiểm tra thao tác nào", "Mở H4 trước", "Đổi toàn bộ dữ liệu thành list"],
+    correctOptionIndex: 1,
+    explanation: "Nhận diện nhóm kỹ năng trước giúp bạn chọn đúng mẫu thao tác: tạo ndarray, đọc shape, indexing hay filtering.",
+  },
+};
+
+export function getMissionQuickCheck(activityId: string): MissionQuickCheckDefinition | null {
+  return QUICK_CHECKS[activityId] ?? null;
+}

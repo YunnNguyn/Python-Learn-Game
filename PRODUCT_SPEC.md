@@ -361,3 +361,9 @@ Target extensibility:
 → optional generator/grader/visualization plugin
 ```
 
+## Alpha learning-path UX
+
+The learning product must make the next useful action obvious without turning navigation into a game gate. The initial production path is linear across VS-01..VS-07: the first activity is open, completing an activity opens the next, and any activity with existing attempts remains accessible for backward compatibility. Direct mission creation must enforce the same derived access rule used by the UI.
+
+The Learn dashboard should surface one primary "today" action, prioritizing a recent failure/weak review when relevant and otherwise continuing the next unlocked activity. Lightweight conceptual self-checks may appear in lesson content, but they are formative only: they never create AttemptRecords, mastery evidence, or rewards. Run/Submit keyboard shortcuts are supported in the practice tab to keep coding flow fast.
+

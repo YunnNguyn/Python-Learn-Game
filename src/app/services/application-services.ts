@@ -27,6 +27,7 @@ import {
 } from "../../core/persistence";
 import { CORE_RUNTIME_ID, type RuntimeSystemError } from "../../core/runtime";
 import { createPyodideRuntimeManager } from "../../core/runtime/pyodide";
+import { getActivityAccess } from "../learning-path";
 
 export interface PlayableMissionSession {
   readonly session: MissionAttemptSession;
@@ -135,6 +136,11 @@ export function createApplicationServices(): ApplicationServices {
           "ACTIVITY_NOT_FOUND",
           "Không tìm thấy hoạt động học cần mở.",
         );
+      }
+
+      const access = getActivityAccess(content, learning, activity.id);
+      if (!access.unlocked) {
+        return failure("ACTIVITY_LOCKED", access.reason);
       }
 
       if (

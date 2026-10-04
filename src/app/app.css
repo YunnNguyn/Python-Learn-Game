@@ -1767,3 +1767,177 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* Phase E — alpha learning experience */
+.today-study-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+  border: 1px solid var(--color-accent-border);
+  border-radius: 0.9rem;
+  background: linear-gradient(135deg, rgba(19, 40, 62, 0.9), rgba(23, 30, 40, 0.95));
+  padding: 1rem 1.1rem;
+}
+
+.today-study-card h2 {
+  margin-bottom: 0.35rem;
+  color: var(--color-text);
+  font-size: 1.1rem;
+}
+
+.today-study-card p {
+  margin: 0;
+}
+
+.learning-card--locked {
+  opacity: 0.72;
+}
+
+.progress-pill--locked {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-1);
+  color: var(--color-muted);
+}
+
+.locked-action {
+  min-height: 2.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.65rem;
+  background: var(--color-surface-1);
+  color: var(--color-muted);
+  font-weight: 700;
+  padding: 0.65rem 0.9rem;
+}
+
+.activity-locked-panel {
+  margin: 1.5rem 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.8rem;
+  background: var(--color-surface-1);
+  padding: 1rem;
+}
+
+.activity-locked-panel strong {
+  color: var(--color-text);
+}
+
+.activity-locked-panel p {
+  margin-bottom: 0;
+}
+
+.mission-lesson-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.mission-quick-check {
+  margin-top: 0;
+}
+
+.mission-quick-check__options {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1rem 0;
+}
+
+.mission-quick-check__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.7rem;
+  background: var(--color-surface-1);
+  color: var(--color-text-soft);
+  cursor: pointer;
+  padding: 0.75rem 0.85rem;
+}
+
+.mission-quick-check__option:hover {
+  border-color: var(--color-accent-border);
+  background: var(--color-surface-hover);
+}
+
+.mission-quick-check__option input {
+  margin-top: 0.2rem;
+  accent-color: var(--color-accent);
+}
+
+.mission-quick-check__option--correct {
+  border-color: var(--color-success-border);
+  background: var(--color-success-surface);
+}
+
+.mission-quick-check__option--wrong {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-surface);
+}
+
+.mission-quick-check__feedback {
+  border-radius: 0.7rem;
+  padding: 0.85rem 0.95rem;
+}
+
+.mission-quick-check__feedback.is-correct {
+  border: 1px solid var(--color-success-border);
+  background: var(--color-success-surface);
+}
+
+.mission-quick-check__feedback.is-wrong {
+  border: 1px solid var(--color-danger-border);
+  background: var(--color-danger-surface);
+}
+
+.mission-quick-check__feedback strong {
+  color: var(--color-text);
+}
+
+.mission-quick-check__feedback p {
+  margin: 0.35rem 0 0.75rem;
+}
+
+.mission-controls {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 8;
+  border: 1px solid var(--color-border);
+  border-radius: 0.8rem;
+  background: rgba(19, 25, 34, 0.96);
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.18);
+  padding: 0.75rem;
+  backdrop-filter: blur(8px);
+}
+
+.mission-shortcut {
+  margin-left: 0.45rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.35rem;
+  background: var(--color-surface-3);
+  color: var(--color-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.12rem 0.35rem;
+}
+
+@media (max-width: 48rem) {
+  .today-study-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .today-study-card .primary-action--link {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .mission-controls {
+    position: static;
+  }
+
+  .mission-shortcut {
+    display: none;
+  }
+}

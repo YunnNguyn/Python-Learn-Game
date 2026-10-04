@@ -5,11 +5,12 @@
 ## Current Phase
 
 ```text
-Phase D — Complete CS116 NumPy Vertical Slice VS-01..VS-07
+Phase E — Alpha Learning Experience
 ```
 
 Status: **Implementation Complete / Awaiting Local Automated + Manual Validation**
 
+2026-10-04 Phase E direction: the seven-activity NumPy slice is considered complete/locked. The current phase focuses on daily learning UX rather than new NumPy content: linear unlock guidance, a today recommendation, lightweight self-checks that do not create AttemptRecords, direct service-level lock enforcement, keyboard shortcuts, and responsive practice ergonomics. Existing attempts keep access even if they predate the unlock policy.
 2026-10-03 direction lock: Phase A (first playable mission), Phase B (persistent learning loop), and the core Phase C reward/meta-progression loop are complete and locked. The abandoned Phaser/Sensor Control Room branch remains removed. Phase D productionizes the complete seven-activity CS116 NumPy slice while preserving the same learning/runtime boundaries: deterministic generated data, reusable declarative grading, H1–H4 hints, durable AttemptRecords, review selection, and optional meta rewards. No Phaser dependency is part of the learning path.
 
 Phase 0 remains complete and locked through the six source-of-truth documents:

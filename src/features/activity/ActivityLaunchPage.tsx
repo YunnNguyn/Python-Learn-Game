@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 
 import { useApplicationServices, useLearningProgress } from "../../app/services";
+import { getActivityAccess } from "../../app/learning-path";
 import {
   LearningActivityType,
   type LearningActivityId,
@@ -27,11 +28,29 @@ export function ActivityLaunchPage() {
     );
   }
 
+  const access = getActivityAccess(content, learning, activity.id);
   const executable =
     activity.type === LearningActivityType.CODE_MISSION ||
     activity.type === LearningActivityType.DEBUG_MISSION ||
     activity.type === LearningActivityType.BOSS_MISSION;
   const progress = learning.getActivityProgress(activity.id);
+
+  if (!access.unlocked) {
+    return (
+      <section className="page-card activity-page" aria-labelledby="activity-title">
+        <p className="eyebrow">Hoạt động học · Chưa mở</p>
+        <h1 id="activity-title">{activity.title}</h1>
+        {activity.description ? <p className="page-lead">{activity.description}</p> : null}
+        <section className="activity-locked-panel" aria-label="Điều kiện mở khóa">
+          <strong>🔒 Hoạt động này chưa được mở.</strong>
+          <p>{access.reason}</p>
+        </section>
+        <Link className="primary-action primary-action--link" to="/learn">
+          Về lộ trình hôm nay
+        </Link>
+      </section>
+    );
+  }
   const attempts = learning.getAttemptsByActivity(activity.id).slice(-5).reverse();
 
   return (

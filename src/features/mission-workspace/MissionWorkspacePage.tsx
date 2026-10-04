@@ -15,11 +15,12 @@ import { MissionControls } from "./MissionControls";
 import { MissionDataPanel } from "./MissionDataPanel";
 import { MissionHintPanel } from "./MissionHintPanel";
 import { MissionLessonPanel } from "./MissionLessonPanel";
+import { MissionQuickCheck } from "./MissionQuickCheck";
 import { MissionObjectivePanel } from "./MissionObjectivePanel";
 import { MissionOutputPanel } from "./MissionOutputPanel";
 import { PythonEditor } from "./PythonEditor";
 import { GradingFeedback } from "./grading-feedback";
-import { getMissionLessonGuide } from "./mission-lesson-guides";
+import { getMissionLessonGuide, getMissionQuickCheck } from "./mission-lesson-guides";
 
 type WorkspaceOperation = "run" | "submit" | "reload" | null;
 type RetryMode = "same" | "variant";
@@ -112,6 +113,24 @@ export function MissionWorkspacePage() {
     if (operation === "submit") return "Đang chạy Submit sạch, chấm bài và lưu bằng chứng học tập...";
     return "Chạy thử dùng để khám phá; Nộp bài luôn chấm trên baseline sạch và lưu tiến độ.";
   }, [loading, operation]);
+
+  useEffect(() => {
+    if (activeTab !== "practice" || !session) return;
+
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (event.isComposing || !(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
+      event.preventDefault();
+      if (operationRef.current !== null) return;
+      if (event.shiftKey) {
+        void handleSubmit();
+      } else {
+        void handleRun();
+      }
+    };
+
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [activeTab, session, code]);
 
   function applyPlayableSession(next: PlayableMissionSession) {
     setBundle(next);
@@ -253,6 +272,7 @@ export function MissionWorkspacePage() {
 
   const data = session.instance.learner.data ?? {};
   const lessonGuide = getMissionLessonGuide(session.activity.id);
+  const quickCheck = getMissionQuickCheck(session.activity.id);
 
   return (
     <section className="page-card mission-workspace" aria-labelledby="mission-title">
@@ -364,7 +384,12 @@ export function MissionWorkspacePage() {
         </>
       ) : null}
 
-      {activeTab === "lesson" ? <MissionLessonPanel guide={lessonGuide} /> : null}
+      {activeTab === "lesson" ? (
+        <div className="mission-lesson-stack">
+          <MissionLessonPanel guide={lessonGuide} />
+          <MissionQuickCheck definition={quickCheck} activityId={session.activity.id} />
+        </div>
+      ) : null}
 
       {activeTab === "prompt" ? (
         <div className="mission-tab-content mission-tab-content--prompt">

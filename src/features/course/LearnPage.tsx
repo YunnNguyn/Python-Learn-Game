@@ -6,6 +6,7 @@ import {
   useMetaProgression,
 } from "../../app/services";
 import { ReviewReason, type LearningActivityId } from "../../core/domain";
+import { getNextStudyActivity } from "../../app/learning-path";
 import {
   InventoryItemId,
   inventoryItemLabel,
@@ -21,6 +22,8 @@ export function LearnPage() {
     ? learning.getReviewRecommendations(content.getConcepts(), content.getActivities())
     : [];
   const uniqueReviews = deduplicateActivityRecommendations(reviewRecommendations).slice(0, 3);
+  const nextStudy = snapshot.ready ? getNextStudyActivity(content, learning) : null;
+  const todayAction = resolveTodayAction(uniqueReviews, nextStudy);
 
   return (
     <section className="page-card learning-page" aria-labelledby="learn-title">
@@ -30,6 +33,19 @@ export function LearnPage() {
         Học theo lộ trình thực hành. Mỗi lần Nộp bài được lưu cục bộ để theo dõi tiến độ,
         gợi ý phần cần ôn và giữ lịch sử học ngay cả khi bạn đóng trình duyệt.
       </p>
+
+      {todayAction ? (
+        <section className="today-study-card" aria-labelledby="today-study-title">
+          <div>
+            <p className="learning-card__meta">Hôm nay nên học gì?</p>
+            <h2 id="today-study-title">{todayAction.title}</h2>
+            <p>{todayAction.description}</p>
+          </div>
+          <Link className="primary-action primary-action--link" to={`/activity/${todayAction.activityId}`}>
+            {todayAction.cta}
+          </Link>
+        </section>
+      ) : null}
 
       <section className="meta-summary-card" aria-labelledby="meta-summary-title">
         <div className="meta-summary-card__header">
@@ -130,5 +146,57 @@ function reviewReasonLabel(reason: ReviewReason): string {
       return "Khái niệm này đã lâu chưa được luyện lại.";
     case ReviewReason.DEPENDENCY:
       return "Đây là kiến thức nền đang yếu so với phần bạn đã học.";
+  }
+}
+
+interface TodayAction {
+  readonly activityId: LearningActivityId;
+  readonly title: string;
+  readonly description: string;
+  readonly cta: string;
+}
+
+function resolveTodayAction(
+  reviews: readonly { readonly activityId?: LearningActivityId; readonly reason: ReviewReason }[],
+  nextStudy: ReturnType<typeof getNextStudyActivity>,
+): TodayAction | null {
+  const urgentReview = reviews.find(
+    (item) =>
+      item.activityId !== undefined &&
+      (item.reason === ReviewReason.RECENT_FAILURE || item.reason === ReviewReason.WEAK),
+  );
+
+  if (urgentReview?.activityId) {
+    return {
+      activityId: urgentReview.activityId,
+      title: "Ôn lại phần vừa vướng trước khi đi tiếp",
+      description: reviewReasonLabel(urgentReview.reason),
+      cta: "Ôn ngay",
+    };
+  }
+
+  if (!nextStudy) return null;
+  switch (nextStudy.reason) {
+    case "CONTINUE":
+      return {
+        activityId: nextStudy.activityId,
+        title: "Tiếp tục hoạt động đang làm",
+        description: "Bạn đã có lần nộp ở hoạt động này. Tiếp tục từ tiến độ hiện tại để hoàn thành nó.",
+        cta: "Tiếp tục",
+      };
+    case "NEXT":
+      return {
+        activityId: nextStudy.activityId,
+        title: "Hoạt động tiếp theo đã sẵn sàng",
+        description: "Đi theo thứ tự lộ trình để kiến thức mới xuất hiện sau khi phần nền đã được luyện xong.",
+        cta: "Học tiếp",
+      };
+    case "COMPLETE_REVIEW":
+      return {
+        activityId: nextStudy.activityId,
+        title: "Lộ trình hiện tại đã hoàn thành",
+        description: "Bạn có thể dùng bài ôn tập cuối để củng cố lại toàn bộ lát cắt NumPy.",
+        cta: "Ôn tập",
+      };
   }
 }
