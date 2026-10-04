@@ -1,5 +1,6 @@
 import {
   CS116_PRODUCTION_CONTENT,
+  getCs116MissionInstanceValidator,
   registerCs116Generators,
   registerCs116Hints,
   registerCs116ProductionContent,
@@ -172,6 +173,7 @@ export function createApplicationServices(): ApplicationServices {
           generatorRegistry: generators,
           baseSeed: seed,
           difficulty: Difficulty.EASY,
+          validator: getCs116MissionInstanceValidator(template.generator.id),
         }).instance;
       } catch (error) {
         return failure(

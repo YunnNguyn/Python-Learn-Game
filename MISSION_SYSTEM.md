@@ -790,7 +790,7 @@ Focus:
 - create an array;
 - inspect `shape`;
 - inspect `ndim`;
-- connect dimensions to a visible sensor grid.
+- connect dimensions to the concrete generated matrix shown in the task.
 
 ### VS-02 — Diagnose Telemetry
 
@@ -818,7 +818,7 @@ Focus:
 
 - comparisons;
 - boolean mask;
-- visible target selection.
+- use the mask to select the requested IDs.
 
 ### VS-05 — Radar Filter Variant
 
@@ -838,7 +838,7 @@ Focus:
 
 - combine indexing and boolean logic;
 - objective does not name the NumPy APIs;
-- semantic event should cause the radar to react to selected contacts.
+- require two vectorized conditions combined with element-wise AND.
 
 ### VS-07 — Recall Packet
 
@@ -864,7 +864,7 @@ The slice must prove:
 - reusable grader behavior;
 - local progress persistence;
 - Retry Variant;
-- semantic world reaction tied to code result.
+- complete VS-01 through VS-07 production content with deterministic generated variants.
 
 ### Learning
 

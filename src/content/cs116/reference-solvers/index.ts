@@ -10,3 +10,8 @@ export {
   solveThresholdFilterReference,
   type ThresholdFilterReferenceResult,
 } from "./threshold-filter-reference-solver";
+
+export {
+  solveHostileContactReference,
+  type HostileContactReferenceResult,
+} from "./hostile-contact-reference-solver";

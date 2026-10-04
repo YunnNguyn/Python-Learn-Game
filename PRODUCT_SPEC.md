@@ -137,8 +137,6 @@ The initial product will eventually include:
 - deterministic mission generation;
 - reusable grading;
 - structured feedback and progressive hints;
-- semantic world events;
-- a reusable 2D Sensor Control Room visualization;
 - local progress persistence in IndexedDB;
 - review, retry-variant, and free-practice flows;
 - an Exam Mode capable of disabling or limiting assistance.
@@ -173,21 +171,9 @@ The canonical vertical-slice activities are:
 
 See `CURRICULUM.md` for concept ownership and `MISSION_SYSTEM.md` for activity behavior.
 
-### 5.3 First visual setting
+### 5.3 Optional visualization
 
-Use one reusable **Sensor Control Room** rather than a large overworld.
-
-Initial visualization modules may include:
-
-- `SensorGrid`;
-- `RadarTargets`;
-- `StatusPanel`.
-
-The purpose is to validate:
-
-```text
-code → result → meaningful visual reaction
-```
+Visualization is not part of the baseline acceptance path. A future lesson may add a focused visualization when it materially improves understanding, but normal NumPy missions remain editor + runtime + grading experiences.
 
 Art production is not an initial success criterion.
 
@@ -332,7 +318,7 @@ The first vertical slice must demonstrate:
 - grading works through reusable grading infrastructure;
 - progress persists locally;
 - Retry Variant changes the task;
-- world reaction corresponds to the code result.
+- all seven canonical NumPy activities run, grade, persist, and support retry variants.
 
 ### Vertical-slice learning success
 

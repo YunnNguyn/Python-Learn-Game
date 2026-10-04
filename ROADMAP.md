@@ -7,8 +7,8 @@ Current production sequence:
 ```text
 Phase A — First Real Playable Mission                         COMPLETE / LOCKED
 Phase B — Persistent Learning Loop                           COMPLETE / LOCKED
-Phase C — Reward & Meta-Game Foundation + Robot Workshop v1 CURRENT
-Phase D — Complete CS116 NumPy vertical slice VS-01..VS-07
+Phase C — Reward & Meta-Game Foundation + Robot Workshop v1 COMPLETE / LOCKED
+Phase D — Complete CS116 NumPy vertical slice VS-01..VS-07 CURRENT
 Phase E — Meta-game expansion only after the learning slice is healthy
 Phase F — Optional accounts / friends / cups after a backend exists
 ```
@@ -34,8 +34,8 @@ Phase 0 + Foundations 1–5 — COMPLETE / LOCKED
 App Shell + Python Runtime + Mission Pipeline — COMPLETE / LOCKED
 Phase A — First Real Playable Mission — COMPLETE / LOCKED
 Phase B — Persistent Learning Loop — COMPLETE / LOCKED
-Phase C — Reward & Meta-Game Foundation + Robot Workshop v1 — CURRENT
-Phase D — Complete NumPy Vertical Slice VS-01..VS-07
+Phase C — Reward & Meta-Game Foundation + Robot Workshop v1 — COMPLETE / LOCKED
+Phase D — Complete NumPy Vertical Slice VS-01..VS-07 — CURRENT
 Playtest / polish
 Then expand curriculum and optional meta-game systems
 ```
@@ -553,7 +553,7 @@ For each activity:
 - configure/generate mission instance where applicable;
 - add grader config;
 - add H1–H4 hints where allowed;
-- map semantic result to visualization;
+- keep generated learner data and hidden grading data separated;
 - add focused content tests.
 
 Vertical-slice technical acceptance:
@@ -566,7 +566,7 @@ Vertical-slice technical acceptance:
 - grader works;
 - progress persists;
 - Retry Variant changes the task;
-- world reaction matches code output.
+- all seven missions generate reproducibly and grade the intended learner outputs.
 
 Learning acceptance:
 
@@ -606,7 +606,7 @@ Identify:
 
 - unclear objectives;
 - feedback that gives away answers;
-- weak visualization links;
+- weak task-to-feedback links;
 - generators that produce trivial variants;
 - persistence/progression confusion.
 

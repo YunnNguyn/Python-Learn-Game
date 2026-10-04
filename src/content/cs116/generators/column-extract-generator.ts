@@ -139,6 +139,8 @@ export const columnExtractGenerator: MissionGenerator = {
       learner: {
         objective:
           "Extract the requested threat-channel column from the telemetry matrix and inspect the extracted data.",
+        context:
+          "`targetColumnIndex` là chỉ số cột cần lấy. Kết quả phải là một NumPy ndarray 1 chiều chứa toàn bộ cột đó.",
         data: {
           matrix,
           targetColumnIndex,
@@ -151,7 +153,11 @@ export const columnExtractGenerator: MissionGenerator = {
         },
       },
       grading: {
-        data: { targetColumnIndex },
+        data: {
+          targetColumnIndex,
+          expectedValues: matrix.map((row) => row[targetColumnIndex]!),
+          expectedShape: [rows],
+        },
       },
       world: {
         initialState: {

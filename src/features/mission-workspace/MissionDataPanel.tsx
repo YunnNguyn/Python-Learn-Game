@@ -1,5 +1,7 @@
 import type { JsonObject, JsonValue } from "../../core/domain";
 
+import { MissionValuePreview } from "./MissionValuePreview";
+
 export type MissionPreviewData = JsonValue;
 
 export interface MissionDataPanelProps {
@@ -20,15 +22,13 @@ export function MissionDataPanel({ data }: MissionDataPanelProps) {
         <div className="mission-data-list">
           {entries.map(([name, value]) => (
             <section className="mission-data-entry" key={name}>
-              <h3 className="mission-data-entry__name">
-                <code className="mission-inline-code">{name}</code>
-              </h3>
-              <pre className="mission-data-preview">{formatJson(value)}</pre>
+              <h3 className="mission-data-entry__name">{name}</h3>
+              <MissionValuePreview className="mission-data-preview" value={value} />
             </section>
           ))}
         </div>
       ) : (
-        <pre className="mission-data-preview">{formatJson(data)}</pre>
+        <MissionValuePreview className="mission-data-preview" value={data} />
       )}
     </section>
   );
@@ -44,8 +44,4 @@ function getTopLevelEntries(data: MissionPreviewData): readonly [string, JsonVal
 
 function isJsonObject(value: MissionPreviewData): value is JsonObject {
   return value !== null && !Array.isArray(value) && typeof value === "object";
-}
-
-function formatJson(value: JsonValue): string {
-  return JSON.stringify(value, null, 2);
 }

@@ -1501,3 +1501,269 @@ a {
     width: 100%;
   }
 }
+
+/* Phase D UX refresh — tabbed mission workspace, lesson guide, richer data previews */
+.mission-tab-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.mission-tab-button {
+  min-height: 2.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.7rem;
+  background: var(--color-surface-1);
+  color: var(--color-text-soft);
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.65rem 0.95rem;
+}
+
+.mission-tab-button:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.mission-tab-button--active {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-surface);
+  color: var(--color-accent-strong);
+}
+
+.mission-workspace__main--practice,
+.mission-workspace__main--brief {
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 0;
+}
+
+.mission-lesson-panel {
+  margin-top: 0.25rem;
+}
+
+.mission-lesson-panel__library {
+  margin-top: 1.1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.8rem;
+  background: var(--color-surface-1);
+  padding: 1rem;
+}
+
+.mission-method-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.8rem;
+}
+
+.mission-lesson-section + .mission-lesson-section {
+  margin-top: 1.25rem;
+}
+
+.mission-lesson-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.85rem;
+}
+
+.mission-lesson-card {
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: var(--color-surface-1);
+  padding: 0.9rem 1rem;
+}
+
+.mission-lesson-card--review {
+  background: rgba(19, 40, 62, 0.45);
+}
+
+.mission-lesson-card h4 {
+  margin: 0 0 0.45rem;
+  color: var(--color-text);
+  font-size: 0.98rem;
+}
+
+.mission-lesson-card p {
+  margin: 0;
+}
+
+.mission-code-sample {
+  margin: 0.8rem 0 0;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 0.65rem;
+  background: var(--color-editor);
+  color: #d4d4d4;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  padding: 0.75rem 0.85rem;
+}
+
+.mission-bullet-list {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.mission-bullet-list li + li {
+  margin-top: 0.45rem;
+}
+
+.mission-data-entry__name {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 0.55rem;
+  border-radius: 0.55rem;
+  background: var(--color-accent-surface);
+  color: var(--color-accent-strong);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0.3rem 0.55rem;
+  text-transform: uppercase;
+}
+
+.mission-value-preview,
+.mission-data-preview,
+.mission-result-panel__content {
+  max-width: 100%;
+  margin: 0;
+  overflow: auto;
+  border-radius: 0.65rem;
+  background: var(--color-surface-3);
+  color: var(--color-text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  padding: 0.9rem;
+  white-space: pre;
+}
+
+.mission-token--key {
+  color: #79b8ff;
+}
+
+.mission-token--string {
+  color: #9ecbff;
+}
+
+.mission-token--number {
+  color: #f2cc60;
+}
+
+.mission-token--boolean {
+  color: #ffab70;
+}
+
+.mission-token--null {
+  color: #c792ea;
+}
+
+.mission-error-block {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.mission-error-summary {
+  border: 1px solid var(--color-danger-border);
+  border-radius: 0.7rem;
+  background: var(--color-danger-surface);
+  padding: 0.85rem 0.95rem;
+}
+
+.mission-error-summary__title {
+  margin: 0 !important;
+  color: var(--color-danger-text) !important;
+  font-weight: 800;
+}
+
+.mission-error-summary__body {
+  margin: 0.45rem 0 0 !important;
+  color: var(--color-text) !important;
+}
+
+.mission-error-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.7rem;
+}
+
+.mission-error-chip {
+  border: 1px solid var(--color-danger-border);
+  border-radius: 999px;
+  background: rgba(255, 123, 114, 0.1);
+  color: var(--color-danger-text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.35rem 0.65rem;
+}
+
+.mission-error-details {
+  border: 1px solid var(--color-border);
+  border-radius: 0.7rem;
+  background: var(--color-surface-1);
+  padding: 0.75rem;
+}
+
+.mission-error-details summary {
+  cursor: pointer;
+  color: var(--color-text-soft);
+  font-weight: 700;
+}
+
+.mission-error-details .mission-result-panel__content {
+  margin-top: 0.75rem;
+}
+
+/* Phase D UX polish 02 — learning-first tab order and compact horizontal data layout */
+.mission-tab-content {
+  margin-top: 0.25rem;
+}
+
+.mission-tab-content--prompt .mission-panel,
+.mission-tab-content--data .mission-panel {
+  width: 100%;
+}
+
+.mission-tab-content--data .mission-data-list {
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+.mission-tab-content--data .mission-data-entry {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 0.8rem;
+  background: var(--color-surface-2);
+  padding: 0.85rem;
+}
+
+.mission-tab-content--data .mission-data-entry__name {
+  margin-bottom: 0.65rem;
+}
+
+.mission-data-entry__name {
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.mission-tab-content--data .mission-data-preview {
+  max-height: 24rem;
+  min-height: 5.25rem;
+}
+
+@media (max-width: 52rem) {
+  .mission-tab-content--data .mission-data-list {
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  }
+}
+
+@media (max-width: 34rem) {
+  .mission-tab-content--data .mission-data-list {
+    grid-template-columns: 1fr;
+  }
+}

@@ -23,6 +23,7 @@ import {
 import {
   columnExtractGenerator,
   CS116_GENERATOR_ID,
+  hostileContactGenerator,
   matrixShapeGenerator,
   registerCs116Generators,
   thresholdFilterGenerator,
@@ -51,6 +52,19 @@ const FILTER_CONFIG = {
   thresholdMin: 4,
   thresholdMaxExclusive: 16,
   comparison: "GT",
+} satisfies JsonObject;
+
+const HOSTILE_CONFIG = {
+  instructionLevel: "TRANSFER",
+  baseEntityCount: 5,
+  distanceMin: 10,
+  distanceMaxExclusive: 100,
+  threatMin: 1,
+  threatMaxExclusive: 11,
+  distanceLimitMin: 35,
+  distanceLimitMaxExclusive: 75,
+  threatThresholdMin: 4,
+  threatThresholdMaxExclusive: 9,
 } satisfies JsonObject;
 
 function generate(
@@ -127,15 +141,16 @@ function templateFor(
 }
 
 describe("CS116 generator registration", () => {
-  it("exports exactly the three locked first-slice generator IDs", () => {
+  it("exports the four generators required by the complete vertical slice", () => {
     expect(Object.values(CS116_GENERATOR_ID)).toEqual([
       "cs116.numpy.matrix-shape",
       "cs116.numpy.column-extract",
       "cs116.numpy.threshold-filter",
+      "cs116.numpy.hostile-contact",
     ]);
   });
 
-  it("registers exactly three implementations in deterministic order", () => {
+  it("registers all four implementations in deterministic order", () => {
     const registry = new GeneratorRegistry();
 
     registerCs116Generators(registry);
@@ -144,6 +159,7 @@ describe("CS116 generator registration", () => {
       CS116_GENERATOR_ID.MATRIX_SHAPE,
       CS116_GENERATOR_ID.COLUMN_EXTRACT,
       CS116_GENERATOR_ID.THRESHOLD_FILTER,
+      CS116_GENERATOR_ID.HOSTILE_CONTACT,
     ]);
     expect(registry.getGenerator(CS116_GENERATOR_ID.MATRIX_SHAPE)).toBe(
       matrixShapeGenerator,
@@ -154,6 +170,9 @@ describe("CS116 generator registration", () => {
     expect(registry.getGenerator(CS116_GENERATOR_ID.THRESHOLD_FILTER)).toBe(
       thresholdFilterGenerator,
     );
+    expect(registry.getGenerator(CS116_GENERATOR_ID.HOSTILE_CONTACT)).toBe(
+      hostileContactGenerator,
+    );
   });
 
   it("relies on normal registry duplicate failure on second registration", () => {
@@ -163,7 +182,7 @@ describe("CS116 generator registration", () => {
     expect(() => registerCs116Generators(registry)).toThrow(
       "Generator ID already registered: cs116.numpy.matrix-shape",
     );
-    expect(registry.getGeneratorIds()).toHaveLength(3);
+    expect(registry.getGeneratorIds()).toHaveLength(4);
   });
 });
 
@@ -335,7 +354,11 @@ describe("Column Extract Generator", () => {
       expect(output.runtime!.setupData!.targetColumnIndex).toBe(
         targetColumnIndex,
       );
-      expect(output.grading!.data).toEqual({ targetColumnIndex });
+      expect(output.grading!.data).toEqual({
+        targetColumnIndex,
+        expectedValues: matrix.map((row) => row[targetColumnIndex]!),
+        expectedShape: [rows],
+      });
       expect(output.world!.initialState).toEqual({
         rowCount: rows,
         columnCount: columns,
@@ -344,21 +367,29 @@ describe("Column Extract Generator", () => {
     }
   });
 
-  it("keeps values in range and leaves result-shape semantics and solution code unlocked", () => {
+  it("keeps values in range, hides expected results from the learner, and leaves solution code unlocked", () => {
     const output = generate(
       columnExtractGenerator,
       COLUMN_CONFIG,
       Difficulty.HARD,
       "column-boundary",
     );
+    const matrix = matrixFrom(output);
+    const targetColumnIndex = output.learner.data!.targetColumnIndex as number;
 
-    for (const value of matrixFrom(output).flat()) {
+    for (const value of matrix.flat()) {
       expect(value).toBeGreaterThanOrEqual(10);
       expect(value).toBeLessThan(80);
     }
     expect(output.learner.starterCode).toBeUndefined();
     expect(output.learner.objective).not.toContain("[:,");
-    expect(output.grading!.data).not.toHaveProperty("expectedShape");
+    expect(output.learner.data).not.toHaveProperty("expectedShape");
+    expect(output.learner.data).not.toHaveProperty("expectedValues");
+    expect(output.grading!.data).toMatchObject({
+      targetColumnIndex,
+      expectedShape: [matrix.length],
+      expectedValues: matrix.map((row) => row[targetColumnIndex]!),
+    });
     expect(output.grading!.data).not.toHaveProperty("resultShape");
   });
 
@@ -548,8 +579,72 @@ describe("Threshold Filter Generator", () => {
   });
 });
 
+describe("Hostile Contact Generator", () => {
+  it("is deterministic and produces hidden combined-condition grading data", () => {
+    const first = generate(
+      hostileContactGenerator,
+      HOSTILE_CONFIG,
+      Difficulty.HARD,
+      "hostile-fixed",
+    );
+    const second = generate(
+      hostileContactGenerator,
+      HOSTILE_CONFIG,
+      Difficulty.HARD,
+      "hostile-fixed",
+    );
+
+    expect(second).toEqual(first);
+    expect(first.learner.data!.entityIds).toHaveLength(9);
+    expect(first.learner.data!.contacts).toHaveLength(9);
+    expect(first.grading!.data!.expectedMask).toHaveLength(9);
+    expect(first.grading!.data!.expectedEntityIds).toBeDefined();
+    expect(first.learner.data).not.toHaveProperty("expectedMask");
+    expect(first.learner.data).not.toHaveProperty("expectedEntityIds");
+  });
+
+  it("computes AND selection from distance and threat columns in entity order", () => {
+    const rng = new SequenceRng([
+      20, 8,
+      60, 9,
+      30, 3,
+      50, 7,
+      70, 2,
+      55,
+      6,
+    ]);
+    const output = hostileContactGenerator.generate({
+      templateVersion: 1,
+      config: {
+        ...HOSTILE_CONFIG,
+        baseEntityCount: 5,
+        distanceLimitMin: 55,
+        distanceLimitMaxExclusive: 56,
+        threatThresholdMin: 6,
+        threatThresholdMaxExclusive: 7,
+      },
+      difficulty: Difficulty.EASY,
+      rng,
+    });
+
+    expect(output.grading!.data!.expectedMask).toEqual([
+      true,
+      false,
+      false,
+      true,
+      false,
+    ]);
+    expect(output.grading!.data!.expectedEntityIds).toEqual([
+      "contact-1",
+      "contact-4",
+    ]);
+    expect(output.grading!.data!.expectedDistanceColumn).toEqual([20, 60, 30, 50, 70]);
+    expect(output.grading!.data!.expectedThreatColumn).toEqual([8, 9, 3, 7, 2]);
+  });
+});
+
 describe("CS116 generator config validation", () => {
-  it("rejects representative invalid configs for all three generators", () => {
+  it("rejects representative invalid configs for all four generators", () => {
     expect(() =>
       generate(matrixShapeGenerator, {
         ...MATRIX_CONFIG,
@@ -568,6 +663,12 @@ describe("CS116 generator config validation", () => {
         comparison: "LT",
       }),
     ).toThrow();
+    expect(() =>
+      generate(hostileContactGenerator, {
+        ...HOSTILE_CONFIG,
+        baseEntityCount: 2,
+      }),
+    ).toThrow();
   });
 
   it("requires templateVersion >= 1 for every production generator", () => {
@@ -575,6 +676,7 @@ describe("CS116 generator config validation", () => {
       [matrixShapeGenerator, MATRIX_CONFIG],
       [columnExtractGenerator, COLUMN_CONFIG],
       [thresholdFilterGenerator, FILTER_CONFIG],
+      [hostileContactGenerator, HOSTILE_CONFIG],
     ] as const;
 
     for (const [generator, config] of cases) {
@@ -627,6 +729,12 @@ describe("Foundation 4 composition", () => {
         CS116_GENERATOR_ID.THRESHOLD_FILTER,
         thresholdFilterGenerator,
         FILTER_CONFIG,
+      ],
+      [
+        "mission.cs116.hostile-contact.fixture",
+        CS116_GENERATOR_ID.HOSTILE_CONTACT,
+        hostileContactGenerator,
+        HOSTILE_CONFIG,
       ],
     ] as const;
 

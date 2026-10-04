@@ -766,6 +766,7 @@ describe("F5.6 registry composition", () => {
       CS116_GENERATOR_ID.MATRIX_SHAPE,
       CS116_GENERATOR_ID.COLUMN_EXTRACT,
       CS116_GENERATOR_ID.THRESHOLD_FILTER,
+      CS116_GENERATOR_ID.HOSTILE_CONTACT,
     ]);
     expect(graderRegistry.getGraderIds()).toEqual([
       CORE_GRADER_ID.DECLARATIVE,

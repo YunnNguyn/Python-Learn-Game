@@ -185,16 +185,18 @@ export const thresholdFilterGenerator: MissionGenerator = {
       parsed.thresholdMaxExclusive,
     );
 
-    const expectedEntityIds = entityIds.filter((_, index) => {
-      const value = values[index]!;
-      return parsed.comparison === "GT"
-        ? value > threshold
-        : value >= threshold;
-    });
+    const expectedMask = values.map((value) =>
+      parsed.comparison === "GT" ? value > threshold : value >= threshold,
+    );
+    const expectedEntityIds = entityIds.filter((_, index) => expectedMask[index]);
 
     return {
       learner: {
         objective: objectiveFor(parsed.instructionLevel),
+        context:
+          parsed.comparison === "GT"
+            ? "Quy tắc `GT`: giữ cảm biến có `value > threshold`. Hãy tạo boolean mask rồi dùng mask để lọc ID."
+            : "Quy tắc `GTE`: giữ cảm biến có `value >= threshold`. Hãy tạo boolean mask rồi dùng mask để lọc ID.",
         data: {
           entityIds,
           values,
@@ -210,7 +212,12 @@ export const thresholdFilterGenerator: MissionGenerator = {
         },
       },
       grading: {
-        data: { expectedEntityIds },
+        data: {
+          expectedMask,
+          expectedMaskShape: [count],
+          expectedEntityIds,
+          expectedResultShape: [expectedEntityIds.length],
+        },
       },
       world: {
         initialState: {

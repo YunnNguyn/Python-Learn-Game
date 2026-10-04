@@ -7,25 +7,23 @@ import {
   type PlayableMissionSession,
 } from "../../app/services";
 import { LearningStage, type AttemptRecord } from "../../core/domain";
+import type { RuntimeExecutionResult } from "../../core/runtime";
 import type { GraderResult } from "../../core/grading";
 import type { RevealedHint } from "../../core/hints";
 import type { MissionAttemptSession } from "../../core/learning";
-import type { RewardGrant } from "../../core/meta-progression";
-import {
-  RUNTIME_EXECUTION_STATUS,
-  type RuntimeExecutionResult,
-} from "../../core/runtime";
 import { MissionControls } from "./MissionControls";
 import { MissionDataPanel } from "./MissionDataPanel";
 import { MissionHintPanel } from "./MissionHintPanel";
+import { MissionLessonPanel } from "./MissionLessonPanel";
 import { MissionObjectivePanel } from "./MissionObjectivePanel";
 import { MissionOutputPanel } from "./MissionOutputPanel";
-import { MissionRewardPanel } from "./MissionRewardPanel";
 import { PythonEditor } from "./PythonEditor";
 import { GradingFeedback } from "./grading-feedback";
+import { getMissionLessonGuide } from "./mission-lesson-guides";
 
 type WorkspaceOperation = "run" | "submit" | "reload" | null;
 type RetryMode = "same" | "variant";
+type MissionWorkspaceTab = "lesson" | "prompt" | "data" | "practice";
 
 export function MissionWorkspacePage() {
   const { missionId } = useParams();
@@ -41,10 +39,10 @@ export function MissionWorkspacePage() {
   const [execution, setExecution] = useState<RuntimeExecutionResult | null>(null);
   const [grading, setGrading] = useState<GraderResult | null>(null);
   const [attempt, setAttempt] = useState<AttemptRecord | null>(null);
-  const [rewardGrants, setRewardGrants] = useState<readonly RewardGrant[]>([]);
   const [revealedHints, setRevealedHints] = useState<readonly RevealedHint[]>([]);
   const [draftSuppressed, setDraftSuppressed] = useState(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<MissionWorkspaceTab>("lesson");
 
   useEffect(() => {
     let cancelled = false;
@@ -55,10 +53,10 @@ export function MissionWorkspacePage() {
     setExecution(null);
     setGrading(null);
     setAttempt(null);
-    setRewardGrants([]);
     setRevealedHints([]);
     setDraftSuppressed(false);
     setDraftNotice(null);
+    setActiveTab("lesson");
 
     if (!routeId) {
       setLoadError("Không xác định được bài thực hành cần mở.");
@@ -122,11 +120,11 @@ export function MissionWorkspacePage() {
     setExecution(null);
     setGrading(null);
     setAttempt(null);
-    setRewardGrants([]);
     setDraftSuppressed(false);
     setDraftNotice(next.resumedDraft ? "Đã khôi phục bản nháp và đề đang làm trước đó." : null);
     setLoading(false);
     setOperation(null);
+    setActiveTab("lesson");
     operationRef.current = null;
   }
 
@@ -136,7 +134,6 @@ export function MissionWorkspacePage() {
     setOperation("run");
     setGrading(null);
     setAttempt(null);
-    setRewardGrants([]);
     try {
       const result = await session.run(code);
       setExecution(result.execution);
@@ -155,9 +152,6 @@ export function MissionWorkspacePage() {
       setExecution(result.execution);
       setGrading(result.grading ?? null);
       setAttempt(result.attemptRecord);
-      setRewardGrants(
-        services.metaProgression.getRewardGrantsForAttempt(result.attemptRecord.id),
-      );
       if (result.attemptRecord.passed) {
         setDraftSuppressed(true);
         setDraftNotice(null);
@@ -258,7 +252,7 @@ export function MissionWorkspacePage() {
   }
 
   const data = session.instance.learner.data ?? {};
-  const executionError = execution ? formatExecutionError(execution) : null;
+  const lessonGuide = getMissionLessonGuide(session.activity.id);
 
   return (
     <section className="page-card mission-workspace" aria-labelledby="mission-title">
@@ -278,112 +272,120 @@ export function MissionWorkspacePage() {
       </p>
       {draftNotice ? <p className="mission-draft-notice">{draftNotice}</p> : null}
 
-      <div className="mission-workspace__main">
-        <div className="mission-workspace__info">
+      <nav className="mission-tab-nav" aria-label="Khu vực nội dung của nhiệm vụ">
+        <button
+          className={tabClassName(activeTab === "lesson")}
+          type="button"
+          onClick={() => setActiveTab("lesson")}
+        >
+          Bài học
+        </button>
+        <button
+          className={tabClassName(activeTab === "prompt")}
+          type="button"
+          onClick={() => setActiveTab("prompt")}
+        >
+          Đề bài
+        </button>
+        <button
+          className={tabClassName(activeTab === "data")}
+          type="button"
+          onClick={() => setActiveTab("data")}
+        >
+          Dữ liệu
+        </button>
+        <button
+          className={tabClassName(activeTab === "practice")}
+          type="button"
+          onClick={() => setActiveTab("practice")}
+        >
+          Làm bài
+        </button>
+      </nav>
+
+      {activeTab === "practice" ? (
+        <>
+          <MissionControls
+            runDisabled={operation !== null}
+            submitDisabled={operation !== null}
+            onRun={() => void handleRun()}
+            onSubmit={() => void handleSubmit()}
+            note={runtimeNote}
+          />
+
+          <div className="mission-workspace__main mission-workspace__main--practice">
+            <section className="mission-editor-region" aria-labelledby="mission-editor-title">
+              <h2 id="mission-editor-title">Trình soạn thảo</h2>
+              <PythonEditor value={code} onChange={setCode} readOnly={operation !== null} />
+            </section>
+          </div>
+
+          {execution ? <MissionOutputPanel execution={execution} /> : null}
+
+          {grading ? (
+            <section className="mission-grading-region" aria-labelledby="mission-grading-title">
+              <h2 id="mission-grading-title">Phản hồi chấm bài</h2>
+              <GradingFeedback result={grading} />
+            </section>
+          ) : null}
+
+          {session.hasHints() ? (
+            <MissionHintPanel
+              hints={revealedHints}
+              remainingCount={session.getRemainingHintCount()}
+              disabled={operation !== null}
+              onReveal={handleRevealHint}
+            />
+          ) : null}
+
+          {attempt ? (
+            <section className="mission-attempt-evidence" aria-live="polite">
+              <div>
+                <strong>Đã lưu lần nộp #{attempt.submissionIndex}.</strong>{" "}
+                {attempt.passed ? "Kết quả đạt yêu cầu." : "Kết quả chưa đạt; bạn có thể sửa và nộp lại."}
+                {attempt.hintsUsed.length > 0
+                  ? ` Gợi ý đã dùng: ${attempt.hintsUsed.join(", ")}.`
+                  : " Không dùng gợi ý."}
+              </div>
+              <div className="mission-retry-actions">
+                <button
+                  className="secondary-action secondary-action--button"
+                  type="button"
+                  onClick={() => void handleRetry("same")}
+                >
+                  Làm lại cùng đề
+                </button>
+                <button className="primary-action" type="button" onClick={() => void handleRetry("variant")}>
+                  Tạo đề mới
+                </button>
+              </div>
+            </section>
+          ) : null}
+        </>
+      ) : null}
+
+      {activeTab === "lesson" ? <MissionLessonPanel guide={lessonGuide} /> : null}
+
+      {activeTab === "prompt" ? (
+        <div className="mission-tab-content mission-tab-content--prompt">
           <MissionObjectivePanel
             objective={session.activity.description ?? session.instance.learner.objective}
             context={session.instance.learner.context}
           />
+        </div>
+      ) : null}
+
+      {activeTab === "data" ? (
+        <div className="mission-tab-content mission-tab-content--data">
           <MissionDataPanel data={data} />
         </div>
-
-        <section className="mission-editor-region" aria-labelledby="mission-editor-title">
-          <h2 id="mission-editor-title">Trình soạn thảo</h2>
-          <PythonEditor value={code} onChange={setCode} readOnly={operation !== null} />
-        </section>
-      </div>
-
-      {session.hasHints() ? (
-        <MissionHintPanel
-          hints={revealedHints}
-          remainingCount={session.getRemainingHintCount()}
-          disabled={operation !== null}
-          onReveal={handleRevealHint}
-        />
-      ) : null}
-
-      <MissionControls
-        runDisabled={operation !== null}
-        submitDisabled={operation !== null}
-        onRun={() => void handleRun()}
-        onSubmit={() => void handleSubmit()}
-        note={runtimeNote}
-      />
-
-      {execution ? (
-        <MissionOutputPanel
-          status={execution.status}
-          stdout={execution.stdout}
-          stderr={execution.stderr}
-          error={executionError}
-        />
-      ) : null}
-
-      {grading ? (
-        <section className="mission-grading-region" aria-labelledby="mission-grading-title">
-          <h2 id="mission-grading-title">Phản hồi chấm bài</h2>
-          <GradingFeedback result={grading} />
-        </section>
-      ) : null}
-
-      {rewardGrants.length > 0 ? <MissionRewardPanel grants={rewardGrants} /> : null}
-
-      {attempt ? (
-        <section className="mission-attempt-evidence" aria-live="polite">
-          <div>
-            <strong>Đã lưu lần nộp #{attempt.submissionIndex}.</strong>{" "}
-            {attempt.passed ? "Kết quả đạt yêu cầu." : "Kết quả chưa đạt; bạn có thể sửa và nộp lại."}
-            {attempt.hintsUsed.length > 0
-              ? ` Gợi ý đã dùng: ${attempt.hintsUsed.join(", ")}.`
-              : " Không dùng gợi ý."}
-          </div>
-          <div className="mission-retry-actions">
-            <button
-              className="secondary-action secondary-action--button"
-              type="button"
-              onClick={() => void handleRetry("same")}
-            >
-              Làm lại cùng đề
-            </button>
-            <button
-              className="primary-action"
-              type="button"
-              onClick={() => void handleRetry("variant")}
-            >
-              Tạo đề mới
-            </button>
-          </div>
-        </section>
       ) : null}
     </section>
   );
 }
 
-function formatExecutionError(execution: RuntimeExecutionResult): string | null {
-  if (execution.status === RUNTIME_EXECUTION_STATUS.PYTHON_EXCEPTION) {
-    const type = execution.exception.type?.trim() || "PythonError";
-    const message = extractTerminalExceptionMessage(execution.exception.message, type);
-    return message ? `${type}: ${message}` : type;
-  }
-  if (execution.status === RUNTIME_EXECUTION_STATUS.RUNTIME_ERROR) {
-    return execution.error.message;
-  }
-  if (execution.status === RUNTIME_EXECUTION_STATUS.TIMEOUT) {
-    return execution.error?.message ?? "Mã chạy quá thời gian cho phép.";
-  }
-  return null;
-}
-
-function extractTerminalExceptionMessage(message: string | undefined, type: string): string | null {
-  if (!message) return null;
-  const lines = message
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const prefix = `${type}:`;
-  const terminal = [...lines].reverse().find((line) => line.startsWith(prefix));
-  if (terminal) return terminal.slice(prefix.length).trim();
-  return lines.length === 1 ? lines[0]! : null;
+function tabClassName(active: boolean): string {
+  return active ? "mission-tab-button mission-tab-button--active" : "mission-tab-button";
 }
 
 function stageLabel(stage: LearningStage): string {

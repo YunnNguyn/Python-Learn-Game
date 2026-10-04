@@ -5,12 +5,12 @@
 ## Current Phase
 
 ```text
-Phase C — Reward & Meta-Game Foundation + Robot Workshop v1
+Phase D — Complete CS116 NumPy Vertical Slice VS-01..VS-07
 ```
 
 Status: **Implementation Complete / Awaiting Local Automated + Manual Validation**
 
-2026-10-03 direction lock: Phase A (first playable mission) and Phase B (persistent learning loop) are complete and locked. The previous Phaser/Sensor Control Room Phase C was abandoned and removed. Current Phase C keeps the learning workspace focused and adds a separate local-first meta-progression loop: immutable AttemptRecord evidence → bounded reward policy → persisted inventory/daily goals → Robot Workshop v1. LearningEngine, grader, mastery, hints, and mission runtime remain independent of robot/meta-game state. No Phaser dependency is part of this phase.
+2026-10-03 direction lock: Phase A (first playable mission), Phase B (persistent learning loop), and the core Phase C reward/meta-progression loop are complete and locked. The abandoned Phaser/Sensor Control Room branch remains removed. Phase D productionizes the complete seven-activity CS116 NumPy slice while preserving the same learning/runtime boundaries: deterministic generated data, reusable declarative grading, H1–H4 hints, durable AttemptRecords, review selection, and optional meta rewards. No Phaser dependency is part of the learning path.
 
 Phase 0 remains complete and locked through the six source-of-truth documents:
 
@@ -26,12 +26,25 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 ## Current Task
 
 ```text
-Phase C — Reward & Meta-Game Foundation + Robot Workshop v1
+Phase D — Complete CS116 NumPy Vertical Slice VS-01..VS-07
 ```
 
 Status: **Implementation Complete / Awaiting Local Automated + Manual Validation**
 
-Phase C acceptance scope:
+Phase D implementation scope:
+
+- three production NumPy lessons containing all seven canonical activities;
+- production MissionTemplates and H1–H4 hint sets for VS-01 through VS-07;
+- VS-02 independent shape/ndim reasoning;
+- VS-03 generated column extraction;
+- VS-04 guided and VS-05 independent boolean filtering;
+- VS-06 transfer mission with column indexing plus element-wise logical AND;
+- VS-07 generated mixed review covering all seven locked concepts;
+- semantic validators prevent empty/universal selection tasks for filtering and transfer missions;
+- every mission keeps learner-visible data separate from hidden grading expectations;
+- no Phaser/per-mission game-world dependency.
+
+Previous Phase C acceptance scope (locked baseline):
 
 - idempotent rewards from immutable AttemptRecords;
 - anti-farming: first-activity/focused bonuses are lifetime-once, daily bonuses are date-bounded;
