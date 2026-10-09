@@ -25,6 +25,7 @@ export const CS116_HINT_SET_ID = {
   W302: "cs116.hints.ml.w302" as HintSetId,
   W303: "cs116.hints.ml.w303" as HintSetId,
   W401: "cs116.hints.data-validation.w401" as HintSetId,
+  W402: "cs116.hints.data-validation.w402" as HintSetId,
 } as const;
 
 export const CS116_VS01_HINT_SET: HintSet = {
@@ -533,6 +534,28 @@ export const CS116_W401_HINT_SET: HintSet = {
   ],
 };
 
+export const CS116_W402_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.W402,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Quy tắc IQR: outlier là giá trị dưới Q1 − 1.5·IQR hoặc trên Q3 + 1.5·IQR. Không giả định dữ liệu phân phối chuẩn.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Series.quantile(0.25) trả về Q1 (percentile 25), quantile(0.75) trả về Q3. IQR = Q3 − Q1.",
+    },
+    {
+      level: HintLevel.H3,
+      text: 'q1 = float(df["salary"].quantile(0.25)); q3 = float(df["salary"].quantile(0.75)); iqr = q3 - q1; lower_bound = q1 - 1.5 * iqr; upper_bound = q3 + 1.5 * iqr.',
+    },
+    {
+      level: HintLevel.H4,
+      text: 'mask = (df["salary"] < lower_bound) | (df["salary"] > upper_bound); outlier_ids = df[mask]["employee_id"].tolist(); clean_count = int((~mask).sum()).',
+    },
+  ],
+};
+
 export const CS116_PRODUCTION_HINT_SETS = [
   CS116_VS01_HINT_SET,
   CS116_VS02_HINT_SET,
@@ -557,6 +580,7 @@ export const CS116_PRODUCTION_HINT_SETS = [
   CS116_W302_HINT_SET,
   CS116_W303_HINT_SET,
   CS116_W401_HINT_SET,
+  CS116_W402_HINT_SET,
 ] as const;
 
 export function registerCs116Hints(registry: HintRegistry): void {

@@ -19,6 +19,7 @@ export const CS116_PRODUCTION_IDS = {
   lessonMlValidation: "python-ml.ml.validation-split",
   lessonMlDiagnostics: "python-ml.ml.diagnostics",
   lessonDataCleaning: "python-ml.data-validation.cleaning",
+  lessonOutliers: "python-ml.data-validation.outliers",
   activityVs01: "cs116.numpy.vs01",
   activityVs02: "cs116.numpy.vs02",
   activityVs03: "cs116.numpy.vs03",
@@ -43,6 +44,7 @@ export const CS116_PRODUCTION_IDS = {
   activityW302: "cs116.ml.w302",
   activityW303: "cs116.ml.w303",
   activityW401: "cs116.data-validation.w401",
+  activityW402: "cs116.data-validation.w402",
   templateVs01: "cs116.numpy.vs01",
   templateVs02: "cs116.numpy.vs02",
   templateVs03: "cs116.numpy.vs03",
@@ -67,4 +69,5 @@ export const CS116_PRODUCTION_IDS = {
   templateW302: "cs116.ml.w302",
   templateW303: "cs116.ml.w303",
   templateW401: "cs116.data-validation.w401",
+  templateW402: "cs116.data-validation.w402",
 } as const;

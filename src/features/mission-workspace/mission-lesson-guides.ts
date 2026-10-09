@@ -677,6 +677,39 @@ const GUIDES: Readonly<Record<string, MissionLessonGuide>> = {
       "Drop_duplicates → final_shape và final_order_ids.",
     ],
   },
+  "cs116.data-validation.w402": {
+    title: "Bài học nhanh cho W4-02",
+    summary:
+      "CS116 Bài 4: tiêu chí IQR 1.5× — outlier là giá trị dưới Q1−1.5·IQR hoặc trên Q3+1.5·IQR. Không giả định phân phối chuẩn, chịu được dữ liệu lệch.",
+    library: "pandas",
+    methods: [
+      "Series.quantile(0.25)",
+      "Series.quantile(0.75)",
+      "boolean indexing: df[(s < lo) | (s > hi)]",
+      "Series.tolist()",
+    ],
+    newTopics: [
+      {
+        label: "Quantile",
+        explanation:
+          "Series.quantile(p) trả về percentile thứ p·100 (p nằm trong [0, 1]). Q1 = quantile(0.25), Q3 = quantile(0.75).",
+        syntax: 'q1 = float(df["salary"].quantile(0.25))',
+      },
+      {
+        label: "Mask boolean + lọc",
+        explanation:
+          "(df[\"col\"] < lo) | (df[\"col\"] > hi) tạo mặt nạ boolean. df[mask] trả về các hàng là outlier; ~mask lật ngược để lấy phần clean.",
+        syntax:
+          'mask = (df["salary"] < lower_bound) | (df["salary"] > upper_bound)',
+      },
+    ],
+    workflow: [
+      "Đọc monthly_salaries.csv.",
+      "Tính Q1, Q3, IQR = Q3 − Q1.",
+      "Tính cận: lower = Q1 − 1.5·IQR, upper = Q3 + 1.5·IQR.",
+      "Lấy outlier_ids (list employee_id) và clean_count (int).",
+    ],
+  },
 };
 
 export function getMissionLessonGuide(activityId: string): MissionLessonGuide | null {
@@ -909,6 +942,19 @@ const QUICK_CHECKS: Readonly<Record<string, MissionQuickCheckDefinition>> = {
     correctOptionIndex: 1,
     explanation:
       "pandas mặc định không sửa inplace: dropna, drop_duplicates, fillna đều trả về DataFrame mới. Muốn sửa gốc phải gán lại hoặc dùng inplace=True (nhưng gán lại rõ ràng hơn).",
+  },
+  "cs116.data-validation.w402": {
+    question:
+      "Vì sao tiêu chí IQR tốt hơn tiêu chí \"ngoài ±2σ của trung bình\" khi dữ liệu lệch mạnh?",
+    options: [
+      "IQR tính nhanh hơn vì chỉ cần sort",
+      "Mean và std bị kéo bởi chính outlier → ngưỡng ±2σ cũng lệch theo, bỏ sót outlier; Q1/Q3 không bị kéo nên ngưỡng vẫn ổn định",
+      "IQR luôn phát hiện nhiều outlier hơn",
+      "Tiêu chí ±2σ chỉ dùng được cho dữ liệu đã chuẩn hóa",
+    ],
+    correctOptionIndex: 1,
+    explanation:
+      "Trung bình và độ lệch chuẩn RẤT nhạy với outlier (chính nó kéo mean & std lên), nên ngưỡng ±2σ bị méo theo và có thể bỏ sót chính các outlier đó. Q1/Q3 là percentile — một vài giá trị cực đoan không làm chúng dịch chuyển đáng kể, nên tiêu chí IQR vững hơn.",
   },
 };
 

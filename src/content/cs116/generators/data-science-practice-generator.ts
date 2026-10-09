@@ -19,6 +19,7 @@ const configSchema = z
       "TRAIN_VAL_TEST_SPLIT",
       "OVERFIT_DIAGNOSIS",
       "DATA_CLEANING",
+      "OUTLIER_IQR",
     ]),
   })
   .strict();
@@ -296,6 +297,27 @@ export const dataSciencePracticeGenerator: MissionGenerator = {
                 "A009",
                 "A010",
               ],
+            } as JsonObject,
+          },
+        };
+
+      case "OUTLIER_IQR":
+        return {
+          learner: {
+            objective:
+              "Dùng tiêu chí IQR để phát hiện outlier: tính Q1, Q3, IQR = Q3 − Q1 và cận [Q1 − 1.5·IQR, Q3 + 1.5·IQR], rồi liệt kê các nhân viên có lương lệch khỏi khoảng này.",
+            context:
+              "Đọc data/monthly_salaries.csv (employee_id, salary — đơn vị triệu đồng). Dùng Series.quantile(0.25) và quantile(0.75) để lấy Q1, Q3. Lưu q1, q3, iqr, lower_bound, upper_bound (tất cả float), outlier_ids (list employee_id theo thứ tự xuất hiện) và clean_count (số nhân viên còn lại sau khi lọc outlier).",
+          },
+          grading: {
+            data: {
+              expectedQ1: 13.5,
+              expectedQ3: 16.5,
+              expectedIqr: 3.0,
+              expectedLowerBound: 9.0,
+              expectedUpperBound: 21.0,
+              expectedOutlierIds: ["E13", "E14", "E15"],
+              expectedCleanCount: 12,
             } as JsonObject,
           },
         };

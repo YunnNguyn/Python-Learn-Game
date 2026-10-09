@@ -64,7 +64,10 @@ export const CS116_PRODUCTION_WORLD_DATA_VALIDATION: World = WorldSchema.parse({
   title: "Data Validation & EDA — làm sạch và nhìn dữ liệu",
   description:
     "CS116 (Bài 4): kiểm tra shape/dtype, phát hiện và loại bỏ missing values + duplicates, nhận diện outlier và nhìn phân phối trước khi fit mô hình.",
-  lessonIds: [CS116_PRODUCTION_IDS.lessonDataCleaning],
+  lessonIds: [
+    CS116_PRODUCTION_IDS.lessonDataCleaning,
+    CS116_PRODUCTION_IDS.lessonOutliers,
+  ],
 });
 
 export const CS116_PRODUCTION_LESSON_DATA_CLEANING: Lesson = LessonSchema.parse({
@@ -154,4 +157,105 @@ export const CS116_PRODUCTION_TEMPLATE_W401: MissionTemplate =
     },
     starterCode:
       'import pandas as pd\n\ndf = pd.read_csv("data/raw_sales.csv")\n\n# Bước 1: ghi lại kích thước ban đầu.\nraw_shape = \n\n# Bước 2: đếm missing values theo cột (dùng isna().sum()).\nmissing_price = \nmissing_quantity = \n\n# Bước 3: loại bỏ hàng có missing values.\ndf_no_na = \nafter_dropna_shape = \n\n# Bước 4: loại bỏ hàng trùng.\nclean = \nfinal_shape = \nfinal_order_ids = \n',
+  });
+
+const [, , , statsOutlierIqr] = CS116_DATA_VALIDATION_CONCEPTS;
+
+// 15 nhân viên: 12 dòng cụm quanh 12-18M, 3 dòng outlier (3, 50, 80M). Với
+// Q1=13.5, Q3=16.5, IQR=3 → cận [9, 21], đúng 3 outlier E13/E14/E15.
+const MONTHLY_SALARIES_DATASET = {
+  filename: "monthly_salaries.csv",
+  content:
+    "employee_id,salary\nE01,12\nE02,13\nE03,14\nE04,15\nE05,16\nE06,17\nE07,18\nE08,15\nE09,14\nE10,16\nE11,15\nE12,13\nE13,3\nE14,50\nE15,80\n",
+  description:
+    "15 bảng lương (triệu đồng) với 3 outlier rõ rệt — dùng để luyện tiêu chí IQR.",
+} as const;
+
+export const CS116_PRODUCTION_LESSON_OUTLIERS: Lesson = LessonSchema.parse({
+  id: CS116_PRODUCTION_IDS.lessonOutliers,
+  title: "Bài 15 — Phát hiện outlier với IQR",
+  description:
+    "CS116 Bài 4: dùng tiêu chí IQR (1.5×) để tách outlier khỏi phần dữ liệu bình thường trước khi fit mô hình hoặc tính thống kê tổng hợp.",
+  conceptIds: [statsOutlierIqr!.id],
+  activityIds: [CS116_PRODUCTION_IDS.activityW402],
+});
+
+export const CS116_PRODUCTION_ACTIVITY_W402 = codeActivity({
+  id: CS116_PRODUCTION_IDS.activityW402,
+  title: "W4-02 — Lọc outlier bảng lương",
+  description:
+    "Dùng Q1/Q3 và quy tắc 1.5·IQR để liệt kê các nhân viên có lương nằm ngoài khoảng bình thường.",
+  conceptIds: [statsOutlierIqr!.id],
+  stage: LearningStage.INDEPENDENT,
+  missionTemplateId: CS116_PRODUCTION_IDS.templateW402,
+});
+
+export const CS116_PRODUCTION_TEMPLATE_W402: MissionTemplate =
+  MissionTemplateSchema.parse({
+    id: CS116_PRODUCTION_IDS.templateW402,
+    version: 1,
+    conceptIds: [statsOutlierIqr!.id],
+    allowedStages: [LearningStage.INDEPENDENT],
+    generator: {
+      id: CS116_GENERATOR_ID.DATA_SCIENCE_PRACTICE,
+      config: { mode: "OUTLIER_IQR" },
+    },
+    grader: {
+      id: CORE_GRADER_ID.DECLARATIVE,
+      config: {
+        checks: [
+          { type: DeclarativeGraderCheckType.NO_EXCEPTION },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "q1",
+            expected: gradingDataRef("expectedQ1"),
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "q3",
+            expected: gradingDataRef("expectedQ3"),
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "iqr",
+            expected: gradingDataRef("expectedIqr"),
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "lower_bound",
+            expected: gradingDataRef("expectedLowerBound"),
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "upper_bound",
+            expected: gradingDataRef("expectedUpperBound"),
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "outlier_ids",
+            expected: gradingDataRef("expectedOutlierIds"),
+          },
+          {
+            type: DeclarativeGraderCheckType.PYTHON_TYPE,
+            variable: "clean_count",
+            expected: "int",
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "clean_count",
+            expected: gradingDataRef("expectedCleanCount"),
+          },
+        ],
+      },
+    },
+    hintSetId: CS116_HINT_SET_ID.W402,
+    runtime: {
+      id: CORE_RUNTIME_ID.PYODIDE,
+      config: {
+        packages: ["pandas"],
+        workspace: { datasets: [MONTHLY_SALARIES_DATASET] },
+      },
+    },
+    starterCode:
+      'import pandas as pd\n\ndf = pd.read_csv("data/monthly_salaries.csv")\n\n# Bước 1: Q1 (percentile 25) và Q3 (percentile 75).\nq1 = \nq3 = \n\n# Bước 2: IQR và cận trên/dưới (1.5·IQR).\niqr = \nlower_bound = \nupper_bound = \n\n# Bước 3: lọc các hàng là outlier (lương ngoài [lower_bound, upper_bound]).\noutlier_ids = \nclean_count = \n',
   });

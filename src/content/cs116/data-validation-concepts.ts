@@ -40,4 +40,14 @@ export const CS116_DATA_VALIDATION_CONCEPTS: readonly Concept[] = [
     prerequisites: ["pandas.dataframe"],
     tags: ["pandas", "data-cleaning", "cs116.bai4"],
   }),
+  ConceptSchema.parse({
+    id: "stats.outlier_iqr",
+    title: "Phát hiện outlier bằng IQR",
+    description:
+      "CS116 Bài 4: outlier là giá trị nằm ngoài [Q1 − 1.5·IQR, Q3 + 1.5·IQR] với IQR = Q3 − Q1. Tiêu chí này không giả định phân phối chuẩn, hoạt động tốt trên dữ liệu lệch.",
+    classification: KnowledgeClassification.MUST_UNDERSTAND,
+    source: ConceptSource.CS116,
+    prerequisites: ["pandas.dataframe"],
+    tags: ["statistics", "data-validation", "cs116.bai4"],
+  }),
 ];
