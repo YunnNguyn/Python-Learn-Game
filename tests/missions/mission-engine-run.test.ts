@@ -182,6 +182,29 @@ describe("MissionEngine MP.1 Run pipeline", () => {
     ]);
   });
 
+  it("preserves workspace metadata returned by runtime preparation", async () => {
+    const runtime = new FakeRuntimeManager();
+    runtime.prepareResult = {
+      ok: true,
+      workspace: {
+        datasets: [
+          {
+            filename: "telemetry.csv",
+            relativePath: "data/telemetry.csv",
+            bytes: 42,
+          },
+        ],
+        artifacts: [],
+      },
+    };
+    const engine = new MissionEngine(runtime, createGraderRegistry());
+    const template = createTemplate();
+
+    await expect(
+      engine.loadMission(template, createInstance(template)),
+    ).resolves.toEqual(runtime.prepareResult);
+  });
+
   it("does not leak learner, grading, or world payloads into runtime preparation", async () => {
     const runtime = new FakeRuntimeManager();
     const engine = new MissionEngine(runtime, createGraderRegistry());

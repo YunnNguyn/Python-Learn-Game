@@ -5,3 +5,4 @@ dist/
 .vite-cache/
 
 local-runtime/.workspaces/
+.codegraph/

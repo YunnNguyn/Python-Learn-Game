@@ -22,6 +22,9 @@ import {
 } from "../../../../src/core/random";
 import {
   columnExtractGenerator,
+  csvInspectionGenerator,
+  pandasPracticeGenerator,
+  dataSciencePracticeGenerator,
   CS116_GENERATOR_ID,
   hostileContactGenerator,
   matrixShapeGenerator,
@@ -141,16 +144,19 @@ function templateFor(
 }
 
 describe("CS116 generator registration", () => {
-  it("exports the four generators required by the complete vertical slice", () => {
+  it("exports the locked NumPy generators plus the pandas generators", () => {
     expect(Object.values(CS116_GENERATOR_ID)).toEqual([
       "cs116.numpy.matrix-shape",
       "cs116.numpy.column-extract",
       "cs116.numpy.threshold-filter",
       "cs116.numpy.hostile-contact",
+      "cs116.pandas.csv-inspection",
+      "cs116.pandas.practice",
+      "cs116.data-science.practice",
     ]);
   });
 
-  it("registers all four implementations in deterministic order", () => {
+  it("registers all implementations in deterministic order", () => {
     const registry = new GeneratorRegistry();
 
     registerCs116Generators(registry);
@@ -160,6 +166,9 @@ describe("CS116 generator registration", () => {
       CS116_GENERATOR_ID.COLUMN_EXTRACT,
       CS116_GENERATOR_ID.THRESHOLD_FILTER,
       CS116_GENERATOR_ID.HOSTILE_CONTACT,
+      CS116_GENERATOR_ID.CSV_INSPECTION,
+      CS116_GENERATOR_ID.PANDAS_PRACTICE,
+      CS116_GENERATOR_ID.DATA_SCIENCE_PRACTICE,
     ]);
     expect(registry.getGenerator(CS116_GENERATOR_ID.MATRIX_SHAPE)).toBe(
       matrixShapeGenerator,
@@ -173,6 +182,15 @@ describe("CS116 generator registration", () => {
     expect(registry.getGenerator(CS116_GENERATOR_ID.HOSTILE_CONTACT)).toBe(
       hostileContactGenerator,
     );
+    expect(registry.getGenerator(CS116_GENERATOR_ID.CSV_INSPECTION)).toBe(
+      csvInspectionGenerator,
+    );
+    expect(registry.getGenerator(CS116_GENERATOR_ID.PANDAS_PRACTICE)).toBe(
+      pandasPracticeGenerator,
+    );
+    expect(registry.getGenerator(CS116_GENERATOR_ID.DATA_SCIENCE_PRACTICE)).toBe(
+      dataSciencePracticeGenerator,
+    );
   });
 
   it("relies on normal registry duplicate failure on second registration", () => {
@@ -182,7 +200,144 @@ describe("CS116 generator registration", () => {
     expect(() => registerCs116Generators(registry)).toThrow(
       "Generator ID already registered: cs116.numpy.matrix-shape",
     );
-    expect(registry.getGeneratorIds()).toHaveLength(4);
+    expect(registry.getGeneratorIds()).toHaveLength(7);
+  });
+});
+
+describe("CSV Inspection Generator", () => {
+  it("is deterministic and keeps expected CSV structure in grading data", () => {
+    const first = generate(csvInspectionGenerator, {}, Difficulty.EASY, "csv-a");
+    const second = generate(csvInspectionGenerator, {}, Difficulty.HARD, "csv-b");
+
+    expect(second).toEqual(first);
+    expect(first.grading?.data).toEqual({
+      expectedShape: [3, 3],
+      expectedColumns: ["contact_id", "distance", "threat"],
+    });
+    expect(first.learner.data).toBeUndefined();
+  });
+});
+
+describe("pandas Practice Generator", () => {
+  it("keeps column-selection expectations hidden from learner data", () => {
+    const first = generate(
+      pandasPracticeGenerator,
+      { mode: "SELECT_COLUMN" },
+      Difficulty.EASY,
+      "pandas-select-a",
+    );
+    const second = generate(
+      pandasPracticeGenerator,
+      { mode: "SELECT_COLUMN" },
+      Difficulty.HARD,
+      "pandas-select-b",
+    );
+
+    expect(second).toEqual(first);
+    expect(first.learner.data).toBeUndefined();
+    expect(first.grading?.data).toEqual({
+      expectedSeriesValues: [38, 77, 51, 29, 60],
+      expectedSeriesNdim: 1,
+      expectedFrameShape: [5, 1],
+    });
+  });
+
+  it("publishes only the filtering threshold and hides expected answers", () => {
+    const output = generate(
+      pandasPracticeGenerator,
+      { mode: "FILTER_ROWS" },
+      Difficulty.NORMAL,
+      "pandas-filter",
+    );
+
+    expect(output.learner.data).toEqual({ threshold: 5 });
+    expect(output.learner.data).not.toHaveProperty("expectedFilteredIds");
+    // The starter code relies on `threshold` existing as a Python global, so
+    // it must be injected through runtime setup data (learner.data is display-only).
+    expect(output.runtime?.setupData).toEqual({ threshold: 5 });
+    expect(output.runtime?.setupData).not.toHaveProperty("expectedFilteredIds");
+    expect(output.grading?.data).toEqual({
+      expectedFilteredIds: ["contact-2", "contact-3", "contact-4"],
+      expectedFilteredCount: 3,
+    });
+  });
+
+  it("rejects unsupported pandas practice modes", () => {
+    expect(() =>
+      generate(pandasPracticeGenerator, { mode: "UNKNOWN" }),
+    ).toThrow();
+  });
+});
+
+describe("Data Science Practice Generator", () => {
+  it("keeps deterministic hidden expectations for all F4 modes", () => {
+    const modes = [
+      "MISSING_VALUES",
+      "GROUPBY_AGGREGATE",
+      "PIVOT_TABLE",
+      "MATPLOTLIB_LINE_PLOT",
+      "MATPLOTLIB_SCATTER_PLOT",
+      "PANDAS_MERGE",
+      "PIL_IMAGE_ARRAY",
+      "PIL_CROP_RESIZE",
+    ] as const;
+
+    for (const mode of modes) {
+      const first = generate(
+        dataSciencePracticeGenerator,
+        { mode },
+        Difficulty.EASY,
+        "data-science-a",
+      );
+      const second = generate(
+        dataSciencePracticeGenerator,
+        { mode },
+        Difficulty.HARD,
+        "data-science-b",
+      );
+
+      expect(second).toEqual(first);
+      expect(first.grading?.data).toBeDefined();
+      expect(first.learner.data).toBeUndefined();
+    }
+  });
+
+  it("publishes the intended hidden targets for representative pandas and plot tasks", () => {
+    expect(
+      generate(dataSciencePracticeGenerator, {
+        mode: "MISSING_VALUES",
+      }).grading?.data,
+    ).toEqual({
+      expectedMissingBefore: 2,
+      expectedMissingAfter: 0,
+      expectedFilledValues: [10, 20, 20, 20, 60],
+    });
+
+    expect(
+      generate(dataSciencePracticeGenerator, {
+        mode: "GROUPBY_AGGREGATE",
+      }).grading?.data,
+    ).toEqual({
+      expectedMeanScores: { A: 110, B: 70 },
+      expectedGroupCount: 2,
+    });
+
+    expect(
+      generate(dataSciencePracticeGenerator, {
+        mode: "MATPLOTLIB_LINE_PLOT",
+      }).grading?.data,
+    ).toMatchObject({
+      expectedLineCount: 1,
+      expectedArtifactExists: true,
+      expectedPointCount: 5,
+      expectedFinalLoss: 0.31,
+    });
+  });
+
+  it("rejects unsupported data science modes", () => {
+    expect(() =>
+      generate(dataSciencePracticeGenerator, { mode: "UNKNOWN" }),
+    ).toThrow();
   });
 });
 
@@ -644,7 +799,7 @@ describe("Hostile Contact Generator", () => {
 });
 
 describe("CS116 generator config validation", () => {
-  it("rejects representative invalid configs for all four generators", () => {
+  it("rejects representative invalid configs for every production generator", () => {
     expect(() =>
       generate(matrixShapeGenerator, {
         ...MATRIX_CONFIG,
@@ -669,6 +824,15 @@ describe("CS116 generator config validation", () => {
         baseEntityCount: 2,
       }),
     ).toThrow();
+    expect(() =>
+      generate(csvInspectionGenerator, { unsupported: true }),
+    ).toThrow();
+    expect(() =>
+      generate(pandasPracticeGenerator, { mode: "UNKNOWN" }),
+    ).toThrow();
+    expect(() =>
+      generate(dataSciencePracticeGenerator, { mode: "UNKNOWN" }),
+    ).toThrow();
   });
 
   it("requires templateVersion >= 1 for every production generator", () => {
@@ -677,6 +841,9 @@ describe("CS116 generator config validation", () => {
       [columnExtractGenerator, COLUMN_CONFIG],
       [thresholdFilterGenerator, FILTER_CONFIG],
       [hostileContactGenerator, HOSTILE_CONFIG],
+      [csvInspectionGenerator, {}],
+      [pandasPracticeGenerator, { mode: "SELECT_COLUMN" }],
+      [dataSciencePracticeGenerator, { mode: "MISSING_VALUES" }],
     ] as const;
 
     for (const [generator, config] of cases) {

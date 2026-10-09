@@ -11,6 +11,7 @@ import {
   LearningActivityType,
   type HintLevel,
   type LearningActivityId,
+  type MissionTemplate,
 } from "../../core/domain";
 import { GeneratorRegistry } from "../../core/generators";
 import { GraderRegistry, registerCoreGraders } from "../../core/grading";
@@ -25,7 +26,11 @@ import {
   createBrowserLearningPersistence,
   type LearningPersistence,
 } from "../../core/persistence";
-import { CORE_RUNTIME_ID, type RuntimeSystemError } from "../../core/runtime";
+import {
+  CORE_RUNTIME_ID,
+  type RuntimeSystemError,
+  type RuntimeWorkspaceInfo,
+} from "../../core/runtime";
 import { createLocalPythonRuntimeManager } from "../../core/runtime/local-python";
 import { createPyodideRuntimeManager } from "../../core/runtime/pyodide";
 import { getActivityAccess } from "../learning-path";
@@ -35,6 +40,7 @@ export interface PlayableMissionSession {
   readonly initialCode: string;
   readonly variantIndex: number;
   readonly resumedDraft: boolean;
+  readonly initialWorkspace?: RuntimeWorkspaceInfo;
 }
 
 export interface CreateMissionSessionOptions {
@@ -199,7 +205,7 @@ export function createApplicationServices(): ApplicationServices {
         );
       }
 
-      const runtime = createRuntimeManager(template.runtime.id);
+      const runtime = createRuntimeManager(template);
       if (runtime === null) {
         return failure(
           "RUNTIME_UNSUPPORTED",
@@ -232,6 +238,9 @@ export function createApplicationServices(): ApplicationServices {
           initialCode: resumedDraft ? draft.code : starterCode,
           variantIndex,
           resumedDraft,
+          ...(loaded.workspace !== undefined
+            ? { initialWorkspace: loaded.workspace }
+            : {}),
         },
       };
     },
@@ -264,11 +273,39 @@ export function createApplicationServices(): ApplicationServices {
   };
 }
 
-function createRuntimeManager(runtimeId: string) {
-  if (runtimeId === CORE_RUNTIME_ID.PYODIDE) {
-    return createPyodideRuntimeManager();
+// Heavy Pyodide packages (pandas, Matplotlib, scikit-learn, OpenCV) can take
+// several seconds to import the first time in a fresh namespace, especially on
+// modest machines, so Data/ML missions need a much longer execution deadline
+// than the light NumPy exercises. We widen the timeout only for missions that
+// actually request those packages (or stage a dataset workspace); plain NumPy
+// missions keep a snappy deadline so infinite loops recover quickly.
+const PYODIDE_LIGHT_TIMEOUT_MS = 15_000;
+const PYODIDE_HEAVY_TIMEOUT_MS = 60_000;
+
+function pyodideExecutionTimeoutMs(template: MissionTemplate): number {
+  const config = template.runtime.config;
+  if (config === undefined) {
+    return PYODIDE_LIGHT_TIMEOUT_MS;
   }
-  if (runtimeId === CORE_RUNTIME_ID.LOCAL_PYTHON) {
+  const packages = Array.isArray(config.packages)
+    ? (config.packages as unknown[])
+    : [];
+  const hasHeavyPackage = packages.some(
+    (name) => typeof name === "string" && name.toLowerCase() !== "numpy",
+  );
+  const hasWorkspace = config.workspace !== undefined;
+  return hasHeavyPackage || hasWorkspace
+    ? PYODIDE_HEAVY_TIMEOUT_MS
+    : PYODIDE_LIGHT_TIMEOUT_MS;
+}
+
+function createRuntimeManager(template: MissionTemplate) {
+  if (template.runtime.id === CORE_RUNTIME_ID.PYODIDE) {
+    return createPyodideRuntimeManager({
+      executionTimeoutMs: pyodideExecutionTimeoutMs(template),
+    });
+  }
+  if (template.runtime.id === CORE_RUNTIME_ID.LOCAL_PYTHON) {
     return createLocalPythonRuntimeManager();
   }
   return null;

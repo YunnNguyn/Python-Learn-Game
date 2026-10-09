@@ -38,7 +38,7 @@ function progressReader(
 }
 
 describe("linear learning path", () => {
-  it("keeps the NumPy slice followed by the local-runtime bridge in curriculum order", () => {
+  it("keeps NumPy followed by the Local Python data-science path in curriculum order", () => {
     const content = createContent();
 
     expect(getOrderedActivityIds(content)).toEqual([
@@ -50,7 +50,136 @@ describe("linear learning path", () => {
       CS116_PRODUCTION_IDS.activityVs06,
       CS116_PRODUCTION_IDS.activityVs07,
       CS116_PRODUCTION_IDS.activityLc01,
+      CS116_PRODUCTION_IDS.activityLc02,
+      CS116_PRODUCTION_IDS.activityLc03,
+      CS116_PRODUCTION_IDS.activityLc04,
+      CS116_PRODUCTION_IDS.activityLc05,
+      CS116_PRODUCTION_IDS.activityLc06,
+      CS116_PRODUCTION_IDS.activityLc07,
+      CS116_PRODUCTION_IDS.activityLc08,
+      CS116_PRODUCTION_IDS.activityLc09,
+      CS116_PRODUCTION_IDS.activityLc10,
+      CS116_PRODUCTION_IDS.activityLc11,
+      CS116_PRODUCTION_IDS.activityLc12,
+      CS116_PRODUCTION_IDS.activityLc13,
     ]);
+  });
+
+  it("unlocks LC-02 only after LC-01 is completed", () => {
+    const content = createContent();
+    const ordered = getOrderedActivityIds(content);
+    const completedBeforeLc01 = Object.fromEntries(
+      ordered.slice(0, 7).map((activityId) => [
+        String(activityId),
+        { attemptCount: 1, successfulAttemptCount: 1, completed: true },
+      ]),
+    );
+    expect(
+      getActivityAccess(
+        content,
+        progressReader(completedBeforeLc01),
+        CS116_PRODUCTION_IDS.activityLc02 as LearningActivityId,
+      ).unlocked,
+    ).toBe(false);
+
+    const completedThroughLc01 = {
+      ...completedBeforeLc01,
+      [CS116_PRODUCTION_IDS.activityLc01]: {
+        attemptCount: 1,
+        successfulAttemptCount: 1,
+        completed: true,
+      },
+    };
+    expect(
+      getActivityAccess(
+        content,
+        progressReader(completedThroughLc01),
+        CS116_PRODUCTION_IDS.activityLc02 as LearningActivityId,
+      ).unlocked,
+    ).toBe(true);
+  });
+
+  it("unlocks LC-03 after LC-02 and LC-04 after LC-03", () => {
+    const content = createContent();
+    const ordered = getOrderedActivityIds(content);
+    const completeThrough = (activityId: string) => {
+      const index = ordered.findIndex((candidate) => String(candidate) === activityId);
+      return progressReader(
+        Object.fromEntries(
+          ordered.slice(0, index + 1).map((id) => [
+            String(id),
+            { attemptCount: 1, successfulAttemptCount: 1, completed: true },
+          ]),
+        ),
+      );
+    };
+
+    expect(
+      getActivityAccess(
+        content,
+        completeThrough(CS116_PRODUCTION_IDS.activityLc02),
+        CS116_PRODUCTION_IDS.activityLc03 as LearningActivityId,
+      ).unlocked,
+    ).toBe(true);
+    expect(
+      getActivityAccess(
+        content,
+        completeThrough(CS116_PRODUCTION_IDS.activityLc02),
+        CS116_PRODUCTION_IDS.activityLc04 as LearningActivityId,
+      ).unlocked,
+    ).toBe(false);
+    expect(
+      getActivityAccess(
+        content,
+        completeThrough(CS116_PRODUCTION_IDS.activityLc03),
+        CS116_PRODUCTION_IDS.activityLc04 as LearningActivityId,
+      ).unlocked,
+    ).toBe(true);
+  });
+
+  it("keeps the later F4 pandas → Matplotlib → merge → image sequence linear", () => {
+    const content = createContent();
+    const ordered = getOrderedActivityIds(content);
+    const progressThrough = (activityId: string) => {
+      const index = ordered.findIndex((candidate) => String(candidate) === activityId);
+      return progressReader(
+        Object.fromEntries(
+          ordered.slice(0, index + 1).map((id) => [
+            String(id),
+            { attemptCount: 1, successfulAttemptCount: 1, completed: true },
+          ]),
+        ),
+      );
+    };
+
+    expect(
+      getActivityAccess(
+        content,
+        progressThrough(CS116_PRODUCTION_IDS.activityLc09),
+        CS116_PRODUCTION_IDS.activityLc10 as LearningActivityId,
+      ).unlocked,
+    ).toBe(true);
+    expect(
+      getActivityAccess(
+        content,
+        progressThrough(CS116_PRODUCTION_IDS.activityLc09),
+        CS116_PRODUCTION_IDS.activityLc11 as LearningActivityId,
+      ).unlocked,
+    ).toBe(false);
+    expect(
+      getActivityAccess(
+        content,
+        progressThrough(CS116_PRODUCTION_IDS.activityLc10),
+        CS116_PRODUCTION_IDS.activityLc11 as LearningActivityId,
+      ).unlocked,
+    ).toBe(true);
+    expect(
+      getActivityAccess(
+        content,
+        progressThrough(CS116_PRODUCTION_IDS.activityLc11),
+        CS116_PRODUCTION_IDS.activityLc12 as LearningActivityId,
+      ).unlocked,
+    ).toBe(true);
   });
 
   it("unlocks only the first activity for a new learner", () => {

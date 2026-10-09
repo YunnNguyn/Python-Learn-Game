@@ -18,33 +18,35 @@ import { CORE_GRADER_ID, DeclarativeGraderCheckType } from "../../core/grading";
 import { CORE_RUNTIME_ID } from "../../core/runtime";
 import { CS116_GENERATOR_ID } from "./generators";
 import { CS116_HINT_SET_ID } from "./production-hints";
+import { CS116_PANDAS_CONCEPTS } from "./pandas-concepts";
+import { CS116_DATA_SCIENCE_CONCEPTS } from "./data-science-concepts";
+import { CS116_PRODUCTION_IDS } from "./production-ids";
+import {
+  CS116_PRODUCTION_ACTIVITY_LC05,
+  CS116_PRODUCTION_ACTIVITY_LC06,
+  CS116_PRODUCTION_ACTIVITY_LC07,
+  CS116_PRODUCTION_ACTIVITY_LC08,
+  CS116_PRODUCTION_ACTIVITY_LC09,
+  CS116_PRODUCTION_ACTIVITY_LC10,
+  CS116_PRODUCTION_ACTIVITY_LC11,
+  CS116_PRODUCTION_ACTIVITY_LC12,
+  CS116_PRODUCTION_ACTIVITY_LC13,
+  CS116_PRODUCTION_LESSON_FEATURE_BASICS,
+  CS116_PRODUCTION_LESSON_IMAGE_ARRAYS,
+  CS116_PRODUCTION_LESSON_MATPLOTLIB_CORE,
+  CS116_PRODUCTION_LESSON_PANDAS_COMBINE,
+  CS116_PRODUCTION_LESSON_PANDAS_QUALITY,
+  CS116_PRODUCTION_TEMPLATE_LC05,
+  CS116_PRODUCTION_TEMPLATE_LC06,
+  CS116_PRODUCTION_TEMPLATE_LC07,
+  CS116_PRODUCTION_TEMPLATE_LC08,
+  CS116_PRODUCTION_TEMPLATE_LC09,
+  CS116_PRODUCTION_TEMPLATE_LC10,
+  CS116_PRODUCTION_TEMPLATE_LC11,
+  CS116_PRODUCTION_TEMPLATE_LC12,
+  CS116_PRODUCTION_TEMPLATE_LC13,
+} from "./data-science-production-content";
 import { CS116_VERTICAL_SLICE_CONCEPTS } from "./vertical-slice-concepts";
-
-export const CS116_PRODUCTION_IDS = {
-  pack: "cs116",
-  course: "python-ml-practice",
-  world: "python-ml.numpy",
-  lessonArrayCore: "python-ml.numpy.array-shape",
-  lessonIndexFilter: "python-ml.numpy.index-filter",
-  lessonTransferReview: "python-ml.numpy.transfer-review",
-  lessonLocalRuntime: "python-ml.numpy.local-runtime",
-  activityVs01: "cs116.numpy.vs01",
-  activityVs02: "cs116.numpy.vs02",
-  activityVs03: "cs116.numpy.vs03",
-  activityVs04: "cs116.numpy.vs04",
-  activityVs05: "cs116.numpy.vs05",
-  activityVs06: "cs116.numpy.vs06",
-  activityVs07: "cs116.numpy.vs07",
-  activityLc01: "cs116.local.numpy.lc01",
-  templateVs01: "cs116.numpy.vs01",
-  templateVs02: "cs116.numpy.vs02",
-  templateVs03: "cs116.numpy.vs03",
-  templateVs04: "cs116.numpy.vs04",
-  templateVs05: "cs116.numpy.vs05",
-  templateVs06: "cs116.numpy.vs06",
-  templateVs07: "cs116.numpy.vs07",
-  templateLc01: "cs116.local.numpy.lc01",
-} as const;
 
 const [
   numpyArray,
@@ -56,10 +58,17 @@ const [
   numpyLogicalAnd,
 ] = CS116_VERTICAL_SLICE_CONCEPTS;
 
+const [
+  pandasDataFrame,
+  pandasSeries,
+  pandasColumnSelect,
+  pandasBooleanFilter,
+] = CS116_PANDAS_CONCEPTS;
+
 export const CS116_PRODUCTION_PACK: ContentPackManifest =
   ContentPackManifestSchema.parse({
     id: CS116_PRODUCTION_IDS.pack,
-    version: "0.3.0",
+    version: "0.7.0",
     schemaVersion: 1,
     title: "Nội dung Python cho ML/AI — gói CS116",
     description:
@@ -73,7 +82,7 @@ export const CS116_PRODUCTION_COURSE: Course = CourseSchema.parse({
   title: "Python cho ML/AI — Thực hành nền tảng",
   description:
     "Học Python bằng thực hành, bắt đầu với NumPy và tư duy dữ liệu cần cho Machine Learning/AI.",
-  worldIds: [CS116_PRODUCTION_IDS.world],
+  worldIds: [CS116_PRODUCTION_IDS.world, CS116_PRODUCTION_IDS.worldDataScience],
 });
 
 export const CS116_PRODUCTION_WORLD: World = WorldSchema.parse({
@@ -86,6 +95,21 @@ export const CS116_PRODUCTION_WORLD: World = WorldSchema.parse({
     CS116_PRODUCTION_IDS.lessonIndexFilter,
     CS116_PRODUCTION_IDS.lessonTransferReview,
     CS116_PRODUCTION_IDS.lessonLocalRuntime,
+  ],
+});
+
+export const CS116_PRODUCTION_WORLD_DATA_SCIENCE: World = WorldSchema.parse({
+  id: CS116_PRODUCTION_IDS.worldDataScience,
+  title: "Python for Data Science — pandas, biểu đồ & ảnh",
+  description:
+    "CS116 Bài 2B, chạy trong trình duyệt (Pyodide): DataFrame/Series, filtering, missing values (fillna), pivot_table, tạo cột, biểu đồ Matplotlib và ảnh RGB bằng Pillow. Kèm vài chủ đề Supplementary/ML Foundation: groupby, merge, crop/resize.",
+  lessonIds: [
+    CS116_PRODUCTION_IDS.lessonPandasCore,
+    CS116_PRODUCTION_IDS.lessonPandasQuality,
+    CS116_PRODUCTION_IDS.lessonMatplotlibCore,
+    CS116_PRODUCTION_IDS.lessonPandasCombine,
+    CS116_PRODUCTION_IDS.lessonImageArrays,
+    CS116_PRODUCTION_IDS.lessonFeatureBasics,
   ],
 });
 
@@ -132,11 +156,26 @@ export const CS116_PRODUCTION_LESSON_TRANSFER_REVIEW: Lesson = LessonSchema.pars
 
 export const CS116_PRODUCTION_LESSON_LOCAL_RUNTIME: Lesson = LessonSchema.parse({
   id: CS116_PRODUCTION_IDS.lessonLocalRuntime,
-  title: "Bài 4 — NumPy trên Python local",
+  title: "Bài 4 — NumPy và pandas trên Python local",
   description:
-    "Dùng chính kỹ năng NumPy đã học trong một main.py chạy bằng Python thật trên máy, làm cầu nối sang pandas, scikit-learn và model training.",
+    "Dùng main.py chạy bằng Python thật trên máy, từ NumPy chuyển sang đọc dataset CSV bằng pandas và quan sát file đầu ra của workspace.",
   conceptIds: [numpyIndexColumn!.id, numpyShape!.id],
-  activityIds: [CS116_PRODUCTION_IDS.activityLc01],
+  activityIds: [
+    CS116_PRODUCTION_IDS.activityLc01,
+    CS116_PRODUCTION_IDS.activityLc02,
+  ],
+});
+
+export const CS116_PRODUCTION_LESSON_PANDAS_CORE: Lesson = LessonSchema.parse({
+  id: CS116_PRODUCTION_IDS.lessonPandasCore,
+  title: "Bài 5 — DataFrame, Series và lọc dữ liệu",
+  description:
+    "Bắt đầu World 2 bằng mental model DataFrame/Series, chọn cột đúng dạng và lọc các hàng thỏa điều kiện.",
+  conceptIds: CS116_PANDAS_CONCEPTS.map((concept) => concept.id),
+  activityIds: [
+    CS116_PRODUCTION_IDS.activityLc03,
+    CS116_PRODUCTION_IDS.activityLc04,
+  ],
 });
 
 function codeActivity(input: {
@@ -236,6 +275,36 @@ export const CS116_PRODUCTION_ACTIVITY_LC01 = codeActivity({
   conceptIds: [numpyIndexColumn!.id, numpyShape!.id],
   stage: LearningStage.TRANSFER,
   missionTemplateId: CS116_PRODUCTION_IDS.templateLc01,
+});
+
+export const CS116_PRODUCTION_ACTIVITY_LC02 = codeActivity({
+  id: CS116_PRODUCTION_IDS.activityLc02,
+  title: "LC-02 — Đọc dữ liệu CSV với pandas",
+  description:
+    "Đọc telemetry.csv từ Local Python workspace bằng pandas và kiểm tra shape cùng tên các cột của DataFrame.",
+  conceptIds: [numpyShape!.id],
+  stage: LearningStage.TRANSFER,
+  missionTemplateId: CS116_PRODUCTION_IDS.templateLc02,
+});
+
+export const CS116_PRODUCTION_ACTIVITY_LC03 = codeActivity({
+  id: CS116_PRODUCTION_IDS.activityLc03,
+  title: "LC-03 — Chọn cột trong DataFrame",
+  description:
+    "Phân biệt Series và DataFrame một cột bằng hai cách chọn cột pandas phổ biến.",
+  conceptIds: [pandasDataFrame!.id, pandasSeries!.id, pandasColumnSelect!.id],
+  stage: LearningStage.GUIDED,
+  missionTemplateId: CS116_PRODUCTION_IDS.templateLc03,
+});
+
+export const CS116_PRODUCTION_ACTIVITY_LC04 = codeActivity({
+  id: CS116_PRODUCTION_IDS.activityLc04,
+  title: "LC-04 — Lọc contact theo điều kiện",
+  description:
+    "Dùng boolean filtering của pandas để chọn các hàng có threat đạt ngưỡng và lấy contact_id kết quả.",
+  conceptIds: [pandasDataFrame!.id, pandasColumnSelect!.id, pandasBooleanFilter!.id],
+  stage: LearningStage.INDEPENDENT,
+  missionTemplateId: CS116_PRODUCTION_IDS.templateLc04,
 });
 
 const gradingDataRef = (path: string) => ({ $gradingData: path });
@@ -457,10 +526,225 @@ export const CS116_PRODUCTION_TEMPLATE_LC01: MissionTemplate =
     },
     hintSetId: CS116_HINT_SET_ID.VS03,
     runtime: {
-      id: CORE_RUNTIME_ID.LOCAL_PYTHON,
-      config: { executionTimeoutSeconds: 60 },
+      id: CORE_RUNTIME_ID.PYODIDE,
+      config: { packages: ["numpy"] },
     },
     starterCode: `import numpy as np\n\n# matrix và targetColumnIndex đã được nạp sẵn.\ntelemetry = np.array(matrix)\n\n# Dùng NumPy indexing để lấy toàn bộ cột được yêu cầu.\nresult = \n`,
+  });
+
+export const CS116_PRODUCTION_TEMPLATE_LC02: MissionTemplate =
+  MissionTemplateSchema.parse({
+    id: CS116_PRODUCTION_IDS.templateLc02,
+    version: 1,
+    conceptIds: [numpyShape!.id],
+    allowedStages: [LearningStage.TRANSFER],
+    generator: {
+      id: CS116_GENERATOR_ID.CSV_INSPECTION,
+      config: {},
+    },
+    grader: {
+      id: CORE_GRADER_ID.DECLARATIVE,
+      config: {
+        checks: [
+          { type: DeclarativeGraderCheckType.NO_EXCEPTION },
+          {
+            type: DeclarativeGraderCheckType.VARIABLE_EXISTS,
+            variable: "shape_result",
+          },
+          {
+            type: DeclarativeGraderCheckType.PYTHON_TYPE,
+            variable: "shape_result",
+            expected: "tuple",
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "shape_result",
+            expected: gradingDataRef("expectedShape"),
+          },
+          {
+            type: DeclarativeGraderCheckType.VARIABLE_EXISTS,
+            variable: "columns_result",
+          },
+          {
+            type: DeclarativeGraderCheckType.PYTHON_TYPE,
+            variable: "columns_result",
+            expected: "list",
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "columns_result",
+            expected: gradingDataRef("expectedColumns"),
+          },
+        ],
+      },
+    },
+    hintSetId: CS116_HINT_SET_ID.LC02,
+    // Pivot sang Pyodide: bài chạy pandas ngay trong browser (không cần Local
+    // Python service), nên app online được. Dataset được stage vào FS ảo của
+    // Pyodide qua workspace.datasets, giống hợp đồng workspace của Local Python.
+    runtime: {
+      id: CORE_RUNTIME_ID.PYODIDE,
+      config: {
+        packages: ["pandas"],
+        workspace: {
+          datasets: [
+            {
+              filename: "telemetry.csv",
+              content:
+                "contact_id,distance,threat\ncontact-1,38,1\ncontact-2,77,4\ncontact-3,51,3\n",
+              description: "Dữ liệu telemetry nhỏ cho bài đọc CSV.",
+            },
+          ],
+        },
+      },
+    },
+    starterCode: `import pandas as pd\n\ndf = pd.read_csv("data/telemetry.csv")\n\nshape_result = \ncolumns_result = \n`,
+  });
+
+const PANDAS_TELEMETRY_DATASET = {
+  filename: "telemetry.csv",
+  content:
+    "contact_id,distance,threat\ncontact-1,38,1\ncontact-2,77,7\ncontact-3,51,5\ncontact-4,29,8\ncontact-5,60,3\n",
+  description:
+    "Dataset telemetry cho bài chọn cột và lọc hàng. Có contact-3 với threat=5 đúng bằng ngưỡng để phân biệt >= với >.",
+} as const;
+
+export const CS116_PRODUCTION_TEMPLATE_LC03: MissionTemplate =
+  MissionTemplateSchema.parse({
+    id: CS116_PRODUCTION_IDS.templateLc03,
+    version: 1,
+    conceptIds: [pandasDataFrame!.id, pandasSeries!.id, pandasColumnSelect!.id],
+    allowedStages: [LearningStage.GUIDED],
+    generator: {
+      id: CS116_GENERATOR_ID.PANDAS_PRACTICE,
+      config: { mode: "SELECT_COLUMN" },
+    },
+    grader: {
+      id: CORE_GRADER_ID.DECLARATIVE,
+      config: {
+        checks: [
+          { type: DeclarativeGraderCheckType.NO_EXCEPTION },
+          {
+            type: DeclarativeGraderCheckType.PYTHON_TYPE,
+            variable: "distance_series",
+            expected: "Series",
+          },
+          {
+            type: DeclarativeGraderCheckType.SHAPE,
+            variable: "distance_series",
+            expected: [5],
+          },
+          {
+            type: DeclarativeGraderCheckType.PYTHON_TYPE,
+            variable: "distance_frame",
+            expected: "DataFrame",
+          },
+          {
+            type: DeclarativeGraderCheckType.SHAPE,
+            variable: "distance_frame",
+            expected: [5, 1],
+          },
+          {
+            type: DeclarativeGraderCheckType.PYTHON_TYPE,
+            variable: "series_values",
+            expected: "list",
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "series_values",
+            expected: gradingDataRef("expectedSeriesValues"),
+          },
+          {
+            type: DeclarativeGraderCheckType.PYTHON_TYPE,
+            variable: "series_ndim",
+            expected: "int",
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "series_ndim",
+            expected: gradingDataRef("expectedSeriesNdim"),
+          },
+          {
+            type: DeclarativeGraderCheckType.PYTHON_TYPE,
+            variable: "frame_shape",
+            expected: "tuple",
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "frame_shape",
+            expected: gradingDataRef("expectedFrameShape"),
+          },
+        ],
+      },
+    },
+    hintSetId: CS116_HINT_SET_ID.LC03,
+    runtime: {
+      id: CORE_RUNTIME_ID.PYODIDE,
+      config: {
+        packages: ["pandas"],
+        workspace: { datasets: [PANDAS_TELEMETRY_DATASET] },
+      },
+    },
+    starterCode: `import pandas as pd\n\ndf = pd.read_csv("data/telemetry.csv")\n\n# Một cặp ngoặc vuông -> Series; hai cặp -> DataFrame một cột.\ndistance_series = \ndistance_frame = \n\nseries_values = \nseries_ndim = \nframe_shape = \n`,
+  });
+
+export const CS116_PRODUCTION_TEMPLATE_LC04: MissionTemplate =
+  MissionTemplateSchema.parse({
+    id: CS116_PRODUCTION_IDS.templateLc04,
+    version: 1,
+    conceptIds: [pandasDataFrame!.id, pandasColumnSelect!.id, pandasBooleanFilter!.id],
+    allowedStages: [LearningStage.INDEPENDENT],
+    generator: {
+      id: CS116_GENERATOR_ID.PANDAS_PRACTICE,
+      config: { mode: "FILTER_ROWS" },
+    },
+    grader: {
+      id: CORE_GRADER_ID.DECLARATIVE,
+      config: {
+        checks: [
+          { type: DeclarativeGraderCheckType.NO_EXCEPTION },
+          {
+            type: DeclarativeGraderCheckType.PYTHON_TYPE,
+            variable: "filtered",
+            expected: "DataFrame",
+          },
+          {
+            type: DeclarativeGraderCheckType.SHAPE,
+            variable: "filtered",
+            expected: [3, 3],
+          },
+          {
+            type: DeclarativeGraderCheckType.PYTHON_TYPE,
+            variable: "filtered_ids",
+            expected: "list",
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "filtered_ids",
+            expected: gradingDataRef("expectedFilteredIds"),
+          },
+          {
+            type: DeclarativeGraderCheckType.PYTHON_TYPE,
+            variable: "filtered_count",
+            expected: "int",
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "filtered_count",
+            expected: gradingDataRef("expectedFilteredCount"),
+          },
+        ],
+      },
+    },
+    hintSetId: CS116_HINT_SET_ID.LC04,
+    runtime: {
+      id: CORE_RUNTIME_ID.PYODIDE,
+      config: {
+        packages: ["pandas"],
+        workspace: { datasets: [PANDAS_TELEMETRY_DATASET] },
+      },
+    },
+    starterCode: `import pandas as pd\n\ndf = pd.read_csv("data/telemetry.csv")\n\n# threshold đã được nạp sẵn từ đề.\nfiltered = \nfiltered_ids = \nfiltered_count = \n`,
   });
 
 function thresholdTemplate(input: {
@@ -704,14 +988,24 @@ export const CS116_PRODUCTION_TEMPLATE_VS07: MissionTemplate =
 
 export const CS116_PRODUCTION_CONTENT = {
   packs: [CS116_PRODUCTION_PACK] as const,
-  concepts: CS116_VERTICAL_SLICE_CONCEPTS,
+  concepts: [
+    ...CS116_VERTICAL_SLICE_CONCEPTS,
+    ...CS116_PANDAS_CONCEPTS,
+    ...CS116_DATA_SCIENCE_CONCEPTS,
+  ] as const,
   courses: [CS116_PRODUCTION_COURSE] as const,
-  worlds: [CS116_PRODUCTION_WORLD] as const,
+  worlds: [CS116_PRODUCTION_WORLD, CS116_PRODUCTION_WORLD_DATA_SCIENCE] as const,
   lessons: [
     CS116_PRODUCTION_LESSON_ARRAY_CORE,
     CS116_PRODUCTION_LESSON_INDEX_FILTER,
     CS116_PRODUCTION_LESSON_TRANSFER_REVIEW,
     CS116_PRODUCTION_LESSON_LOCAL_RUNTIME,
+    CS116_PRODUCTION_LESSON_PANDAS_CORE,
+    CS116_PRODUCTION_LESSON_PANDAS_QUALITY,
+    CS116_PRODUCTION_LESSON_MATPLOTLIB_CORE,
+    CS116_PRODUCTION_LESSON_PANDAS_COMBINE,
+    CS116_PRODUCTION_LESSON_IMAGE_ARRAYS,
+    CS116_PRODUCTION_LESSON_FEATURE_BASICS,
   ] as const,
   activities: [
     CS116_PRODUCTION_ACTIVITY_VS01,
@@ -722,6 +1016,18 @@ export const CS116_PRODUCTION_CONTENT = {
     CS116_PRODUCTION_ACTIVITY_VS06,
     CS116_PRODUCTION_ACTIVITY_VS07,
     CS116_PRODUCTION_ACTIVITY_LC01,
+    CS116_PRODUCTION_ACTIVITY_LC02,
+    CS116_PRODUCTION_ACTIVITY_LC03,
+    CS116_PRODUCTION_ACTIVITY_LC04,
+    CS116_PRODUCTION_ACTIVITY_LC05,
+    CS116_PRODUCTION_ACTIVITY_LC06,
+    CS116_PRODUCTION_ACTIVITY_LC07,
+    CS116_PRODUCTION_ACTIVITY_LC08,
+    CS116_PRODUCTION_ACTIVITY_LC09,
+    CS116_PRODUCTION_ACTIVITY_LC10,
+    CS116_PRODUCTION_ACTIVITY_LC11,
+    CS116_PRODUCTION_ACTIVITY_LC12,
+    CS116_PRODUCTION_ACTIVITY_LC13,
   ] as const,
   missionTemplates: [
     CS116_PRODUCTION_TEMPLATE_VS01,
@@ -732,5 +1038,17 @@ export const CS116_PRODUCTION_CONTENT = {
     CS116_PRODUCTION_TEMPLATE_VS06,
     CS116_PRODUCTION_TEMPLATE_VS07,
     CS116_PRODUCTION_TEMPLATE_LC01,
+    CS116_PRODUCTION_TEMPLATE_LC02,
+    CS116_PRODUCTION_TEMPLATE_LC03,
+    CS116_PRODUCTION_TEMPLATE_LC04,
+    CS116_PRODUCTION_TEMPLATE_LC05,
+    CS116_PRODUCTION_TEMPLATE_LC06,
+    CS116_PRODUCTION_TEMPLATE_LC07,
+    CS116_PRODUCTION_TEMPLATE_LC08,
+    CS116_PRODUCTION_TEMPLATE_LC09,
+    CS116_PRODUCTION_TEMPLATE_LC10,
+    CS116_PRODUCTION_TEMPLATE_LC11,
+    CS116_PRODUCTION_TEMPLATE_LC12,
+    CS116_PRODUCTION_TEMPLATE_LC13,
   ] as const,
 };

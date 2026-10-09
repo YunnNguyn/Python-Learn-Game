@@ -17,6 +17,8 @@ export type {
   RuntimeMissionPreparationRequest,
   RuntimePythonException,
   RuntimeSystemError,
+  RuntimeWorkspaceFile,
+  RuntimeWorkspaceInfo,
 } from "./runtime-contracts";
 export type {
   RuntimeObservedValue,

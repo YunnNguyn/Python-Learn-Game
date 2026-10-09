@@ -1,5 +1,8 @@
 export { hostileContactGenerator } from "./hostile-contact-generator";
 export { columnExtractGenerator } from "./column-extract-generator";
+export { csvInspectionGenerator } from "./csv-inspection-generator";
+export { pandasPracticeGenerator } from "./pandas-practice-generator";
+export { dataSciencePracticeGenerator } from "./data-science-practice-generator";
 export { CS116_GENERATOR_ID } from "./generator-ids";
 export { matrixShapeGenerator } from "./matrix-shape-generator";
 export { registerCs116Generators } from "./register-cs116-generators";

@@ -25,6 +25,21 @@ const DEFAULT_SETUP_JSON = `{
   }
 }`;
 
+// Dev-only: lets us exercise the Pyodide multi-package + workspace-staging path
+// (the Data/ML pivot) without walking the whole linear curriculum. Empty object
+// means no packages/workspace, matching the original light-exercise behavior.
+const DEFAULT_RUNTIME_CONFIG_JSON = `{
+  "packages": ["pandas"],
+  "workspace": {
+    "datasets": [
+      {
+        "filename": "telemetry.csv",
+        "content": "contact_id,distance,threat\\ncontact-1,38,1\\ncontact-2,77,4\\ncontact-3,51,3\\n"
+      }
+    ]
+  }
+}`;
+
 interface FeedbackPreviewCase {
   readonly label: string;
   readonly result: GraderResult;
@@ -167,6 +182,9 @@ export function DebugPage() {
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeProbeStatus>("IDLE");
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [setupJson, setSetupJson] = useState(DEFAULT_SETUP_JSON);
+  const [runtimeConfigJson, setRuntimeConfigJson] = useState(
+    DEFAULT_RUNTIME_CONFIG_JSON,
+  );
   const [preparePending, setPreparePending] = useState(false);
   const [prepareValidationError, setPrepareValidationError] =
     useState<string | null>(null);
@@ -182,7 +200,11 @@ export function DebugPage() {
     useState<RuntimeExecutionResult | null>(null);
 
   const getRuntimeManager = (): RuntimeManager => {
-    managerRef.current ??= createPyodideRuntimeManager();
+    // Dev probe exercises Data/ML packages (pandas, etc.), whose first import
+    // can exceed the default 5s deadline, so use the heavy-mission timeout here.
+    managerRef.current ??= createPyodideRuntimeManager({
+      executionTimeoutMs: 60_000,
+    });
     return managerRef.current;
   };
 
@@ -239,9 +261,31 @@ export function DebugPage() {
       return;
     }
 
+    let parsedRuntimeConfig: unknown = undefined;
+    const trimmedRuntimeConfig = runtimeConfigJson.trim();
+    if (trimmedRuntimeConfig.length > 0) {
+      try {
+        parsedRuntimeConfig = JSON.parse(trimmedRuntimeConfig);
+      } catch {
+        setPrepareValidationError("Runtime config JSON không hợp lệ.");
+        return;
+      }
+      if (
+        typeof parsedRuntimeConfig !== "object" ||
+        parsedRuntimeConfig === null ||
+        Array.isArray(parsedRuntimeConfig)
+      ) {
+        setPrepareValidationError("Runtime config JSON phải có object ở cấp gốc.");
+        return;
+      }
+    }
+
     setPreparePending(true);
     const result = await getRuntimeManager().prepareMission({
       setupData: parsed as JsonObject,
+      ...(parsedRuntimeConfig === undefined
+        ? {}
+        : { runtimeConfig: parsedRuntimeConfig as JsonObject }),
     });
     if (!mountedRef.current) {
       return;
@@ -329,6 +373,18 @@ export function DebugPage() {
               rows={10}
               value={setupJson}
               onChange={(event) => setSetupJson(event.target.value)}
+            />
+          </div>
+          <div className="debug-runtime-field">
+            <label htmlFor="runtime-config-json">
+              <strong>Runtime config JSON (packages + workspace)</strong>
+            </label>
+            <textarea
+              className="debug-runtime-textarea"
+              id="runtime-config-json"
+              rows={10}
+              value={runtimeConfigJson}
+              onChange={(event) => setRuntimeConfigJson(event.target.value)}
             />
           </div>
           <div className="debug-runtime-actions">
@@ -480,6 +536,34 @@ export function DebugPage() {
                   <pre className="debug-runtime-output">
                     {JSON.stringify(submitResult.serialized, null, 2)}
                   </pre>
+                </>
+              ) : null}
+              {submitResult.workspace &&
+              submitResult.workspace.artifacts.length > 0 ? (
+                <>
+                  <p>
+                    <strong>artifacts</strong>
+                  </p>
+                  {submitResult.workspace.artifacts.map((artifact) => (
+                    <div key={artifact.relativePath}>
+                      <code>
+                        {artifact.relativePath} ({artifact.bytes}b
+                        {artifact.category ? ` · ${artifact.category}` : ""})
+                      </code>
+                      {artifact.dataUrl ? (
+                        <img
+                          src={artifact.dataUrl}
+                          alt={artifact.filename}
+                          style={{
+                            maxWidth: 360,
+                            display: "block",
+                            marginTop: 4,
+                            background: "#fff",
+                          }}
+                        />
+                      ) : null}
+                    </div>
+                  ))}
                 </>
               ) : null}
               {submitResult.status === "PYTHON_EXCEPTION" ? (

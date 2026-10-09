@@ -374,6 +374,21 @@ Local runtime workspaces are service-owned and sandboxed by path rather than acc
 
 The product does not require a custom notebook runtime. The default learner unit remains one editable Python script plus read-only datasets and generated artifacts when needed.
 
+Phase F3 uses Local Python protocol v2. Runtime lifecycle/execution results may carry an optional `workspace` payload containing dataset and artifact metadata; this data stays separate from execution diagnostics and generic grader observations, so Pyodide does not need fake file metadata.
+
+A Local Python session workspace has exactly this product-managed shape:
+
+```text
+<runtime-workspace>/<session-id>/
+├── main.py
+├── data/
+└── artifacts/
+```
+
+`main.py` is the only learner-editable exercise source. MissionTemplate runtime config may declare trusted inline dataset entries (`filename`, UTF-8 `content`, optional `description`). The service validates simple filenames, rebuilds `data/` from authored content, and never accepts arbitrary browser-supplied source paths. Before every Run/Submit it also recreates `artifacts/`; after execution it returns a bounded top-level scan of regular files with normalized relative path, byte size, extension, and category. Directories and escaping symlinks are ignored.
+
+These controls define an application workspace boundary, not an OS security sandbox. Learner code executes as the current OS user and can potentially access user files outside the workspace. Hardened process/container isolation is outside Phase F3.
+
 ### 4.12 World Event Bridge
 
 Converts mission semantics into framework-neutral `WorldEvent` messages.

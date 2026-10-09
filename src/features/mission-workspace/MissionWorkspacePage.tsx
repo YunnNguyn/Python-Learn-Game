@@ -14,6 +14,7 @@ import {
   CORE_RUNTIME_ID,
   type RuntimeExecutionResult,
   type RuntimeSystemError,
+  type RuntimeWorkspaceInfo,
 } from "../../core/runtime";
 import { MissionControls } from "./MissionControls";
 import { MissionDataPanel } from "./MissionDataPanel";
@@ -51,6 +52,7 @@ export function MissionWorkspacePage() {
   const [activeTab, setActiveTab] = useState<MissionWorkspaceTab>("lesson");
   const [stopPending, setStopPending] = useState(false);
   const [runtimeActionNotice, setRuntimeActionNotice] = useState<string | null>(null);
+  const [workspace, setWorkspace] = useState<RuntimeWorkspaceInfo | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +69,7 @@ export function MissionWorkspacePage() {
     setActiveTab("lesson");
     setStopPending(false);
     setRuntimeActionNotice(null);
+    setWorkspace(null);
 
     if (!routeId) {
       setLoadError({ code: "MISSION_ROUTE_MISSING", message: "Không xác định được bài thực hành cần mở." });
@@ -167,6 +170,7 @@ export function MissionWorkspacePage() {
     setDraftNotice(next.resumedDraft ? "Đã khôi phục bản nháp và đề đang làm trước đó." : null);
     setRuntimeActionNotice(null);
     setStopPending(false);
+    setWorkspace(next.initialWorkspace ?? null);
     setLoading(false);
     setOperation(null);
     setActiveTab("lesson");
@@ -183,6 +187,9 @@ export function MissionWorkspacePage() {
     try {
       const result = await session.run(code);
       setExecution(result.execution);
+      if (result.execution.workspace !== undefined) {
+        setWorkspace(result.execution.workspace);
+      }
     } finally {
       operationRef.current = null;
       setOperation(null);
@@ -198,6 +205,9 @@ export function MissionWorkspacePage() {
     try {
       const result = await session.submit(code);
       setExecution(result.execution);
+      if (result.execution.workspace !== undefined) {
+        setWorkspace(result.execution.workspace);
+      }
       setGrading(result.grading ?? null);
       setAttempt(result.attemptRecord);
       if (result.attemptRecord.passed) {
@@ -373,6 +383,61 @@ export function MissionWorkspacePage() {
             </span>
           </section>
 
+          {workspace !== null ? (
+            <section className="mission-workspace-files" aria-label="Mission workspace">
+              <div className="mission-workspace-files__group">
+                <h2>Dữ liệu</h2>
+                {(workspace?.datasets.length ?? 0) > 0 ? (
+                  <ul className="mission-workspace-files__list">
+                    {workspace!.datasets.map((file) => (
+                      <li key={file.relativePath}>
+                        <div>
+                          <strong>{file.filename}</strong>
+                          <code>{file.relativePath}</code>
+                        </div>
+                        <span>{formatWorkspaceBytes(file.bytes)}</span>
+                        {file.description ? <p>{file.description}</p> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mission-workspace-files__empty">Bài này không có dataset được chuẩn bị sẵn.</p>
+                )}
+              </div>
+
+              <div className="mission-workspace-files__group">
+                <h2>File đầu ra</h2>
+                {(workspace?.artifacts.length ?? 0) > 0 ? (
+                  <ul className="mission-workspace-files__list">
+                    {workspace!.artifacts.map((file) => (
+                      <li key={file.relativePath}>
+                        <div>
+                          <strong>{file.filename}</strong>
+                          <code>{file.relativePath}</code>
+                        </div>
+                        <span>
+                          {formatWorkspaceBytes(file.bytes)}
+                          {file.category ? ` · ${file.category}` : ""}
+                          {file.extension ? ` · .${file.extension}` : ""}
+                        </span>
+                        {file.dataUrl ? (
+                          <img
+                            className="mission-workspace-files__image"
+                            src={file.dataUrl}
+                            alt={`Kết quả ${file.filename}`}
+                            loading="lazy"
+                          />
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mission-workspace-files__empty">Chưa có file trong artifacts/ từ lần chạy hiện tại.</p>
+                )}
+              </div>
+            </section>
+          ) : null}
+
           {runtimeActionNotice ? <p className="mission-runtime-notice">{runtimeActionNotice}</p> : null}
 
           <MissionControls
@@ -472,4 +537,10 @@ function stageLabel(stage: LearningStage): string {
     case LearningStage.RETENTION:
       return "Ghi nhớ";
   }
+}
+
+function formatWorkspaceBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

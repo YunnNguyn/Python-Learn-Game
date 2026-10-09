@@ -13,10 +13,25 @@ from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import urlparse
 
 from . import PROTOCOL_VERSION, SERVICE_NAME
+
+MAX_DATASETS = 50
+MAX_ARTIFACTS = 100
+DATASET_KEYS = frozenset({"filename", "content", "description"})
+ARTIFACT_CATEGORIES = {
+    "csv": "csv",
+    "png": "image",
+    "jpg": "image",
+    "jpeg": "image",
+    "json": "json",
+    "txt": "text",
+    "pkl": "model",
+    "joblib": "model",
+}
 
 
 @dataclass
@@ -25,6 +40,7 @@ class SessionState:
     workspace: Path
     runtime_config: dict[str, Any] = field(default_factory=dict)
     setup_data: dict[str, Any] = field(default_factory=dict)
+    datasets: list[dict[str, str]] = field(default_factory=list)
     active_process: subprocess.Popen[str] | None = None
     interrupted: bool = False
     lock: threading.Lock = field(default_factory=threading.Lock)
@@ -41,6 +57,9 @@ class RuntimeState:
         session_id = uuid.uuid4().hex
         workspace = self.workspace_root / session_id
         workspace.mkdir(parents=True, exist_ok=True)
+        (workspace / "main.py").write_text("", encoding="utf-8")
+        (workspace / "data").mkdir()
+        (workspace / "artifacts").mkdir()
         session = SessionState(session_id=session_id, workspace=workspace)
         with self.lock:
             self.sessions[session_id] = session
@@ -160,14 +179,39 @@ class RuntimeRequestHandler(BaseHTTPRequestHandler):
             self._json_response(HTTPStatus.BAD_REQUEST, error_payload("INVALID_TIMEOUT", "executionTimeoutSeconds phải nằm trong 1..3600."))
             return
 
+        try:
+            datasets = validate_dataset_definitions(runtime_config)
+        except ValueError as error:
+            self._json_response(
+                HTTPStatus.BAD_REQUEST,
+                error_payload("INVALID_DATASETS", str(error)),
+            )
+            return
+
         with session.lock:
             if session.active_process is not None:
                 self._json_response(HTTPStatus.CONFLICT, error_payload("RUNTIME_BUSY", "Runtime đang chạy một tiến trình Python."))
                 return
             session.runtime_config = dict(runtime_config)
             session.setup_data = dict(setup_data)
+            session.datasets = datasets
             session.interrupted = False
-        self._json_response(HTTPStatus.OK, {"ok": True})
+            try:
+                stage_datasets(session)
+                reset_artifacts(session)
+            except OSError as error:
+                self._json_response(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    error_payload(
+                        "WORKSPACE_PREPARATION_FAILED",
+                        f"Không thể chuẩn bị workspace: {error}",
+                    ),
+                )
+                return
+        self._json_response(
+            HTTPStatus.OK,
+            {"ok": True, "workspace": workspace_metadata(session)},
+        )
 
     def _execute(self, session: SessionState) -> None:
         body = self._read_json_object()
@@ -183,28 +227,6 @@ class RuntimeRequestHandler(BaseHTTPRequestHandler):
             self._json_response(HTTPStatus.BAD_REQUEST, error_payload("INVALID_OBSERVATIONS", "observeVariables phải là danh sách string."))
             return
 
-        source_path = session.workspace / "main.py"
-        source_path.write_text(code, encoding="utf-8")
-
-        internal_dir = session.workspace / ".python-learn-runtime"
-        internal_dir.mkdir(parents=True, exist_ok=True)
-        token = uuid.uuid4().hex
-        request_path = internal_dir / f"request-{token}.json"
-        result_path = internal_dir / f"result-{token}.json"
-        request_path.write_text(
-            json.dumps(
-                {
-                    "kind": kind,
-                    "code": code,
-                    "sourcePath": str(source_path),
-                    "observeVariables": observe_variables,
-                    "setupData": session.setup_data,
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-
         worker_path = Path(__file__).with_name("worker.py")
         popen_kwargs: dict[str, Any] = {
             "cwd": str(session.workspace),
@@ -219,11 +241,50 @@ class RuntimeRequestHandler(BaseHTTPRequestHandler):
         else:
             popen_kwargs["start_new_session"] = True
 
+        # Force a non-interactive Matplotlib backend so learner code that calls
+        # plt.show() does not block on a GUI window (which would hang until the
+        # execution timeout). Learner code can still override MPLBACKEND.
+        child_env = os.environ.copy()
+        child_env.setdefault("MPLBACKEND", "Agg")
+        popen_kwargs["env"] = child_env
+
         with session.lock:
             if session.active_process is not None:
                 self._json_response(HTTPStatus.CONFLICT, error_payload("RUNTIME_BUSY", "Runtime đang chạy một tiến trình Python."))
                 return
             session.interrupted = False
+            try:
+                stage_datasets(session)
+                reset_artifacts(session)
+                source_path = session.workspace / "main.py"
+                source_path.write_text(code, encoding="utf-8")
+                internal_dir = session.workspace / ".python-learn-runtime"
+                internal_dir.mkdir(parents=True, exist_ok=True)
+                token = uuid.uuid4().hex
+                request_path = internal_dir / f"request-{token}.json"
+                result_path = internal_dir / f"result-{token}.json"
+                request_path.write_text(
+                    json.dumps(
+                        {
+                            "kind": kind,
+                            "code": code,
+                            "sourcePath": str(source_path),
+                            "observeVariables": observe_variables,
+                            "setupData": session.setup_data,
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+            except OSError as error:
+                self._json_response(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    error_payload(
+                        "WORKSPACE_PREPARATION_FAILED",
+                        f"Không thể làm mới workspace: {error}",
+                    ),
+                )
+                return
             process = subprocess.Popen(
                 [
                     sys.executable,
@@ -263,6 +324,7 @@ class RuntimeRequestHandler(BaseHTTPRequestHandler):
                         "code": "EXECUTION_INTERRUPTED",
                         "message": "Tiến trình Python đã được người dùng dừng.",
                     },
+                    "workspace": workspace_metadata(session),
                 },
             )
             return
@@ -278,6 +340,7 @@ class RuntimeRequestHandler(BaseHTTPRequestHandler):
                         "code": "EXECUTION_TIMEOUT",
                         "message": f"Tiến trình Python vượt quá giới hạn {timeout:g} giây.",
                     },
+                    "workspace": workspace_metadata(session),
                 },
             )
             return
@@ -293,6 +356,7 @@ class RuntimeRequestHandler(BaseHTTPRequestHandler):
                         "code": "WORKER_CRASHED",
                         "message": f"Python worker kết thúc với exit code {process.returncode} nhưng không trả kết quả.",
                     },
+                    "workspace": workspace_metadata(session),
                 },
             )
             return
@@ -310,12 +374,14 @@ class RuntimeRequestHandler(BaseHTTPRequestHandler):
                         "code": "INVALID_WORKER_RESULT",
                         "message": "Không đọc được kết quả từ Python worker.",
                     },
+                    "workspace": workspace_metadata(session),
                 },
             )
             return
 
         worker_result["stdout"] = stdout
         worker_result["stderr"] = stderr
+        worker_result["workspace"] = workspace_metadata(session)
         self._json_response(HTTPStatus.OK, worker_result)
 
     def _interrupt(self, session: SessionState) -> None:
@@ -374,17 +440,165 @@ def error_payload(code: str, message: str) -> dict[str, Any]:
     return {"ok": False, "error": {"code": code, "message": message}}
 
 
+def validate_dataset_definitions(runtime_config: dict[str, Any]) -> list[dict[str, str]]:
+    workspace_config = runtime_config.get("workspace")
+    if workspace_config is None:
+        return []
+    if not isinstance(workspace_config, dict):
+        raise ValueError("runtimeConfig.workspace phải là object.")
+    unknown_workspace_keys = set(workspace_config) - {"datasets"}
+    if unknown_workspace_keys:
+        names = ", ".join(sorted(unknown_workspace_keys))
+        raise ValueError(f"workspace chứa field không hỗ trợ: {names}.")
+
+    raw_datasets = workspace_config.get("datasets", [])
+    if not isinstance(raw_datasets, list):
+        raise ValueError("workspace.datasets phải là danh sách.")
+    if len(raw_datasets) > MAX_DATASETS:
+        raise ValueError(f"workspace.datasets chỉ được tối đa {MAX_DATASETS} file.")
+
+    datasets: list[dict[str, str]] = []
+    for index, raw in enumerate(raw_datasets):
+        if not isinstance(raw, dict):
+            raise ValueError(f"datasets[{index}] phải là object.")
+        unknown_keys = set(raw) - DATASET_KEYS
+        if unknown_keys:
+            names = ", ".join(sorted(unknown_keys))
+            raise ValueError(f"datasets[{index}] chứa field không hỗ trợ: {names}.")
+
+        filename = raw.get("filename")
+        content = raw.get("content")
+        description = raw.get("description")
+        if not isinstance(filename, str) or not filename:
+            raise ValueError(f"datasets[{index}].filename phải là string không rỗng.")
+        if not isinstance(content, str):
+            raise ValueError(f"datasets[{index}].content phải là string.")
+        if description is not None and not isinstance(description, str):
+            raise ValueError(f"datasets[{index}].description phải là string.")
+        if not is_safe_workspace_filename(filename):
+            raise ValueError(
+                f"datasets[{index}].filename phải là tên file tương đối đơn, không được chứa path."
+            )
+
+        entry = {"filename": filename, "content": content}
+        if description is not None:
+            entry["description"] = description
+        datasets.append(entry)
+
+    return datasets
+
+
+def is_safe_workspace_filename(filename: str) -> bool:
+    if filename in {".", ".."} or "\x00" in filename:
+        return False
+    if "/" in filename or "\\" in filename:
+        return False
+    if PurePosixPath(filename).is_absolute() or PureWindowsPath(filename).is_absolute():
+        return False
+    if ":" in filename:
+        return False
+    return True
+
+
+def stage_datasets(session: SessionState) -> list[dict[str, Any]]:
+    data_dir = session.workspace / "data"
+    shutil.rmtree(data_dir, ignore_errors=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    data_root = data_dir.resolve()
+    metadata: list[dict[str, Any]] = []
+    for dataset in session.datasets:
+        destination = (data_dir / dataset["filename"]).resolve()
+        if destination.parent != data_root:
+            raise OSError("Dataset path thoát khỏi data/.")
+        encoded = dataset["content"].encode("utf-8")
+        destination.write_bytes(encoded)
+        item: dict[str, Any] = {
+            "filename": dataset["filename"],
+            "relativePath": f"data/{dataset['filename']}",
+            "bytes": len(encoded),
+        }
+        description = dataset.get("description")
+        if description is not None:
+            item["description"] = description
+        metadata.append(item)
+    return metadata
+
+
+def reset_artifacts(session: SessionState) -> None:
+    artifacts_dir = session.workspace / "artifacts"
+    shutil.rmtree(artifacts_dir, ignore_errors=True)
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+
+def dataset_metadata(session: SessionState) -> list[dict[str, Any]]:
+    metadata: list[dict[str, Any]] = []
+    for dataset in session.datasets:
+        encoded = dataset["content"].encode("utf-8")
+        item: dict[str, Any] = {
+            "filename": dataset["filename"],
+            "relativePath": f"data/{dataset['filename']}",
+            "bytes": len(encoded),
+        }
+        description = dataset.get("description")
+        if description is not None:
+            item["description"] = description
+        metadata.append(item)
+    return metadata
+
+
+def scan_artifacts(session: SessionState) -> list[dict[str, Any]]:
+    artifacts_dir = session.workspace / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    artifacts_root = artifacts_dir.resolve()
+    metadata: list[dict[str, Any]] = []
+    for entry in sorted(artifacts_dir.iterdir(), key=lambda item: item.name.casefold()):
+        if len(metadata) >= MAX_ARTIFACTS:
+            break
+        try:
+            resolved = entry.resolve()
+            if resolved.parent != artifacts_root or not resolved.is_file():
+                continue
+            extension = resolved.suffix.lower().lstrip(".")
+            metadata.append(
+                {
+                    "filename": entry.name,
+                    "relativePath": f"artifacts/{entry.name}",
+                    "bytes": resolved.stat().st_size,
+                    "extension": extension,
+                    "category": ARTIFACT_CATEGORIES.get(extension, "generic"),
+                }
+            )
+        except OSError:
+            continue
+    return metadata
+
+
+def workspace_metadata(session: SessionState) -> dict[str, Any]:
+    return {
+        "datasets": dataset_metadata(session),
+        "artifacts": scan_artifacts(session),
+    }
+
+
 def terminate_process_tree(process: subprocess.Popen[str]) -> None:
     if process.poll() is not None:
         return
     try:
         if os.name == "nt":
-            subprocess.run(
+            taskkill = subprocess.run(
                 ["taskkill", "/PID", str(process.pid), "/T", "/F"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=False,
             )
+            if taskkill.returncode == 0:
+                return
+            try:
+                process.send_signal(signal.CTRL_BREAK_EVENT)
+                process.wait(timeout=0.75)
+                return
+            except (OSError, ValueError, subprocess.TimeoutExpired):
+                process.kill()
         else:
             os.killpg(os.getpgid(process.pid), signal.SIGTERM)
             try:

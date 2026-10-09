@@ -15,6 +15,24 @@ export interface RuntimeSystemError {
   readonly message: string;
 }
 
+export interface RuntimeWorkspaceFile {
+  readonly filename: string;
+  readonly relativePath: string;
+  readonly bytes: number;
+  readonly description?: string;
+  readonly extension?: string;
+  readonly category?: string;
+  // Optional inline content for small displayable artifacts (e.g. a base64
+  // data URL for an image the learner produced), so the UI can show the result
+  // without a filesystem the browser can read. Populated by the Pyodide runtime.
+  readonly dataUrl?: string;
+}
+
+export interface RuntimeWorkspaceInfo {
+  readonly datasets: readonly RuntimeWorkspaceFile[];
+  readonly artifacts: readonly RuntimeWorkspaceFile[];
+}
+
 export interface RuntimePythonException {
   readonly type?: string;
   readonly message: string;
@@ -24,6 +42,7 @@ export interface RuntimePythonException {
 export type RuntimeLifecycleResult =
   | {
       readonly ok: true;
+      readonly workspace?: RuntimeWorkspaceInfo;
     }
   | {
       readonly ok: false;
@@ -45,6 +64,7 @@ export interface RuntimeExecutionSuccess {
   readonly stdout: string;
   readonly stderr: string;
   readonly serialized?: JsonObject;
+  readonly workspace?: RuntimeWorkspaceInfo;
 }
 
 export interface RuntimeExecutionPythonException {
@@ -53,6 +73,7 @@ export interface RuntimeExecutionPythonException {
   readonly stderr: string;
   readonly exception: RuntimePythonException;
   readonly serialized?: JsonObject;
+  readonly workspace?: RuntimeWorkspaceInfo;
 }
 
 export interface RuntimeExecutionSystemFailure {
@@ -60,6 +81,7 @@ export interface RuntimeExecutionSystemFailure {
   readonly stdout: string;
   readonly stderr: string;
   readonly error: RuntimeSystemError;
+  readonly workspace?: RuntimeWorkspaceInfo;
 }
 
 export interface RuntimeExecutionTimeout {
@@ -67,6 +89,7 @@ export interface RuntimeExecutionTimeout {
   readonly stdout: string;
   readonly stderr: string;
   readonly error?: RuntimeSystemError;
+  readonly workspace?: RuntimeWorkspaceInfo;
 }
 
 export type RuntimeExecutionResult =

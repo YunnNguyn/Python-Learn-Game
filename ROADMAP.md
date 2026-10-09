@@ -85,18 +85,27 @@ Phase F implementation slices:
    - setup-data injection and normalized observations;
    - timeout and process-tree interruption;
    - `/dev` smoke-test harness.
-2. **F2 IDE integration — IMPLEMENTED / VALIDATION GATE**
+2. **F2 IDE integration — COMPLETE / LOCKED**
    - runtime-aware status;
    - Run / Stop / Submit against local runtime;
    - learner-facing recovery when service is unavailable.
-3. **F3 Workspace + data files — NEXT**
-   - read-only exercise datasets;
-   - one editable `main.py`;
-   - generated artifacts such as CSV/PNG/model files.
-4. **F4 Native Data/ML expansion**
-   - extend the proven Local Python mission path from the LC-01 NumPy bridge into pandas, matplotlib and scikit-learn exercises using the same MissionEngine, grader, AttemptRecord and reward boundaries.
+3. **F3 Workspace + datasets + artifacts — COMPLETE / LOCKED**
+   - each Local Python session owns `main.py`, `data/`, and `artifacts/`;
+   - trusted MissionTemplate content stages inline datasets into `data/` without browser-supplied host paths;
+   - every Run/Submit restages datasets and clears `artifacts/` before execution for deterministic fresh-output semantics;
+   - execution results return dataset/artifact metadata separately from diagnostics and grader observations;
+   - the Mission Workspace shows compact Local-Python-only dataset/output lists;
+   - LC-02 validates pandas CSV loading through `data/telemetry.csv`.
+4. **F4 Native Data/ML expansion — IN PROGRESS**
+   - World 2 now extends the proven Local Python path from LC-02 through LC-12;
+   - pandas: `Series`/`DataFrame`, selection, boolean filtering, missing values, groupby/aggregation, pivot_table and merge;
+   - Matplotlib: Figure/Axes, line/scatter plots and PNG artifacts;
+   - image arrays: Pillow RGB loading, NumPy `height × width × channels`, crop/resize and saved image artifacts;
+   - supplementary ML-foundation topics remain explicitly marked as such instead of being attributed to CS116 lecture ownership;
+   - all activities reuse Local Python, staged datasets, declarative grading, H1–H4 hints, progression, AttemptRecord and rewards;
+   - scikit-learn fit/transform/predict and OpenCV remain later slices after package readiness is resolved; no silent environment installation is part of F4.
 
-Phase F does **not** build a notebook editor or a general multi-file IDE. Add multi-file editing only if later curriculum proves it necessary.
+Phase F does **not** build a notebook editor or a general multi-file IDE. `main.py` remains the only learner-editable exercise file. Local Python code still executes as the current OS user; the workspace boundary is an application boundary, not a hardened malicious-code sandbox. Challenge/Exam artifact scoring remains Phase G.
 
 Acceptance: a local-compute mission can run learner `main.py` in a child process, use installed native packages/CPU/GPU when available, be stopped without killing the app, return normalized grading observations, and recover cleanly for the next run.
 

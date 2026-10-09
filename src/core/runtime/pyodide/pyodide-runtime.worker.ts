@@ -7,6 +7,7 @@ import {
   type RuntimeExecutionResult,
   type RuntimePythonException,
   type RuntimeSystemError,
+  type RuntimeWorkspaceInfo,
 } from "../runtime-contracts";
 import {
   isRuntimeInitWorkerRequest,
@@ -246,6 +247,16 @@ async function prepareMission(
       return;
     }
 
+    const workspaceError = stageMissionWorkspace(runtime, runtimeConfig);
+    if (workspaceError !== null) {
+      workerScope.postMessage({
+        type: "RUNTIME_ERROR",
+        requestId,
+        error: workspaceError,
+      });
+      return;
+    }
+
     const namespaceResult = buildMissionNamespace(
       runtime,
       setupData,
@@ -292,6 +303,22 @@ type MissionNamespaceResult =
       readonly error: RuntimeSystemError;
     };
 
+// Pyodide packages enabled for production content. These all ship in the
+// Pyodide package index, so loadPackage can fetch them in the browser. The
+// Data/ML worlds (pandas, Matplotlib, Pillow, scikit-learn, OpenCV) run fully
+// in-browser through this runtime, which is what makes the app hostable as a
+// static site with no local service.
+const ALLOWED_RUNTIME_PACKAGES = new Set([
+  "numpy",
+  "pandas",
+  "matplotlib",
+  "pillow",
+  "scipy",
+  "scikit-learn",
+  "opencv-python",
+]);
+const ALLOWED_RUNTIME_CONFIG_KEYS = new Set(["packages", "workspace"]);
+
 async function ensureRuntimePackages(
   pyodide: PyodideInterface,
   runtimeConfig: JsonObject | undefined,
@@ -300,15 +327,20 @@ async function ensureRuntimePackages(
     return null;
   }
 
-  const keys = Object.keys(runtimeConfig);
-  if (keys.length !== 1 || keys[0] !== "packages") {
+  const unknownKey = Object.keys(runtimeConfig).find(
+    (key) => !ALLOWED_RUNTIME_CONFIG_KEYS.has(key),
+  );
+  if (unknownKey !== undefined) {
     return {
       code: "UNSUPPORTED_RUNTIME_CONFIG",
-      message: "runtimeConfig hiện chỉ hỗ trợ trường packages.",
+      message: `runtimeConfig không hỗ trợ trường: ${unknownKey}.`,
     };
   }
 
   const packages = runtimeConfig.packages;
+  if (packages === undefined) {
+    return null;
+  }
   if (
     !Array.isArray(packages) ||
     !packages.every(
@@ -324,7 +356,7 @@ async function ensureRuntimePackages(
 
   const requestedPackages = [...new Set(packages as string[])];
   const unsupported = requestedPackages.filter(
-    (packageName) => packageName !== "numpy",
+    (packageName) => !ALLOWED_RUNTIME_PACKAGES.has(packageName.toLowerCase()),
   );
   if (unsupported.length > 0) {
     return {
@@ -348,6 +380,94 @@ async function ensureRuntimePackages(
         `Không thể tải package Python: ${requestedPackages.join(", ")}.`,
       ),
     };
+  }
+}
+
+const SIMPLE_FILENAME = /^[A-Za-z0-9._-]+$/;
+
+// Stage trusted inline datasets into the Pyodide virtual filesystem and reset
+// artifacts/, mirroring the Local Python workspace contract: before each
+// authoritative execution data/ is rebuilt from authored content and
+// artifacts/ is cleared, so reported outputs belong to the current run.
+function stageMissionWorkspace(
+  pyodide: PyodideInterface,
+  runtimeConfig: JsonObject | undefined,
+): RuntimeSystemError | null {
+  const workspace = runtimeConfig?.workspace;
+  if (workspace === undefined) {
+    // Still ensure the standard directories exist for missions that only
+    // write artifacts without declaring datasets.
+    pyodide.runPython(
+      'import os, shutil\nos.makedirs("data", exist_ok=True)\nshutil.rmtree("artifacts", ignore_errors=True)\nos.makedirs("artifacts", exist_ok=True)\n',
+    );
+    return null;
+  }
+
+  if (
+    typeof workspace !== "object" ||
+    workspace === null ||
+    Array.isArray(workspace)
+  ) {
+    return {
+      code: "INVALID_RUNTIME_CONFIG",
+      message: "runtimeConfig.workspace phải là object.",
+    };
+  }
+
+  const datasets = (workspace as JsonObject).datasets ?? [];
+  if (!Array.isArray(datasets)) {
+    return {
+      code: "INVALID_RUNTIME_CONFIG",
+      message: "runtimeConfig.workspace.datasets phải là danh sách.",
+    };
+  }
+
+  const normalized: { filename: string; content: string }[] = [];
+  for (const entry of datasets) {
+    if (
+      typeof entry !== "object" ||
+      entry === null ||
+      Array.isArray(entry) ||
+      typeof (entry as JsonObject).filename !== "string" ||
+      typeof (entry as JsonObject).content !== "string"
+    ) {
+      return {
+        code: "INVALID_DATASETS",
+        message: "Mỗi dataset cần filename và content dạng chuỗi.",
+      };
+    }
+    const filename = (entry as JsonObject).filename as string;
+    if (!SIMPLE_FILENAME.test(filename)) {
+      return {
+        code: "INVALID_DATASETS",
+        message: `Tên dataset không hợp lệ: ${filename}.`,
+      };
+    }
+    normalized.push({
+      filename,
+      content: (entry as JsonObject).content as string,
+    });
+  }
+
+  try {
+    pyodide.globals.set("__mission_datasets_json", JSON.stringify(normalized));
+    pyodide.runPython(
+      'import os, shutil, json, pathlib\n' +
+        'os.makedirs("data", exist_ok=True)\n' +
+        'shutil.rmtree("artifacts", ignore_errors=True)\n' +
+        'os.makedirs("artifacts", exist_ok=True)\n' +
+        'for __entry in json.loads(__mission_datasets_json):\n' +
+        '    (pathlib.Path("data") / __entry["filename"]).write_text(__entry["content"], encoding="utf-8")\n' +
+        'del __entry\n',
+    );
+    return null;
+  } catch (error) {
+    return {
+      code: "WORKSPACE_PREPARATION_FAILED",
+      message: getErrorMessage(error, "Không thể dựng workspace Pyodide."),
+    };
+  } finally {
+    pyodide.globals.delete("__mission_datasets_json");
   }
 }
 
@@ -480,6 +600,18 @@ async function submitCode(
       return;
     }
 
+    const workspaceError = stageMissionWorkspace(runtime, runtimeConfig);
+    if (workspaceError !== null) {
+      postSubmitResult(
+        requestId,
+        executionFailure(
+          workspaceError.code ?? "WORKSPACE_PREPARATION_FAILED",
+          workspaceError.message,
+        ),
+      );
+      return;
+    }
+
     const namespaceResult = buildMissionNamespace(
       runtime,
       setupData,
@@ -512,6 +644,81 @@ async function submitCode(
     submitNamespace?.destroy();
     activeOperationRequestId = null;
   }
+}
+
+// Scan the data/ and artifacts/ directories in the Pyodide virtual filesystem
+// after execution and return a RuntimeWorkspaceInfo. Small image artifacts are
+// inlined as base64 data URLs so the mission workspace can display the figure
+// or image the learner just produced (the browser can't read the virtual FS
+// directly). This is workspace/presentation metadata, kept separate from the
+// grader's variable observations.
+const WORKSPACE_SCAN_SOURCE = `
+import os, json, base64, pathlib
+
+def __plg_scan(dirname, want_image_data):
+    items = []
+    base = pathlib.Path(dirname)
+    if base.is_dir():
+        for p in sorted(base.iterdir()):
+            if not p.is_file():
+                continue
+            ext = p.suffix.lower().lstrip(".")
+            size = p.stat().st_size
+            category = {
+                "png": "image", "jpg": "image", "jpeg": "image",
+                "gif": "image", "webp": "image", "bmp": "image",
+                "csv": "csv", "json": "json", "txt": "text",
+            }.get(ext, "file")
+            item = {
+                "filename": p.name,
+                "relativePath": dirname + "/" + p.name,
+                "bytes": size,
+                "extension": ext,
+                "category": category,
+            }
+            if want_image_data and category == "image" and 0 < size <= 2_000_000:
+                mime = {
+                    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+                    "gif": "image/gif", "webp": "image/webp", "bmp": "image/bmp",
+                }.get(ext, "application/octet-stream")
+                encoded = base64.b64encode(p.read_bytes()).decode("ascii")
+                item["dataUrl"] = "data:" + mime + ";base64," + encoded
+            items.append(item)
+    return items
+
+__plg_ws = json.dumps({
+    "datasets": __plg_scan("data", False),
+    "artifacts": __plg_scan("artifacts", True),
+})
+`;
+
+function scanWorkspace(
+  pyodide: PyodideInterface,
+): RuntimeWorkspaceInfo | undefined {
+  try {
+    pyodide.runPython(WORKSPACE_SCAN_SOURCE);
+    const raw = pyodide.globals.get("__plg_ws") as unknown;
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : undefined;
+    return parsed as RuntimeWorkspaceInfo | undefined;
+  } catch {
+    return undefined;
+  } finally {
+    try {
+      pyodide.runPython(
+        'for __n in ("__plg_ws", "__plg_scan"):\n'
+          + '    globals().pop(__n, None)\n',
+      );
+    } catch {
+      // best-effort cleanup only
+    }
+  }
+}
+
+function withWorkspace(
+  result: RuntimeExecutionResult,
+  workspace: RuntimeWorkspaceInfo | undefined,
+): RuntimeExecutionResult {
+  return workspace === undefined ? result : { ...result, workspace };
 }
 
 async function executePython(
@@ -562,20 +769,28 @@ async function executePython(
     pyodide.setStderr();
   }
 
+  const producedOutput =
+    result.status === RUNTIME_EXECUTION_STATUS.SUCCESS ||
+    result.status === RUNTIME_EXECUTION_STATUS.PYTHON_EXCEPTION;
+  const workspace = producedOutput ? scanWorkspace(pyodide) : undefined;
+
   if (
     observeVariables !== undefined &&
     (result.status === RUNTIME_EXECUTION_STATUS.SUCCESS ||
       result.status === RUNTIME_EXECUTION_STATUS.PYTHON_EXCEPTION)
   ) {
     try {
-      return {
-        ...result,
-        serialized: await collectRuntimeObservations(
-          pyodide,
-          globals,
-          observeVariables,
-        ),
-      };
+      return withWorkspace(
+        {
+          ...result,
+          serialized: await collectRuntimeObservations(
+            pyodide,
+            globals,
+            observeVariables,
+          ),
+        },
+        workspace,
+      );
     } catch (error) {
       return executionFailure(
         "RUNTIME_OBSERVATION_FAILED",
@@ -589,7 +804,7 @@ async function executePython(
     }
   }
 
-  return result;
+  return withWorkspace(result, workspace);
 }
 
 async function collectRuntimeObservations(

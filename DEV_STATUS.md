@@ -8,7 +8,7 @@
 Phase F — Local Python IDE Runtime
 ```
 
-Status: **F1 COMPLETE / LOCKED; F2 implemented and awaiting Windows automated + learner-facing validation.**
+Status: **F1 COMPLETE / LOCKED; F2 COMPLETE / LOCKED; F3 COMPLETE / LOCKED; F4 IN PROGRESS.**
 
 2026-10-04 Phase E direction: the seven-activity NumPy slice is considered complete/locked. The current phase focuses on daily learning UX rather than new NumPy content: linear unlock guidance, a today recommendation, lightweight self-checks that do not create AttemptRecords, direct service-level lock enforcement, keyboard shortcuts, and responsive practice ergonomics. Existing attempts keep access even if they predate the unlock policy.
 2026-10-03 direction lock: Phase A (first playable mission), Phase B (persistent learning loop), and the core Phase C reward/meta-progression loop are complete and locked. The abandoned Phaser/Sensor Control Room branch remains removed. Phase D productionizes the complete seven-activity CS116 NumPy slice while preserving the same learning/runtime boundaries: deterministic generated data, reusable declarative grading, H1–H4 hints, durable AttemptRecords, review selection, and optional meta rewards. No Phaser dependency is part of the learning path.
@@ -27,10 +27,24 @@ Foundation 1 is complete and locked. F1.1 established the project/tooling founda
 ## Current Task
 
 ```text
-Phase F2 — Learner-facing Local Python IDE integration
+Phase F4 — Native Data/ML curriculum expansion
 ```
 
-Status: **Implementation Complete / Awaiting Windows automated + manual validation**
+Status: **IN PROGRESS — broad World 2 Data/ML foundation batch implemented; one combined manual playtest pending.**
+
+Current F4 slice:
+
+- LC-02 remains the pandas CSV-entry bridge from F3;
+- World 2 `Python for Data Science — pandas, biểu đồ & ảnh` now extends the Local Python path through LC-12;
+- LC-03/04 cover `Series` vs one-column `DataFrame` and boolean row filtering;
+- LC-05/06/07 add supplementary ML-foundation practice for missing values, `groupby`/aggregation and `pivot_table`;
+- LC-08/09 add Matplotlib Figure/Axes practice with line/scatter plots and PNG artifacts;
+- LC-10 adds supplementary pandas `merge` / inner-join practice across two staged CSV datasets;
+- LC-11/12 connect image data back to NumPy by reading RGB images with Pillow, inspecting `height × width × channels`, then crop/resize and save a PNG artifact;
+- every new activity keeps `main.py` as the only editable source and reuses Local Python, staged datasets, declarative grading, H1–H4 hints, AttemptRecord, progression and rewards;
+- topics not established as CS116-owned are explicitly classified as `SUPPLEMENTARY_ML_FOUNDATION` rather than silently presented as lecture material;
+- scikit-learn and OpenCV activities are intentionally deferred because those packages are not currently installed in the validated Local Python environment; F4 does not silently install packages or add a package installer;
+- no notebook editor, multi-file IDE or Challenge scoring is added in this batch.
 
 Phase D implementation scope:
 
@@ -1513,7 +1527,7 @@ Phase B tooling note:
 
 ## Phase F — Local Python Runtime Foundation
 
-Status: **F1 COMPLETE / LOCKED. F2 learner-facing IDE integration is implemented and awaiting Windows validation.**
+Status: **F1 COMPLETE / LOCKED. F2 COMPLETE / LOCKED. F3 COMPLETE / LOCKED.**
 
 Architecture lock:
 
@@ -1561,4 +1575,23 @@ F2 implementation:
 - added `LC-01 — NumPy trên máy thật`, a post-slice bridge exercise that reuses learned NumPy indexing but runs through `core.local_python`;
 - the original canonical VS-01..VS-07 vertical slice remains unchanged and continues using Pyodide.
 
-Next F3 gate: service-owned read-only datasets plus generated artifact discovery/download for CSV/PNG/model outputs.
+F3 implementation:
+
+- Local Python protocol v2 carries optional workspace metadata separately from diagnostics and grader observations;
+- each session owns `main.py`, `data/`, and `artifacts/`;
+- trusted authored inline datasets are validated and staged under `data/`; browser-supplied host source paths are not supported;
+- every Run/Submit restages datasets and clears `artifacts/` before execution, then performs a bounded artifact metadata scan;
+- the Mission Workspace shows Local-Python-only “Dữ liệu” and “File đầu ra” sections without adding a file-tree editor;
+- LC-02 reads `data/telemetry.csv` with pandas and grades `df.shape` plus `list(df.columns)` through the existing declarative grader;
+- pandas must already exist in the learner's Local Python environment; there is no hidden package installation;
+- the workspace is an application boundary only. Learner Python still runs as the current OS user and is not a hardened hostile-code sandbox;
+- Challenge/Exam CSV scoring and broader sklearn curriculum remain future work.
+
+F3 final validation:
+
+- [x] `npm.cmd run typecheck` passed;
+- [x] `npm.cmd test` passed: 60 files, 820 tests;
+- [x] `npm.cmd run build -- --outDir dist-phase-f3` passed;
+- [x] `cd local-runtime && python -m unittest discover -s tests -v` passed: 10 tests;
+- [x] full Vitest caught one stale hard-coded production-generator list; the test now includes `cs116.pandas.csv-inspection` and the suite passes;
+- [x] `git diff --check` passed.

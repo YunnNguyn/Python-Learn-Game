@@ -531,6 +531,10 @@ Submit must not depend on variables or mutations left behind by previous Run ope
 
 **One Submit creates one immutable `AttemptRecord`.** Failed and successful submissions both create records. The record is the evidence snapshot for that single submission; a multi-submit mission session is not represented by mutating one record.
 
+For `core.local_python` missions, Run and Submit share a service-owned mission workspace with one editable `main.py`, mission-provided `data/`, and learner-generated `artifacts/`. Authored datasets are restaged and `artifacts/` is cleared before every execution. Run still creates no `AttemptRecord`; Submit still creates exactly one. Workspace metadata is execution metadata and remains separate from grader observations.
+
+LC-02 is the first production Phase F3 mission. It reads `data/telemetry.csv` with pandas and is graded through the existing declarative grader using DataFrame shape and column observations. Artifact-based Challenge/Exam scoring is future work and is not part of LC-02 or Phase F3.
+
 When pedagogically useful, the authoritative Submit response may still visualize a learner-produced result that is structurally valid but incorrect. Grader feedback explains the mismatch while the visualization communicates what the submitted computation actually selected or produced. This behavior remains renderer-neutral through `WorldEvent` / preview contracts and does not couple missions to Phaser.
 
 If the runtime worker is recycled, the mission environment must be reconstructed from the `MissionInstance`.

@@ -67,6 +67,36 @@ class WorkerTests(unittest.TestCase):
             self.assertIn('File "main.py", line 2', result["exception"]["traceback"])
             self.assertEqual(result["serialized"]["variables"]["x"]["value"], 1)
 
+    def test_non_finite_and_unsafe_values_are_omitted_not_invalid_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result_path = Path(tmp) / "result.json"
+            exit_code = run_request(
+                {
+                    "setupData": {},
+                    "code": (
+                        "values = [10.0, float('nan'), 30.0]\n"
+                        "ratio = float('inf')\n"
+                        "big = 2 ** 60\n"
+                        "ok = [1.5, None]\n"
+                    ),
+                    "observeVariables": ["values", "ratio", "big", "ok"],
+                },
+                result_path,
+            )
+            self.assertEqual(exit_code, 0)
+            raw = result_path.read_text(encoding="utf-8")
+            # Strict JSON: browsers reject NaN/Infinity tokens.
+            result = json.loads(
+                raw,
+                parse_constant=lambda token: self.fail(f"invalid JSON token {token}"),
+            )
+            variables = result["serialized"]["variables"]
+            self.assertEqual(variables["values"]["pythonType"], "list")
+            self.assertNotIn("value", variables["values"])
+            self.assertNotIn("value", variables["ratio"])
+            self.assertNotIn("value", variables["big"])
+            self.assertEqual(variables["ok"]["value"], [1.5, None])
+
 
 if __name__ == "__main__":
     unittest.main()

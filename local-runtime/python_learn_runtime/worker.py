@@ -2,13 +2,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import traceback
 from pathlib import Path
 from typing import Any
 
 
+_JS_SAFE_INTEGER = 9007199254740991
+
+
 def _json_value(value: Any) -> Any:
-    if value is None or isinstance(value, (bool, int, float, str)):
+    # Mirror the Pyodide observation contract: values that are not strict
+    # JSON / JS-safe (NaN, ±inf, integers beyond 2**53-1) are not serialized,
+    # so the observation omits `value` instead of emitting invalid JSON.
+    if value is None or isinstance(value, (bool, str)):
+        return value
+
+    if isinstance(value, int):
+        if abs(value) > _JS_SAFE_INTEGER:
+            raise ValueError("Integer exceeds the JavaScript safe range")
+        return value
+
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("Non-finite float is not JSON serializable")
         return value
 
     if isinstance(value, tuple):

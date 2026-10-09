@@ -14,10 +14,23 @@ const ACTIVITY_IDS = [
   CS116_PRODUCTION_IDS.activityVs05,
   CS116_PRODUCTION_IDS.activityVs06,
   CS116_PRODUCTION_IDS.activityVs07,
+  CS116_PRODUCTION_IDS.activityLc01,
+  CS116_PRODUCTION_IDS.activityLc02,
+  CS116_PRODUCTION_IDS.activityLc03,
+  CS116_PRODUCTION_IDS.activityLc04,
+  CS116_PRODUCTION_IDS.activityLc05,
+  CS116_PRODUCTION_IDS.activityLc06,
+  CS116_PRODUCTION_IDS.activityLc07,
+  CS116_PRODUCTION_IDS.activityLc08,
+  CS116_PRODUCTION_IDS.activityLc09,
+  CS116_PRODUCTION_IDS.activityLc10,
+  CS116_PRODUCTION_IDS.activityLc11,
+  CS116_PRODUCTION_IDS.activityLc12,
+  CS116_PRODUCTION_IDS.activityLc13,
 ] as const;
 
 describe("mission lesson guides", () => {
-  it("covers every production NumPy activity with lesson content and a formative self-check", () => {
+  it("covers every production learning activity with lesson content and a formative self-check", () => {
     for (const activityId of ACTIVITY_IDS) {
       expect(getMissionLessonGuide(activityId)).not.toBeNull();
       const check = getMissionQuickCheck(activityId);

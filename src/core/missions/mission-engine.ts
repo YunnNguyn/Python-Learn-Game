@@ -111,7 +111,7 @@ export class MissionEngine {
         instance,
       };
 
-      return { ok: true };
+      return preparation;
     } finally {
       if (this.activeOperation === operation) {
         this.activeOperation = null;

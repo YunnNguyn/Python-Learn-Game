@@ -9,6 +9,18 @@ export const CS116_HINT_SET_ID = {
   VS05: "cs116.hints.numpy.vs05" as HintSetId,
   VS06: "cs116.hints.numpy.vs06" as HintSetId,
   VS07: "cs116.hints.numpy.vs07" as HintSetId,
+  LC02: "cs116.hints.pandas.lc02" as HintSetId,
+  LC03: "cs116.hints.pandas.lc03" as HintSetId,
+  LC04: "cs116.hints.pandas.lc04" as HintSetId,
+  LC05: "cs116.hints.pandas.lc05" as HintSetId,
+  LC06: "cs116.hints.pandas.lc06" as HintSetId,
+  LC07: "cs116.hints.pandas.lc07" as HintSetId,
+  LC08: "cs116.hints.matplotlib.lc08" as HintSetId,
+  LC09: "cs116.hints.matplotlib.lc09" as HintSetId,
+  LC10: "cs116.hints.pandas.lc10" as HintSetId,
+  LC11: "cs116.hints.pillow.lc11" as HintSetId,
+  LC12: "cs116.hints.pillow.lc12" as HintSetId,
+  LC13: "cs116.hints.pandas.lc13" as HintSetId,
 } as const;
 
 export const CS116_VS01_HINT_SET: HintSet = {
@@ -165,6 +177,270 @@ export const CS116_VS07_HINT_SET: HintSet = {
   ],
 };
 
+export const CS116_LC02_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.LC02,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Dataset đã có sẵn trong workspace. Hãy bắt đầu từ DataFrame `df` được đọc bằng pandas rồi quan sát cấu trúc của nó.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Bạn cần lưu hai thông tin: kích thước DataFrame dưới dạng tuple và danh sách tên cột dưới dạng list Python.",
+    },
+    {
+      level: HintLevel.H3,
+      text: "Dùng `df.shape` cho kích thước và `list(df.columns)` để chuyển Index tên cột thành list.",
+    },
+    {
+      level: HintLevel.H4,
+      text: "Pseudocode: đọc `data/telemetry.csv` bằng `pd.read_csv` → `shape_result = df.shape` → `columns_result = list(df.columns)`.",
+    },
+  ],
+};
+
+export const CS116_LC03_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.LC03,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Trong pandas, chọn một cột bằng tên cột có thể tạo Series hoặc DataFrame tùy số lớp ngoặc vuông bạn dùng.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Một cặp ngoặc với chuỗi tên cột trả về Series; hai cặp ngoặc với list tên cột giữ kết quả ở dạng DataFrame.",
+    },
+    {
+      level: HintLevel.H3,
+      text: "Dùng `df[\"distance\"]` cho Series và `df[[\"distance\"]]` cho DataFrame một cột. Series có `.ndim == 1`.",
+    },
+    {
+      level: HintLevel.H4,
+      text: "Pseudocode: đọc CSV → tạo distance_series và distance_frame → `series_values = distance_series.tolist()` → đọc ndim và shape vào các biến kết quả.",
+    },
+  ],
+};
+
+export const CS116_LC04_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.LC04,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Boolean filtering của pandas cũng bắt đầu bằng một phép so sánh theo từng hàng, nhưng điều kiện được tạo từ một Series của DataFrame.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Tạo điều kiện từ cột threat với threshold, dùng điều kiện đó để lọc df, rồi lấy cột contact_id của các hàng còn lại.",
+    },
+    {
+      level: HintLevel.H3,
+      text: "Mẫu chính là `df[df[\"threat\"] >= threshold]`. Sau đó có thể lấy `filtered[\"contact_id\"].tolist()`.",
+    },
+    {
+      level: HintLevel.H4,
+      text: "Pseudocode: filtered = df[df[\"threat\"] >= threshold] → filtered_ids = filtered[\"contact_id\"].tolist() → filtered_count = len(filtered).",
+    },
+  ],
+};
+
+export const CS116_LC05_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.LC05,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Trước khi điền dữ liệu, hãy đo xem cột signal đang thiếu bao nhiêu giá trị.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Series có .isna() để tạo mask missing; .sum() đếm số True. Median là một lựa chọn đơn giản và bền hơn mean khi có outlier.",
+    },
+    {
+      level: HintLevel.H3,
+      text: "Dùng df[\"signal\"].isna().sum(), df[\"signal\"].median() và df[\"signal\"].fillna(...).",
+    },
+    {
+      level: HintLevel.H4,
+      text: "Pseudocode: đếm missing trước → median_signal = median của signal → clean_signal = fillna(median_signal) → đếm missing sau → .tolist().",
+    },
+  ],
+};
+
+export const CS116_LC06_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.LC06,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "groupby tách DataFrame thành các nhóm theo một khóa; sau đó bạn chọn cột số và áp dụng phép aggregation.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Bạn cần nhóm theo team, chọn score, tính mean, rồi sort theo index để kết quả ổn định.",
+    },
+    {
+      level: HintLevel.H3,
+      text: "Mẫu chính: df.groupby(\"team\")[\"score\"].mean().sort_index().",
+    },
+    {
+      level: HintLevel.H4,
+      text: "Pseudocode: grouped = groupby(team) → mean(score) → sort_index → mean_scores = grouped.to_dict() → group_count = len(grouped).",
+    },
+  ],
+};
+
+export const CS116_LC07_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.LC07,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Pivot table biến dữ liệu dạng dài thành bảng hai chiều. Bạn cần xác định biến nào làm hàng, cột và giá trị trong mỗi ô.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Ở bài này team là index, metric là columns, value là values và mỗi ô dùng mean.",
+    },
+    {
+      level: HintLevel.H3,
+      text: "Dùng pd.pivot_table(df, index=\"team\", columns=\"metric\", values=\"value\", aggfunc=\"mean\").",
+    },
+    {
+      level: HintLevel.H4,
+      text: "Sau pivot, sort index và columns; lấy list(pivot.columns) và pivot.round(3).to_numpy().tolist().",
+    },
+  ],
+};
+
+export const CS116_LC08_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.LC08,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Matplotlib tách Figure (toàn bộ hình) và Axes (vùng vẽ). Bài này dùng Axes để vẽ và đặt nhãn.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Vẽ epoch trên trục x và loss trên trục y bằng ax.plot, sau đó đặt xlabel, ylabel và title đúng chuỗi đề yêu cầu.",
+    },
+    {
+      level: HintLevel.H3,
+      text: "Các lời gọi cần dùng: ax.plot(df[\"epoch\"], df[\"loss\"]), ax.set_xlabel(...), ax.set_ylabel(...), ax.set_title(...).",
+    },
+    {
+      level: HintLevel.H4,
+      text: "Hoàn thành bốn lời gọi trên rồi giữ nguyên fig.savefig(output_path, ...). File PNG phải xuất hiện trong danh sách artifacts.",
+    },
+  ],
+};
+
+export const CS116_LC09_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.LC09,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Bài này giống LC-08 về Figure/Axes nhưng primitive vẽ đổi từ line sang scatter.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Tạo Figure/Axes bằng plt.subplots(), rồi đưa distance lên x và threat lên y.",
+    },
+    {
+      level: HintLevel.H3,
+      text: "Mẫu chính: fig, ax = plt.subplots() và ax.scatter(df[\"distance\"], df[\"threat\"]).",
+    },
+    {
+      level: HintLevel.H4,
+      text: "Đặt xlabel='distance', ylabel='threat', title='Threat by distance', rồi giữ savefig đúng output_path để artifact được tạo.",
+    },
+  ],
+};
+
+export const CS116_LC10_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.LC10,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Hai bảng có chung khóa user_id. Với inner join, chỉ các khóa xuất hiện ở cả hai phía mới còn trong kết quả.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Hãy dùng bảng events làm phía trái, ghép users theo user_id, rồi kiểm tra số hàng và các cột region/spend sau merge.",
+    },
+    {
+      level: HintLevel.H3,
+      text: "Mẫu chính: events.merge(users, on=\"user_id\", how=\"inner\").",
+    },
+    {
+      level: HintLevel.H4,
+      text: "Pseudocode: merged = inner merge → merged_ids = merged[\"user_id\"].tolist() → merged_regions = merged[\"region\"].tolist() → total_spend = int(merged[\"spend\"].sum()).",
+    },
+  ],
+};
+
+export const CS116_LC11_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.LC11,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Ảnh RGB có thể nhìn như một NumPy array 3 chiều: height × width × channels.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Pillow đọc ảnh; np.array chuyển pixel sang ndarray. Lưu ý image.size của Pillow là (width, height), còn ndarray.shape là (height, width, channels).",
+    },
+    {
+      level: HintLevel.H3,
+      text: "Dùng pixels = np.array(image), rồi đọc image.size, pixels.shape, pixels.shape[2] và pixel tại [0, 0].",
+    },
+    {
+      level: HintLevel.H4,
+      text: "Pseudocode: pixels=np.array(image) → image_size=image.size → pixel_shape=pixels.shape → channels=pixels.shape[2] → top_left=pixels[0,0].tolist().",
+    },
+  ],
+};
+
+export const CS116_LC12_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.LC12,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Pillow crop dùng box (left, upper, right, lower); cạnh right/lower không thuộc vùng lấy.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Crop góc trên-trái bằng (0, 0, 2, 2), sau đó resize kết quả thành (4, 4).",
+    },
+    {
+      level: HintLevel.H3,
+      text: "Mẫu chính: cropped = image.crop((0, 0, 2, 2)); resized = cropped.resize((4, 4)); sau đó resized.save(output_path).",
+    },
+    {
+      level: HintLevel.H4,
+      text: "Sau khi lưu, chuyển resized sang np.array, rồi ghi cropped.size, resized.size, resized_pixels.shape và kiểm tra Path(output_path).is_file().",
+    },
+  ],
+};
+
+export const CS116_LC13_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.LC13,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Một cột mới trong DataFrame được tạo bằng cách gán vào df[\"tên_cột\"]. Giá trị có thể là phép tính trên các cột có sẵn.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Phép nhân hai cột là element-wise theo từng hàng: df[\"a\"] * df[\"b\"]. Sau khi có cột value, dùng nó để tìm hàng lớn nhất và tổng.",
+    },
+    {
+      level: HintLevel.H3,
+      text: "Mẫu chính: df[\"value\"] = df[\"close\"] * df[\"volume\"]; columns_after = list(df.columns); value_list = df[\"value\"].tolist().",
+    },
+    {
+      level: HintLevel.H4,
+      text: "top_symbol = df.loc[df[\"value\"].idxmax(), \"symbol\"]; total_value = int(df[\"value\"].sum()).",
+    },
+  ],
+};
+
 export const CS116_PRODUCTION_HINT_SETS = [
   CS116_VS01_HINT_SET,
   CS116_VS02_HINT_SET,
@@ -173,6 +449,18 @@ export const CS116_PRODUCTION_HINT_SETS = [
   CS116_VS05_HINT_SET,
   CS116_VS06_HINT_SET,
   CS116_VS07_HINT_SET,
+  CS116_LC02_HINT_SET,
+  CS116_LC03_HINT_SET,
+  CS116_LC04_HINT_SET,
+  CS116_LC05_HINT_SET,
+  CS116_LC06_HINT_SET,
+  CS116_LC07_HINT_SET,
+  CS116_LC08_HINT_SET,
+  CS116_LC09_HINT_SET,
+  CS116_LC10_HINT_SET,
+  CS116_LC11_HINT_SET,
+  CS116_LC12_HINT_SET,
+  CS116_LC13_HINT_SET,
 ] as const;
 
 export function registerCs116Hints(registry: HintRegistry): void {

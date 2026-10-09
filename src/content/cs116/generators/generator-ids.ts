@@ -8,4 +8,7 @@ export const CS116_GENERATOR_ID = {
   COLUMN_EXTRACT: generatorId("cs116.numpy.column-extract"),
   THRESHOLD_FILTER: generatorId("cs116.numpy.threshold-filter"),
   HOSTILE_CONTACT: generatorId("cs116.numpy.hostile-contact"),
+  CSV_INSPECTION: generatorId("cs116.pandas.csv-inspection"),
+  PANDAS_PRACTICE: generatorId("cs116.pandas.practice"),
+  DATA_SCIENCE_PRACTICE: generatorId("cs116.data-science.practice"),
 } as const;

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { RuntimeVariableObservationsSchema } from "../runtime-observations";
 
-export const LOCAL_PYTHON_PROTOCOL_VERSION = 1;
+export const LOCAL_PYTHON_PROTOCOL_VERSION = 2;
 
 export const LocalPythonHealthSchema = z.strictObject({
   ok: z.literal(true),
@@ -19,8 +19,25 @@ export const LocalPythonSessionCreatedSchema = z.strictObject({
   sessionId: z.string().min(1),
 });
 
+const LocalPythonWorkspaceFileSchema = z.strictObject({
+  filename: z.string().min(1),
+  relativePath: z.string().min(1),
+  bytes: z.number().int().nonnegative(),
+  description: z.string().optional(),
+  extension: z.string().optional(),
+  category: z.string().optional(),
+});
+
+const LocalPythonWorkspaceSchema = z.strictObject({
+  datasets: z.array(LocalPythonWorkspaceFileSchema),
+  artifacts: z.array(LocalPythonWorkspaceFileSchema),
+});
+
 export const LocalPythonLifecycleResponseSchema = z.discriminatedUnion("ok", [
-  z.strictObject({ ok: z.literal(true) }),
+  z.strictObject({
+    ok: z.literal(true),
+    workspace: LocalPythonWorkspaceSchema.optional(),
+  }),
   z.strictObject({
     ok: z.literal(false),
     error: z.strictObject({
@@ -33,6 +50,7 @@ export const LocalPythonLifecycleResponseSchema = z.discriminatedUnion("ok", [
 const LocalPythonExecutionBaseSchema = z.object({
   stdout: z.string(),
   stderr: z.string(),
+  workspace: LocalPythonWorkspaceSchema.optional(),
 });
 
 export const LocalPythonExecutionResponseSchema = z.discriminatedUnion("status", [

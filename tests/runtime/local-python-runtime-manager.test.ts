@@ -31,10 +31,22 @@ function createFetchQueue(responses: readonly QueuedResponse[]) {
 const health = {
   ok: true,
   service: "python-learn-runtime",
-  protocolVersion: 1,
+  protocolVersion: 2,
   pythonVersion: "3.13.7",
   pythonExecutable: "C:/Python/python.exe",
   pid: 1234,
+};
+
+const workspace = {
+  datasets: [
+    {
+      filename: "telemetry.csv",
+      relativePath: "data/telemetry.csv",
+      bytes: 42,
+      description: "Telemetry fixture",
+    },
+  ],
+  artifacts: [],
 };
 
 const observations = {
@@ -67,7 +79,7 @@ describe("LocalPythonRuntimeManager", () => {
     const { fetchImpl, calls } = createFetchQueue([
       { body: health },
       { status: 201, body: { sessionId: "abc" } },
-      { body: { ok: true } },
+      { body: { ok: true, workspace } },
     ]);
     const manager = new LocalPythonRuntimeManager({ fetchImpl });
     await manager.initialize();
@@ -77,7 +89,7 @@ describe("LocalPythonRuntimeManager", () => {
         runtimeConfig: { executionTimeoutSeconds: 45 },
         setupData: { values: [2, 5, 8] },
       }),
-    ).resolves.toEqual({ ok: true });
+    ).resolves.toEqual({ ok: true, workspace });
 
     expect(calls[2]?.input).toContain("/sessions/abc/prepare");
     expect(JSON.parse(calls[2]?.init?.body ?? "{}")).toEqual({
@@ -96,6 +108,18 @@ describe("LocalPythonRuntimeManager", () => {
           stdout: "15\n",
           stderr: "",
           serialized: observations,
+          workspace: {
+            ...workspace,
+            artifacts: [
+              {
+                filename: "predictions.csv",
+                relativePath: "artifacts/predictions.csv",
+                bytes: 18,
+                extension: "csv",
+                category: "csv",
+              },
+            ],
+          },
         },
       },
     ]);
@@ -109,6 +133,18 @@ describe("LocalPythonRuntimeManager", () => {
       stdout: "15\n",
       stderr: "",
       serialized: observations,
+      workspace: {
+        ...workspace,
+        artifacts: [
+          {
+            filename: "predictions.csv",
+            relativePath: "artifacts/predictions.csv",
+            bytes: 18,
+            extension: "csv",
+            category: "csv",
+          },
+        ],
+      },
     });
 
     expect(JSON.parse(calls[2]?.init?.body ?? "{}")).toEqual({

@@ -171,6 +171,8 @@ The canonical vertical-slice activities are:
 
 See `CURRICULUM.md` for concept ownership and `MISSION_SYSTEM.md` for activity behavior.
 
+The first post-NumPy production expansion enters **World 2 — Python for Data Science** on the Local Python runtime. The current World 2 batch covers `DataFrame` / `Series`, column selection, boolean filtering, missing values, groupby/aggregation, pivot tables, table merge, Matplotlib line/scatter artifacts, and RGB image-array fundamentals with Pillow. Topics not established as CS116 lecture-owned are labeled Supplementary / ML Foundation. These exercises continue to use one editable `main.py` plus staged datasets/artifacts and the same MissionEngine, declarative grader, AttemptRecord, hint, progression, and reward boundaries rather than introducing a notebook-specific execution path.
+
 ### 5.3 Optional visualization
 
 Visualization is not part of the baseline acceptance path. A future lesson may add a focused visualization when it materially improves understanding, but normal NumPy missions remain editor + runtime + grading experiences.
@@ -382,3 +384,9 @@ For open-ended exams/challenges, the evaluator may grade an output artifact such
 ### Local Python learner experience (Phase F2)
 
 Local-compute activities use the same lesson → prompt → data → single-file IDE flow as browser exercises. The practice tab identifies the active runtime, treats the editable source as `main.py`, exposes Run/Submit consistently, and shows Stop only when the runtime supports interruption. Stopping execution is runtime control, not a submission and not mastery evidence. If the loopback service is unavailable, the learner receives a concrete startup command and can retry the connection without leaving the mission. The first bridge activity (`LC-01`) intentionally reuses already-learned NumPy indexing so runtime behavior can be validated without introducing a new ML concept at the same time.
+
+### Local Python mission workspace (Phase F3)
+
+Each Local Python mission session owns a service-managed workspace containing the learner-editable `main.py`, trusted mission-provided files under `data/`, and learner-generated outputs under `artifacts/`. Authored content may declare small inline datasets; browser requests do not provide arbitrary host source paths. Dataset metadata is available before execution, while artifact metadata refreshes after Run/Submit. Before every Run/Submit the service restages `data/` and clears `artifacts/`, so reported outputs belong to the current execution.
+
+The product does not install pandas or other large packages during a mission. Local Python uses the learner's existing environment; a missing package fails normally and visibly. This workspace boundary is for product correctness and path control only: learner Python still runs as the current OS user and is not a hardened hostile-code sandbox. Challenge/Exam CSV scoring is future Phase G work.
