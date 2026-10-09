@@ -20,6 +20,7 @@ import {
   type RuntimeRunResultWorkerResponse,
   type RuntimeSubmitResultWorkerResponse,
 } from "./worker-protocol";
+import { buildObservationExpression } from "./observation-helper";
 import { createPythonSetupNamespace } from "./setup-conversion";
 import { validateSetupKeys } from "./setup-validation";
 
@@ -40,108 +41,6 @@ let initializationPromise: Promise<PyodideInterface> | null = null;
 let runtime: PyodideInterface | null = null;
 let activeNamespace: PyProxy | null = null;
 let activeOperationRequestId: string | null = null;
-
-const OBSERVATION_HELPER_SOURCE = `
-import json
-import math
-
-_JS_SAFE_INTEGER = 9007199254740991
-
-def __runtime_json_safe(value, ancestors):
-    if value is None or isinstance(value, (bool, str)):
-        return True, value
-
-    if isinstance(value, int):
-        if abs(value) > _JS_SAFE_INTEGER:
-            return False, None
-        return True, value
-
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            return False, None
-        return True, value
-
-    if isinstance(value, (list, tuple)):
-        identity = id(value)
-        if identity in ancestors:
-            return False, None
-        ancestors.add(identity)
-        normalized = []
-        try:
-            for item in value:
-                ok, converted = __runtime_json_safe(item, ancestors)
-                if not ok:
-                    return False, None
-                normalized.append(converted)
-            return True, normalized
-        finally:
-            ancestors.discard(identity)
-
-    if isinstance(value, dict):
-        identity = id(value)
-        if identity in ancestors:
-            return False, None
-        ancestors.add(identity)
-        normalized = {}
-        try:
-            for key, item in value.items():
-                if not isinstance(key, str):
-                    return False, None
-                ok, converted = __runtime_json_safe(item, ancestors)
-                if not ok:
-                    return False, None
-                normalized[key] = converted
-            return True, normalized
-        finally:
-            ancestors.discard(identity)
-
-    return False, None
-
-def __runtime_collect(scope, names):
-    variables = {}
-    for name in names:
-        if name not in scope:
-            continue
-
-        value = scope[name]
-        value_type = type(value)
-        is_ndarray = (
-            value_type.__module__ == "numpy"
-            and value_type.__name__ == "ndarray"
-        )
-        observed = {
-            "pythonType": value_type.__name__,
-            "isNdarray": is_ndarray,
-        }
-
-        candidate = value
-        if is_ndarray:
-            try:
-                shape = [int(dimension) for dimension in value.shape]
-                if all(
-                    0 <= dimension <= _JS_SAFE_INTEGER
-                    for dimension in shape
-                ):
-                    observed["shape"] = shape
-                candidate = value.tolist()
-            except Exception:
-                candidate = value
-
-        try:
-            ok, normalized = __runtime_json_safe(candidate, set())
-            if ok:
-                observed["value"] = normalized
-        except Exception:
-            pass
-
-        variables[name] = observed
-
-    return json.dumps(
-        {"variables": variables},
-        allow_nan=False,
-        separators=(",", ":"),
-    )
-`;
 
 workerScope.onmessage = (event) => {
   if (isRuntimeInitWorkerRequest(event.data)) {
@@ -812,11 +711,7 @@ async function collectRuntimeObservations(
   globals: PyProxy,
   observeVariables: readonly string[],
 ): Promise<JsonObject> {
-  const expression = `(lambda __runtime_ns: (exec(${JSON.stringify(
-    OBSERVATION_HELPER_SOURCE,
-  )}, __runtime_ns), __runtime_ns["__runtime_collect"](globals(), ${JSON.stringify(
-    observeVariables,
-  )}))[1])({})`;
+  const expression = buildObservationExpression(observeVariables);
   let serializedValue: unknown;
 
   try {
