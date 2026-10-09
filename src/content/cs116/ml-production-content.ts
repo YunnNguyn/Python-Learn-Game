@@ -18,8 +18,13 @@ import { CS116_ML_CONCEPTS } from "./ml-concepts";
 import { CS116_HINT_SET_ID } from "./production-hints";
 import { CS116_PRODUCTION_IDS } from "./production-ids";
 
-const [mlPipeline, mlTrainTestSplit, mlLinearRegression, mlTrainValTestSplit] =
-  CS116_ML_CONCEPTS;
+const [
+  mlPipeline,
+  mlTrainTestSplit,
+  mlLinearRegression,
+  mlTrainValTestSplit,
+  mlOverfitUnderfit,
+] = CS116_ML_CONCEPTS;
 
 const gradingDataRef = (path: string) => ({ $gradingData: path });
 
@@ -55,6 +60,7 @@ export const CS116_PRODUCTION_WORLD_ML: World = WorldSchema.parse({
   lessonIds: [
     CS116_PRODUCTION_IDS.lessonMlPipeline,
     CS116_PRODUCTION_IDS.lessonMlValidation,
+    CS116_PRODUCTION_IDS.lessonMlDiagnostics,
   ],
 });
 
@@ -255,4 +261,122 @@ export const CS116_PRODUCTION_TEMPLATE_W302: MissionTemplate =
     },
     starterCode:
       'import pandas as pd\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.linear_model import LinearRegression\n\ndf = pd.read_csv("data/houses_noisy.csv")\nX = df[["area"]]\ny = df["price"]\n\n# Bước 1: tách test (10%) ra khỏi toàn bộ dữ liệu.\nX_tmp, X_test, y_tmp, y_test = \n\n# Bước 2: tách val (2/9 của phần còn lại) khỏi train.\nX_train, X_val, y_train, y_val = \n\nmodel = LinearRegression()\n# Huấn luyện model trên tập train.\n\ncoef = round(float(model.coef_[0]), 2)\nintercept = round(float(model.intercept_), 2)\nval_r2 = round(float(model.score(X_val, y_val)), 4)\ntest_r2 = round(float(model.score(X_test, y_test)), 4)\nn_train = len(X_train)\nn_val = len(X_val)\nn_test = len(X_test)\n',
+  });
+
+// 12 căn hộ với noise ~ std 40 quanh price = 30*area + 100 (RandomState(7)).
+// Dataset nhỏ + noise cao → với split test_size=0.25 random_state=42, train R²
+// đạt ~0.90 nhưng test R² chỉ ~0.77. Gap ~0.13 đủ rõ để minh hoạ overfit mà
+// không fake (cả hai điểm vẫn có nghĩa, không bị âm).
+const APARTMENTS_SMALL_DATASET = {
+  filename: "apartments_small.csv",
+  content:
+    "area,price\n1,197.6\n2,141.4\n3,191.3\n4,236.3\n5,218.4\n6,280.1\n7,310.0\n8,269.8\n9,410.7\n10,424.0\n11,405.0\n12,453.1\n",
+  description:
+    "Dữ liệu 12 căn hộ với noise lớn — dùng để quan sát khoảng cách train R² vs test R².",
+} as const;
+
+export const CS116_PRODUCTION_LESSON_ML_DIAGNOSTICS: Lesson = LessonSchema.parse({
+  id: CS116_PRODUCTION_IDS.lessonMlDiagnostics,
+  title: "Bài 13 — Chẩn đoán overfit / underfit",
+  description:
+    "CS116 Bài 3: luôn so sánh train R² với test R² để biết mô hình thực sự tổng quát hóa hay chỉ học thuộc dữ liệu train.",
+  conceptIds: [
+    mlPipeline!.id,
+    mlLinearRegression!.id,
+    mlOverfitUnderfit!.id,
+  ],
+  activityIds: [CS116_PRODUCTION_IDS.activityW303],
+});
+
+export const CS116_PRODUCTION_ACTIVITY_W303 = codeActivity({
+  id: CS116_PRODUCTION_IDS.activityW303,
+  title: "W3-03 — Train R² vs Test R²: chẩn đoán overfit",
+  description:
+    "CS116 Bài 3: so sánh train R² với test R² trên dataset nhỏ nhiễu để nhận ra overfit.",
+  conceptIds: [
+    mlPipeline!.id,
+    mlLinearRegression!.id,
+    mlOverfitUnderfit!.id,
+  ],
+  stage: LearningStage.TRANSFER,
+  missionTemplateId: CS116_PRODUCTION_IDS.templateW303,
+});
+
+export const CS116_PRODUCTION_TEMPLATE_W303: MissionTemplate =
+  MissionTemplateSchema.parse({
+    id: CS116_PRODUCTION_IDS.templateW303,
+    version: 1,
+    conceptIds: [
+      mlPipeline!.id,
+      mlLinearRegression!.id,
+      mlOverfitUnderfit!.id,
+    ],
+    allowedStages: [LearningStage.TRANSFER],
+    generator: {
+      id: CS116_GENERATOR_ID.DATA_SCIENCE_PRACTICE,
+      config: { mode: "OVERFIT_DIAGNOSIS" },
+    },
+    grader: {
+      id: CORE_GRADER_ID.DECLARATIVE,
+      config: {
+        checks: [
+          { type: DeclarativeGraderCheckType.NO_EXCEPTION },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "train_r2",
+            expected: gradingDataRef("expectedTrainR2"),
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "test_r2",
+            expected: gradingDataRef("expectedTestR2"),
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "gap",
+            expected: gradingDataRef("expectedGap"),
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "coef",
+            expected: gradingDataRef("expectedCoef"),
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "intercept",
+            expected: gradingDataRef("expectedIntercept"),
+          },
+          {
+            type: DeclarativeGraderCheckType.PYTHON_TYPE,
+            variable: "n_train",
+            expected: "int",
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "n_train",
+            expected: gradingDataRef("expectedNTrain"),
+          },
+          {
+            type: DeclarativeGraderCheckType.PYTHON_TYPE,
+            variable: "n_test",
+            expected: "int",
+          },
+          {
+            type: DeclarativeGraderCheckType.EXACT_VALUES,
+            variable: "n_test",
+            expected: gradingDataRef("expectedNTest"),
+          },
+        ],
+      },
+    },
+    hintSetId: CS116_HINT_SET_ID.W303,
+    runtime: {
+      id: CORE_RUNTIME_ID.PYODIDE,
+      config: {
+        packages: ["pandas", "scikit-learn"],
+        workspace: { datasets: [APARTMENTS_SMALL_DATASET] },
+      },
+    },
+    starterCode:
+      'import pandas as pd\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.linear_model import LinearRegression\n\ndf = pd.read_csv("data/apartments_small.csv")\nX = df[["area"]]\ny = df["price"]\n\n# Chia train/test với test_size=0.25, random_state=42.\nX_train, X_test, y_train, y_test = \n\nmodel = LinearRegression()\n# Huấn luyện model trên tập train.\n\n# Chẩn đoán: cả train R² lẫn test R².\ntrain_r2 = \ntest_r2 = \ngap = round(train_r2 - test_r2, 4)\n\ncoef = round(float(model.coef_[0]), 2)\nintercept = round(float(model.intercept_), 2)\nn_train = len(X_train)\nn_test = len(X_test)\n',
   });

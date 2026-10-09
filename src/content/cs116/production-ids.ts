@@ -16,6 +16,7 @@ export const CS116_PRODUCTION_IDS = {
   lessonFeatureBasics: "python-ml.pandas.feature-basics",
   lessonMlPipeline: "python-ml.ml.pipeline-basics",
   lessonMlValidation: "python-ml.ml.validation-split",
+  lessonMlDiagnostics: "python-ml.ml.diagnostics",
   activityVs01: "cs116.numpy.vs01",
   activityVs02: "cs116.numpy.vs02",
   activityVs03: "cs116.numpy.vs03",
@@ -38,6 +39,7 @@ export const CS116_PRODUCTION_IDS = {
   activityLc13: "cs116.local.pandas.lc13",
   activityW301: "cs116.ml.w301",
   activityW302: "cs116.ml.w302",
+  activityW303: "cs116.ml.w303",
   templateVs01: "cs116.numpy.vs01",
   templateVs02: "cs116.numpy.vs02",
   templateVs03: "cs116.numpy.vs03",
@@ -60,4 +62,5 @@ export const CS116_PRODUCTION_IDS = {
   templateLc13: "cs116.local.pandas.lc13",
   templateW301: "cs116.ml.w301",
   templateW302: "cs116.ml.w302",
+  templateW303: "cs116.ml.w303",
 } as const;

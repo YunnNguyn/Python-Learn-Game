@@ -17,6 +17,7 @@ const configSchema = z
       "NEW_COLUMN",
       "LINREG_PIPELINE",
       "TRAIN_VAL_TEST_SPLIT",
+      "OVERFIT_DIAGNOSIS",
     ]),
   })
   .strict();
@@ -266,6 +267,27 @@ export const dataSciencePracticeGenerator: MissionGenerator = {
               expectedNTrain: 14,
               expectedNVal: 4,
               expectedNTest: 2,
+            } as JsonObject,
+          },
+        };
+
+      case "OVERFIT_DIAGNOSIS":
+        return {
+          learner: {
+            objective:
+              "Chẩn đoán mô hình bằng cách so sánh train R² với test R² — nếu khoảng cách lớn, mô hình đã overfit chứ không phải học được quy luật thực.",
+            context:
+              "Đọc data/apartments_small.csv (12 căn hộ với dữ liệu khá nhiễu). Chia train/test với test_size=0.25, random_state=42. Huấn luyện LinearRegression trên tập train. Lưu train_r2 (model.score trên tập train), test_r2 (model.score trên tập test), gap = round(train_r2 - test_r2, 4), coef, intercept, n_train, n_test.",
+          },
+          grading: {
+            data: {
+              expectedTrainR2: 0.9046,
+              expectedTestR2: 0.7718,
+              expectedGap: 0.1328,
+              expectedCoef: 30.32,
+              expectedIntercept: 90.38,
+              expectedNTrain: 9,
+              expectedNTest: 3,
             } as JsonObject,
           },
         };

@@ -53,4 +53,14 @@ export const CS116_ML_CONCEPTS: readonly Concept[] = [
     prerequisites: ["ml.train_test_split"],
     tags: ["ml", "validation", "cs116.bai3"],
   }),
+  ConceptSchema.parse({
+    id: "ml.overfit_underfit",
+    title: "Overfit / Underfit",
+    description:
+      "CS116 Bài 3: so sánh điểm trên train với điểm trên test để chẩn đoán mô hình. Train đẹp mà test tụt mạnh = overfit; cả hai đều thấp = underfit; cả hai đều cao và gần nhau = mô hình tổng quát hóa tốt.",
+    classification: KnowledgeClassification.MUST_UNDERSTAND,
+    source: ConceptSource.CS116,
+    prerequisites: ["ml.train_test_split", "ml.linear_regression"],
+    tags: ["ml", "diagnostics", "cs116.bai3"],
+  }),
 ];

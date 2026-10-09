@@ -23,6 +23,7 @@ export const CS116_HINT_SET_ID = {
   LC13: "cs116.hints.pandas.lc13" as HintSetId,
   W301: "cs116.hints.ml.w301" as HintSetId,
   W302: "cs116.hints.ml.w302" as HintSetId,
+  W303: "cs116.hints.ml.w303" as HintSetId,
 } as const;
 
 export const CS116_VS01_HINT_SET: HintSet = {
@@ -487,6 +488,28 @@ export const CS116_W302_HINT_SET: HintSet = {
   ],
 };
 
+export const CS116_W303_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.W303,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Luôn tính CẢ train R² lẫn test R². Nếu train cao mà test thấp hơn hẳn — mô hình đã học thuộc nhiễu của dữ liệu train thay vì quy luật thực.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Dùng chính model.score: train_r2 trên (X_train, y_train) và test_r2 trên (X_test, y_test). Gap = train_r2 - test_r2 là chỉ báo overfit.",
+    },
+    {
+      level: HintLevel.H3,
+      text: "train_r2 = round(float(model.score(X_train, y_train)), 4); test_r2 = round(float(model.score(X_test, y_test)), 4); gap = round(train_r2 - test_r2, 4).",
+    },
+    {
+      level: HintLevel.H4,
+      text: "coef = round(float(model.coef_[0]), 2); intercept = round(float(model.intercept_), 2); n_train = len(X_train); n_test = len(X_test).",
+    },
+  ],
+};
+
 export const CS116_PRODUCTION_HINT_SETS = [
   CS116_VS01_HINT_SET,
   CS116_VS02_HINT_SET,
@@ -509,6 +532,7 @@ export const CS116_PRODUCTION_HINT_SETS = [
   CS116_LC13_HINT_SET,
   CS116_W301_HINT_SET,
   CS116_W302_HINT_SET,
+  CS116_W303_HINT_SET,
 ] as const;
 
 export function registerCs116Hints(registry: HintRegistry): void {

@@ -611,6 +611,39 @@ const GUIDES: Readonly<Record<string, MissionLessonGuide>> = {
       "Lưu val_r2, test_r2, n_train, n_val, n_test, coef, intercept.",
     ],
   },
+  "cs116.ml.w303": {
+    title: "Bài học nhanh cho W3-03",
+    summary:
+      "CS116 Bài 3: luôn tính CẢ train R² lẫn test R². Train đẹp mà test tụt mạnh = overfit (học thuộc nhiễu); cả hai thấp = underfit; cả hai cao và gần nhau = tổng quát hóa tốt.",
+    library: "pandas + scikit-learn",
+    methods: [
+      "train_test_split(...)",
+      "LinearRegression().fit(...)",
+      "model.score(X_train, y_train)",
+      "model.score(X_test, y_test)",
+    ],
+    newTopics: [
+      {
+        label: "Score trên tập train",
+        explanation:
+          "Dùng model.score trên chính (X_train, y_train) sau khi fit để biết mô hình khớp training data đến đâu — chưa nói gì về tổng quát hóa.",
+        syntax: "train_r2 = model.score(X_train, y_train)",
+      },
+      {
+        label: "Gap và chẩn đoán",
+        explanation:
+          "Gap = train R² − test R². Gap lớn (vd > 0.1) báo hiệu overfit; cả hai số đều thấp báo hiệu underfit (mô hình quá đơn giản hoặc feature yếu).",
+        syntax: "gap = round(train_r2 - test_r2, 4)",
+      },
+    ],
+    workflow: [
+      "Đọc apartments_small.csv và tách X/y.",
+      "Chia train/test (test_size=0.25, random_state=42).",
+      "Fit LinearRegression trên tập train.",
+      "Tính CẢ train_r2 lẫn test_r2 và gap = train - test.",
+      "Nhìn gap để chẩn đoán overfit/underfit.",
+    ],
+  },
 };
 
 export function getMissionLessonGuide(activityId: string): MissionLessonGuide | null {
@@ -817,6 +850,19 @@ const QUICK_CHECKS: Readonly<Record<string, MissionQuickCheckDefinition>> = {
     correctOptionIndex: 1,
     explanation:
       "Nếu dùng test để tune (chọn hyperparameter, chọn mô hình, early stopping) thì test đã rò rỉ vào quá trình huấn luyện; con số cuối không còn phản ánh tổng quát hoá. Validation là tập dùng để tune; test chỉ dùng để báo cáo.",
+  },
+  "cs116.ml.w303": {
+    question:
+      "Train R² = 0.95 nhưng test R² = 0.60. Dấu hiệu này nói lên điều gì?",
+    options: [
+      "Mô hình đang underfit — cần đơn giản hơn",
+      "Mô hình đang overfit — khớp quá sát dữ liệu train, không tổng quát hóa",
+      "Dataset test quá dễ, nên bỏ test và tin train",
+      "Model.score bị lỗi, cần tính lại bằng tay",
+    ],
+    correctOptionIndex: 1,
+    explanation:
+      "Train cao mà test tụt mạnh là chữ ký của overfit — mô hình đã học thuộc cả nhiễu của tập train thay vì quy luật thật. Khắc phục: thêm dữ liệu, chọn mô hình đơn giản hơn, hoặc regularize.",
   },
 };
 
