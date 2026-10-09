@@ -578,6 +578,39 @@ const GUIDES: Readonly<Record<string, MissionLessonGuide>> = {
       "Lấy coef, intercept, pred_10, r2, n_train, n_test.",
     ],
   },
+  "cs116.ml.w302": {
+    title: "Bài học nhanh cho W3-02",
+    summary:
+      "CS116 Bài 3: train / validation / test là ba tập ĐỘC LẬP. Train để học, validation để chọn mô hình/hyperparameter, test chỉ dùng ở bước báo cáo cuối cùng — không được tune trên test.",
+    library: "pandas + scikit-learn",
+    methods: [
+      "train_test_split(...)",
+      "LinearRegression().fit(...)",
+      "model.score(...)",
+    ],
+    newTopics: [
+      {
+        label: "Tỉ lệ 7:2:1 chuẩn CS116",
+        explanation:
+          "Chia 7:2:1 bằng 2 bước: tách test (10%) khỏi toàn bộ, rồi tách val (2/9) khỏi phần còn lại — vì 2/(7+2) = 2/9 nên tỉ lệ cuối cùng đúng 7:2:1.",
+        syntax:
+          "X_tmp, X_test, ... = train_test_split(X, y, test_size=0.1, random_state=42); X_train, X_val, ... = train_test_split(X_tmp, y_tmp, test_size=2/9, random_state=42)",
+      },
+      {
+        label: "Val vs test",
+        explanation:
+          "Val cho phép thử nhiều mô hình/hyperparameter và chọn cái tốt nhất. Test chỉ được dùng MỘT lần ở cuối để biết mô hình đã chọn tổng quát hóa thế nào.",
+        syntax: "val_r2 = model.score(X_val, y_val)  # dùng để so sánh\ntest_r2 = model.score(X_test, y_test)  # chỉ dùng để báo cáo",
+      },
+    ],
+    workflow: [
+      "Đọc houses_noisy.csv và tách X/y.",
+      "Tách test 10% ra trước (random_state=42).",
+      "Tách val 2/9 khỏi phần còn lại (random_state=42).",
+      "Fit LinearRegression trên train.",
+      "Lưu val_r2, test_r2, n_train, n_val, n_test, coef, intercept.",
+    ],
+  },
 };
 
 export function getMissionLessonGuide(activityId: string): MissionLessonGuide | null {
@@ -771,6 +804,19 @@ const QUICK_CHECKS: Readonly<Record<string, MissionQuickCheckDefinition>> = {
     correctOptionIndex: 1,
     explanation:
       "Đánh giá trên dữ liệu chưa thấy (test) mới phản ánh khả năng tổng quát hóa; đo trên train dễ bị đánh giá quá lạc quan do mô hình đã học chính dữ liệu đó.",
+  },
+  "cs116.ml.w302": {
+    question:
+      "Trong luồng train/val/test, dùng tập test lúc nào mới ĐÚNG?",
+    options: [
+      "Mỗi lần đổi hyperparameter để chọn giá trị cho score cao nhất",
+      "Chỉ một lần ở bước cuối, để báo cáo tổng quát hoá của mô hình đã chọn",
+      "Để huấn luyện mô hình cuối cùng cùng với train",
+      "Để quyết định khi nào dừng huấn luyện",
+    ],
+    correctOptionIndex: 1,
+    explanation:
+      "Nếu dùng test để tune (chọn hyperparameter, chọn mô hình, early stopping) thì test đã rò rỉ vào quá trình huấn luyện; con số cuối không còn phản ánh tổng quát hoá. Validation là tập dùng để tune; test chỉ dùng để báo cáo.",
   },
 };
 

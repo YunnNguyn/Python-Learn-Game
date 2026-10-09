@@ -22,6 +22,7 @@ export const CS116_HINT_SET_ID = {
   LC12: "cs116.hints.pillow.lc12" as HintSetId,
   LC13: "cs116.hints.pandas.lc13" as HintSetId,
   W301: "cs116.hints.ml.w301" as HintSetId,
+  W302: "cs116.hints.ml.w302" as HintSetId,
 } as const;
 
 export const CS116_VS01_HINT_SET: HintSet = {
@@ -464,6 +465,28 @@ export const CS116_W301_HINT_SET: HintSet = {
   ],
 };
 
+export const CS116_W302_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.W302,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "CS116 Bài 3 chia 7:2:1 — train để học, validation để chọn mô hình/hyperparameter, test chỉ dùng ở bước cuối cùng để báo cáo. Tuyệt đối không tune trên test.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Chia 7:2:1 bằng 2 lần train_test_split: lần 1 tách test 10% khỏi toàn bộ, lần 2 tách val 2/9 khỏi phần còn lại (vì 2/(7+2)=2/9).",
+    },
+    {
+      level: HintLevel.H3,
+      text: "X_tmp, X_test, y_tmp, y_test = train_test_split(X, y, test_size=0.1, random_state=42); X_train, X_val, y_train, y_val = train_test_split(X_tmp, y_tmp, test_size=2/9, random_state=42).",
+    },
+    {
+      level: HintLevel.H4,
+      text: "val_r2 = round(float(model.score(X_val, y_val)), 4); test_r2 = round(float(model.score(X_test, y_test)), 4); n_train/n_val/n_test = len(X_train)/len(X_val)/len(X_test).",
+    },
+  ],
+};
+
 export const CS116_PRODUCTION_HINT_SETS = [
   CS116_VS01_HINT_SET,
   CS116_VS02_HINT_SET,
@@ -485,6 +508,7 @@ export const CS116_PRODUCTION_HINT_SETS = [
   CS116_LC12_HINT_SET,
   CS116_LC13_HINT_SET,
   CS116_W301_HINT_SET,
+  CS116_W302_HINT_SET,
 ] as const;
 
 export function registerCs116Hints(registry: HintRegistry): void {

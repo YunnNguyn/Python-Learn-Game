@@ -16,6 +16,7 @@ const configSchema = z
       "PIL_CROP_RESIZE",
       "NEW_COLUMN",
       "LINREG_PIPELINE",
+      "TRAIN_VAL_TEST_SPLIT",
     ]),
   })
   .strict();
@@ -243,6 +244,27 @@ export const dataSciencePracticeGenerator: MissionGenerator = {
               expectedPred10: 600.0,
               expectedR2: 1.0,
               expectedNTrain: 6,
+              expectedNTest: 2,
+            } as JsonObject,
+          },
+        };
+
+      case "TRAIN_VAL_TEST_SPLIT":
+        return {
+          learner: {
+            objective:
+              "Chia dữ liệu theo tỉ lệ 7:2:1 (train / validation / test) đúng chuẩn CS116 Bài 3, rồi huấn luyện và báo cáo cả val R² lẫn test R².",
+            context:
+              "Đọc data/houses_noisy.csv. Tách test (10%) trước với test_size=0.1, random_state=42. Sau đó tách train/val từ phần còn lại với test_size=2/9, random_state=42 (vì 2/(7+2)=2/9) — ba tập sẽ có đúng tỉ lệ 7:2:1. Huấn luyện LinearRegression trên train, lưu coef, intercept, val_r2, test_r2, n_train, n_val, n_test.",
+          },
+          grading: {
+            data: {
+              expectedCoef: 49.73,
+              expectedIntercept: 107.81,
+              expectedValR2: 0.9993,
+              expectedTestR2: 0.9996,
+              expectedNTrain: 14,
+              expectedNVal: 4,
               expectedNTest: 2,
             } as JsonObject,
           },

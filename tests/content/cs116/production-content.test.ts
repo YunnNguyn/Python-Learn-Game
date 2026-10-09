@@ -50,9 +50,9 @@ describe("Phase D production CS116 vertical slice", () => {
 
     expect(result).toEqual({ valid: true, issues: [] });
     expect(CS116_PRODUCTION_CONTENT.worlds).toHaveLength(3);
-    expect(CS116_PRODUCTION_CONTENT.lessons).toHaveLength(11);
-    expect(CS116_PRODUCTION_CONTENT.activities).toHaveLength(21);
-    expect(CS116_PRODUCTION_CONTENT.missionTemplates).toHaveLength(21);
+    expect(CS116_PRODUCTION_CONTENT.lessons).toHaveLength(12);
+    expect(CS116_PRODUCTION_CONTENT.activities).toHaveLength(22);
+    expect(CS116_PRODUCTION_CONTENT.missionTemplates).toHaveLength(22);
     expect(CS116_PRODUCTION_CONTENT.worlds[0]!.lessonIds).toEqual([
       CS116_PRODUCTION_IDS.lessonArrayCore,
       CS116_PRODUCTION_IDS.lessonIndexFilter,
@@ -69,11 +69,12 @@ describe("Phase D production CS116 vertical slice", () => {
     ]);
     expect(CS116_PRODUCTION_CONTENT.worlds[2]!.lessonIds).toEqual([
       CS116_PRODUCTION_IDS.lessonMlPipeline,
+      CS116_PRODUCTION_IDS.lessonMlValidation,
     ]);
   });
 
   it("gives every production mission a progressive H1 through H4 hint set", () => {
-    expect(CS116_PRODUCTION_HINT_SETS).toHaveLength(20);
+    expect(CS116_PRODUCTION_HINT_SETS).toHaveLength(21);
 
     for (const template of CS116_PRODUCTION_CONTENT.missionTemplates) {
       const hintSet = CS116_PRODUCTION_HINT_SETS.find(
@@ -240,6 +241,7 @@ describe("Phase D production CS116 vertical slice", () => {
       "INDEPENDENT",
       "GUIDED",
       "GUIDED",
+      "INDEPENDENT",
     ]);
   });
 });

@@ -43,4 +43,14 @@ export const CS116_ML_CONCEPTS: readonly Concept[] = [
     prerequisites: ["ml.train_test_split"],
     tags: ["ml", "model", "regression"],
   }),
+  ConceptSchema.parse({
+    id: "ml.train_val_test_split",
+    title: "Train / Validation / Test (7:2:1)",
+    description:
+      "CS116 Bài 3 chia dữ liệu theo tỉ lệ 7:2:1 — train để huấn luyện, validation để chọn mô hình/hyperparameter, test chỉ dùng để báo cáo cuối (không được dùng để tune).",
+    classification: KnowledgeClassification.MUST_UNDERSTAND,
+    source: ConceptSource.CS116,
+    prerequisites: ["ml.train_test_split"],
+    tags: ["ml", "validation", "cs116.bai3"],
+  }),
 ];
