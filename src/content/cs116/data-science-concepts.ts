@@ -53,7 +53,7 @@ export const CS116_DATA_SCIENCE_CONCEPTS: readonly Concept[] = [
     id: "matplotlib.savefig",
     title: "Lưu biểu đồ thành artifact",
     description:
-      "Ghi Figure ra thư mục artifacts của Local Python workspace để giữ đầu ra trực quan.",
+      "Ghi Figure ra thư mục artifacts của workspace bài để giữ đầu ra trực quan.",
     classification: KnowledgeClassification.MUST_RECALL,
     source: ConceptSource.SUPPLEMENTARY_ML_FOUNDATION,
     prerequisites: ["matplotlib.pyplot"],

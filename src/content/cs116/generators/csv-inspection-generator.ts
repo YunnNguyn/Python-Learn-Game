@@ -31,7 +31,7 @@ export const csvInspectionGenerator: MissionGenerator = {
         objective:
           "Đọc file data/telemetry.csv bằng pandas, sau đó lưu shape của DataFrame và danh sách tên cột vào đúng biến kết quả.",
         context:
-          "Dataset đã được chuẩn bị sẵn trong Local Python workspace tại `data/telemetry.csv`. Dùng `pd.read_csv(...)`, `df.shape` và `list(df.columns)` để kiểm tra cấu trúc dữ liệu.",
+          "Dataset đã được chuẩn bị sẵn trong workspace của bài tại `data/telemetry.csv`. Dùng `pd.read_csv(...)`, `df.shape` và `list(df.columns)` để kiểm tra cấu trúc dữ liệu.",
       },
       grading: {
         data: {

@@ -94,7 +94,7 @@ describe("Phase D production CS116 vertical slice", () => {
     }
   });
 
-  it("keeps VS-01..VS-07 on Pyodide and all LC missions on Local Python", () => {
+  it("keeps VS-01..VS-07 and LC-01..LC-12 on Pyodide", () => {
     const verticalSliceTemplates = CS116_PRODUCTION_CONTENT.missionTemplates.slice(0, 7);
     for (const template of verticalSliceTemplates) {
       expect(template.runtime.id).toBe(CORE_RUNTIME_ID.PYODIDE);

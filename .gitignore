@@ -1,8 +1,11 @@
 node_modules/
 dist/
+dist-*/
 .npm-cache/
 *.local
 .vite-cache/
 
 local-runtime/.workspaces/
 .codegraph/
+__pycache__/
+*.pyc

@@ -117,7 +117,7 @@ export const CS116_PRODUCTION_WORLD: World = WorldSchema.parse({
   id: CS116_PRODUCTION_IDS.world,
   title: "NumPy — Mảng và thao tác dữ liệu",
   description:
-    "Làm chủ ndarray, shape, indexing, boolean filtering và kết hợp điều kiện qua các nhiệm vụ ngắn, rồi chuyển sang một bài bridge chạy bằng Python local.",
+    "Làm chủ ndarray, shape, indexing, boolean filtering và kết hợp điều kiện qua các nhiệm vụ ngắn, rồi chuyển sang một bài bridge chạy bằng Pyodide trong trình duyệt.",
   lessonIds: [
     CS116_PRODUCTION_IDS.lessonArrayCore,
     CS116_PRODUCTION_IDS.lessonIndexFilter,
@@ -184,9 +184,9 @@ export const CS116_PRODUCTION_LESSON_TRANSFER_REVIEW: Lesson = LessonSchema.pars
 
 export const CS116_PRODUCTION_LESSON_LOCAL_RUNTIME: Lesson = LessonSchema.parse({
   id: CS116_PRODUCTION_IDS.lessonLocalRuntime,
-  title: "Bài 4 — NumPy và pandas trên Python local",
+  title: "Bài 4 — NumPy và pandas trong trình duyệt",
   description:
-    "Dùng main.py chạy bằng Python thật trên máy, từ NumPy chuyển sang đọc dataset CSV bằng pandas và quan sát file đầu ra của workspace.",
+    "Dùng main.py chạy trong Pyodide, từ NumPy chuyển sang đọc dataset CSV bằng pandas và quan sát file đầu ra của workspace.",
   conceptIds: [numpyIndexColumn!.id, numpyShape!.id],
   activityIds: [
     CS116_PRODUCTION_IDS.activityLc01,
@@ -297,9 +297,9 @@ export const CS116_PRODUCTION_ACTIVITY_VS07 = codeActivity({
 
 export const CS116_PRODUCTION_ACTIVITY_LC01 = codeActivity({
   id: CS116_PRODUCTION_IDS.activityLc01,
-  title: "LC-01 — NumPy trên máy thật",
+  title: "LC-01 — NumPy trong trình duyệt",
   description:
-    "Chạy một bài indexing quen thuộc bằng Local Python để xác nhận main.py, NumPy native và grader đều hoạt động trên tài nguyên máy thật.",
+    "Chạy một bài indexing quen thuộc bằng Pyodide trong trình duyệt để xác nhận main.py, NumPy và grader đều hoạt động.",
   conceptIds: [numpyIndexColumn!.id, numpyShape!.id],
   stage: LearningStage.TRANSFER,
   missionTemplateId: CS116_PRODUCTION_IDS.templateLc01,
@@ -309,7 +309,7 @@ export const CS116_PRODUCTION_ACTIVITY_LC02 = codeActivity({
   id: CS116_PRODUCTION_IDS.activityLc02,
   title: "LC-02 — Đọc dữ liệu CSV với pandas",
   description:
-    "Đọc telemetry.csv từ Local Python workspace bằng pandas và kiểm tra shape cùng tên các cột của DataFrame.",
+    "Đọc telemetry.csv từ workspace của bài bằng pandas và kiểm tra shape cùng tên các cột của DataFrame.",
   conceptIds: [numpyShape!.id],
   stage: LearningStage.TRANSFER,
   missionTemplateId: CS116_PRODUCTION_IDS.templateLc02,

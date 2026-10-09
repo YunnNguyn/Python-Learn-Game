@@ -207,17 +207,17 @@ const GUIDES: Readonly<Record<string, MissionLessonGuide>> = {
   },
   "cs116.local.numpy.lc01": {
     title: "Bài học nhanh cho LC-01",
-    summary: "Không có cú pháp NumPy mới. Điểm mới là cùng một main.py giờ được chạy bằng Python cài trên máy của bạn thay vì Pyodide trong trình duyệt.",
-    library: "numpy trên Local Python",
+    summary: "Không có cú pháp NumPy mới. Bài này chạy bằng Pyodide ngay trong trình duyệt: cùng một main.py, không cần cài Python hay chạy service nào.",
+    library: "numpy trong trình duyệt (Pyodide)",
     methods: ["import numpy as np", "np.array(...)", "[:, idx]"],
     newTopics: [
       {
-        label: "Local Python runtime",
-        explanation: "Các bài Data/ML nặng sẽ chạy trong child process bằng Python thật trên máy. Nhờ đó code có thể dùng package native, CPU/RAM và về sau là GPU khi framework hỗ trợ.",
+        label: "Pyodide runtime",
+        explanation: "Code chạy bằng Python WebAssembly ngay trong tab trình duyệt của bạn. Package như NumPy được tải khi bài cần.",
       },
       {
         label: "main.py",
-        explanation: "IDE vẫn giữ workflow một file. Run/Submit gửi nội dung editor vào workspace local dưới tên main.py; lỗi Python vì vậy vẫn báo đúng dòng trong file này.",
+        explanation: "IDE vẫn giữ workflow một file. Run/Submit gửi nội dung editor vào workspace trong trình duyệt dưới tên main.py; lỗi Python vì vậy vẫn báo đúng dòng trong file này.",
       },
     ],
     reviewTopics: [
@@ -228,14 +228,14 @@ const GUIDES: Readonly<Record<string, MissionLessonGuide>> = {
       },
     ],
     workflow: [
-      "Đảm bảo Local Python Runtime đang chạy trước khi mở bài.",
+      "Không cần cài Python hay khởi động service nào; runtime Pyodide được tải trong trình duyệt.",
       "Dùng dữ liệu matrix và targetColumnIndex đã được nạp sẵn như ở các mission trước.",
-      "Chạy thử để kiểm tra, sau đó Submit để grader quan sát result trên môi trường local sạch.",
-      "Nếu code chạy lâu hoặc mắc vòng lặp, dùng Dừng tiến trình; ứng dụng và runtime service vẫn tiếp tục sống.",
+      "Chạy thử để kiểm tra, sau đó Submit để grader quan sát result trên môi trường Pyodide sạch.",
+      "Nếu code chạy quá lâu, bài sẽ bị dừng theo giới hạn thời gian và báo lỗi; khi đó sửa code rồi chạy lại.",
     ],
     commonMistakes: [
-      "Local runtime chưa được khởi động nên bài không thể tạo session.",
-      "Python local chưa cài NumPy nên import báo ModuleNotFoundError.",
+      "Pyodide chưa tải xong nên runtime chưa sẵn sàng; chờ trạng thái READY rồi chạy lại.",
+      "Quên import numpy as np nên tên np không tồn tại (NameError).",
       "Nhầm lấy một hàng thay vì toàn bộ cột với cú pháp [:, index].",
     ],
   },
@@ -399,7 +399,7 @@ const GUIDES: Readonly<Record<string, MissionLessonGuide>> = {
       },
       {
         label: "Artifact",
-        explanation: "Local Python workspace dành thư mục artifacts/ cho file đầu ra. Sau mỗi Run/Submit cũ sẽ được dọn để kết quả mới rõ ràng.",
+        explanation: "Workspace của bài dành thư mục artifacts/ cho file đầu ra. Sau mỗi Run/Submit cũ sẽ được dọn để kết quả mới rõ ràng.",
         syntax: "fig.savefig(\"artifacts/loss_curve.png\")",
       },
     ],
