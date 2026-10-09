@@ -20,6 +20,13 @@ import { CS116_GENERATOR_ID } from "./generators";
 import { CS116_HINT_SET_ID } from "./production-hints";
 import { CS116_PANDAS_CONCEPTS } from "./pandas-concepts";
 import { CS116_DATA_SCIENCE_CONCEPTS } from "./data-science-concepts";
+import { CS116_ML_CONCEPTS } from "./ml-concepts";
+import {
+  CS116_PRODUCTION_ACTIVITY_W301,
+  CS116_PRODUCTION_LESSON_ML_PIPELINE,
+  CS116_PRODUCTION_TEMPLATE_W301,
+  CS116_PRODUCTION_WORLD_ML,
+} from "./ml-production-content";
 import { CS116_PRODUCTION_IDS } from "./production-ids";
 import {
   CS116_PRODUCTION_ACTIVITY_LC05,
@@ -82,7 +89,11 @@ export const CS116_PRODUCTION_COURSE: Course = CourseSchema.parse({
   title: "Python cho ML/AI — Thực hành nền tảng",
   description:
     "Học Python bằng thực hành, bắt đầu với NumPy và tư duy dữ liệu cần cho Machine Learning/AI.",
-  worldIds: [CS116_PRODUCTION_IDS.world, CS116_PRODUCTION_IDS.worldDataScience],
+  worldIds: [
+    CS116_PRODUCTION_IDS.world,
+    CS116_PRODUCTION_IDS.worldDataScience,
+    CS116_PRODUCTION_IDS.worldMl,
+  ],
 });
 
 export const CS116_PRODUCTION_WORLD: World = WorldSchema.parse({
@@ -992,9 +1003,14 @@ export const CS116_PRODUCTION_CONTENT = {
     ...CS116_VERTICAL_SLICE_CONCEPTS,
     ...CS116_PANDAS_CONCEPTS,
     ...CS116_DATA_SCIENCE_CONCEPTS,
+    ...CS116_ML_CONCEPTS,
   ] as const,
   courses: [CS116_PRODUCTION_COURSE] as const,
-  worlds: [CS116_PRODUCTION_WORLD, CS116_PRODUCTION_WORLD_DATA_SCIENCE] as const,
+  worlds: [
+    CS116_PRODUCTION_WORLD,
+    CS116_PRODUCTION_WORLD_DATA_SCIENCE,
+    CS116_PRODUCTION_WORLD_ML,
+  ] as const,
   lessons: [
     CS116_PRODUCTION_LESSON_ARRAY_CORE,
     CS116_PRODUCTION_LESSON_INDEX_FILTER,
@@ -1006,6 +1022,7 @@ export const CS116_PRODUCTION_CONTENT = {
     CS116_PRODUCTION_LESSON_PANDAS_COMBINE,
     CS116_PRODUCTION_LESSON_IMAGE_ARRAYS,
     CS116_PRODUCTION_LESSON_FEATURE_BASICS,
+    CS116_PRODUCTION_LESSON_ML_PIPELINE,
   ] as const,
   activities: [
     CS116_PRODUCTION_ACTIVITY_VS01,
@@ -1028,6 +1045,7 @@ export const CS116_PRODUCTION_CONTENT = {
     CS116_PRODUCTION_ACTIVITY_LC11,
     CS116_PRODUCTION_ACTIVITY_LC12,
     CS116_PRODUCTION_ACTIVITY_LC13,
+    CS116_PRODUCTION_ACTIVITY_W301,
   ] as const,
   missionTemplates: [
     CS116_PRODUCTION_TEMPLATE_VS01,
@@ -1050,5 +1068,6 @@ export const CS116_PRODUCTION_CONTENT = {
     CS116_PRODUCTION_TEMPLATE_LC11,
     CS116_PRODUCTION_TEMPLATE_LC12,
     CS116_PRODUCTION_TEMPLATE_LC13,
+    CS116_PRODUCTION_TEMPLATE_W301,
   ] as const,
 };

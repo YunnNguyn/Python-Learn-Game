@@ -15,6 +15,7 @@ const configSchema = z
       "PIL_IMAGE_ARRAY",
       "PIL_CROP_RESIZE",
       "NEW_COLUMN",
+      "LINREG_PIPELINE",
     ]),
   })
   .strict();
@@ -223,6 +224,26 @@ export const dataSciencePracticeGenerator: MissionGenerator = {
               expectedValueList: [30, 40, 20],
               expectedTopSymbol: "B",
               expectedTotalValue: 90,
+            } as JsonObject,
+          },
+        };
+
+      case "LINREG_PIPELINE":
+        return {
+          learner: {
+            objective:
+              "Dựng pipeline hồi quy tuyến tính: tách X/y, chia train/test rồi huấn luyện và đánh giá mô hình.",
+            context:
+              "Đọc data/houses.csv (area, price). Tách X = df[[\"area\"]], y = df[\"price\"]. Chia train/test với test_size=0.25, random_state=42. Huấn luyện LinearRegression trên tập train rồi lưu coef, intercept, pred_10 (dự đoán cho area=10), r2 (điểm R² trên tập test), n_train, n_test.",
+          },
+          grading: {
+            data: {
+              expectedCoef: 50.0,
+              expectedIntercept: 100.0,
+              expectedPred10: 600.0,
+              expectedR2: 1.0,
+              expectedNTrain: 6,
+              expectedNTest: 2,
             } as JsonObject,
           },
         };

@@ -62,6 +62,7 @@ describe("linear learning path", () => {
       CS116_PRODUCTION_IDS.activityLc11,
       CS116_PRODUCTION_IDS.activityLc12,
       CS116_PRODUCTION_IDS.activityLc13,
+      CS116_PRODUCTION_IDS.activityW301,
     ]);
   });
 

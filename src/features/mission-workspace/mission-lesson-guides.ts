@@ -545,6 +545,39 @@ const GUIDES: Readonly<Record<string, MissionLessonGuide>> = {
       "Tìm top_symbol (value lớn nhất) và total_value.",
     ],
   },
+  "cs116.ml.w301": {
+    title: "Bài học nhanh cho W3-01",
+    summary:
+      "CS116 (Bài 3 & Bài 8): pipeline ML end-to-end — tách X/y, chia train/test, huấn luyện LinearRegression và đánh giá R². API scikit-learn cụ thể là Supplementary / ML Foundation.",
+    library: "pandas + scikit-learn",
+    methods: [
+      "train_test_split(...)",
+      "LinearRegression().fit(...)",
+      "model.predict(...)",
+      "model.score(...)",
+    ],
+    newTopics: [
+      {
+        label: "X/y và chia train/test",
+        explanation:
+          "X là DataFrame 2 chiều (df[[\"area\"]]), y là Series mục tiêu. train_test_split tách dữ liệu; random_state cố định để kết quả lặp lại được.",
+        syntax:
+          "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)",
+      },
+      {
+        label: "Huấn luyện và đánh giá",
+        explanation:
+          "fit học hệ số (coef_) và hệ số chặn (intercept_); score trả về R² trên tập test (1.0 là khớp hoàn hảo).",
+        syntax: "model.fit(X_train, y_train); r2 = model.score(X_test, y_test)",
+      },
+    ],
+    workflow: [
+      "Đọc houses.csv và tách X = df[[\"area\"]], y = df[\"price\"].",
+      "Chia train/test (test_size=0.25, random_state=42).",
+      "Huấn luyện LinearRegression trên tập train.",
+      "Lấy coef, intercept, pred_10, r2, n_train, n_test.",
+    ],
+  },
 };
 
 export function getMissionLessonGuide(activityId: string): MissionLessonGuide | null {
@@ -725,6 +758,19 @@ const QUICK_CHECKS: Readonly<Record<string, MissionQuickCheckDefinition>> = {
     correctOptionIndex: 1,
     explanation:
       'Gán vào df["value"] mới thêm cột vào DataFrame; phép nhân hai cột là element-wise theo từng hàng.',
+  },
+  "cs116.ml.w301": {
+    question:
+      "Vì sao phải đánh giá mô hình trên tập test tách riêng thay vì trên tập train?",
+    options: [
+      "Để huấn luyện nhanh hơn",
+      "Để đo khả năng tổng quát hóa trên dữ liệu mô hình chưa thấy",
+      "Vì scikit-learn bắt buộc phải có tập test",
+      "Để tăng số lượng dữ liệu huấn luyện",
+    ],
+    correctOptionIndex: 1,
+    explanation:
+      "Đánh giá trên dữ liệu chưa thấy (test) mới phản ánh khả năng tổng quát hóa; đo trên train dễ bị đánh giá quá lạc quan do mô hình đã học chính dữ liệu đó.",
   },
 };
 

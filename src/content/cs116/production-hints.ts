@@ -21,6 +21,7 @@ export const CS116_HINT_SET_ID = {
   LC11: "cs116.hints.pillow.lc11" as HintSetId,
   LC12: "cs116.hints.pillow.lc12" as HintSetId,
   LC13: "cs116.hints.pandas.lc13" as HintSetId,
+  W301: "cs116.hints.ml.w301" as HintSetId,
 } as const;
 
 export const CS116_VS01_HINT_SET: HintSet = {
@@ -441,6 +442,28 @@ export const CS116_LC13_HINT_SET: HintSet = {
   ],
 };
 
+export const CS116_W301_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.W301,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Một pipeline hồi quy gồm: tách X (đặc trưng) và y (mục tiêu), chia train/test, huấn luyện rồi đánh giá trên tập test.",
+    },
+    {
+      level: HintLevel.H2,
+      text: "Dùng train_test_split với test_size=0.25 và random_state=42 để kết quả lặp lại được. Huấn luyện bằng .fit(X_train, y_train).",
+    },
+    {
+      level: HintLevel.H3,
+      text: "from sklearn.model_selection import train_test_split; from sklearn.linear_model import LinearRegression. model.coef_[0] là hệ số, model.intercept_ là hệ số chặn.",
+    },
+    {
+      level: HintLevel.H4,
+      text: "pred_10 = model.predict(pd.DataFrame({\"area\": [10]}))[0]; r2 = model.score(X_test, y_test); n_train = len(X_train); n_test = len(X_test).",
+    },
+  ],
+};
+
 export const CS116_PRODUCTION_HINT_SETS = [
   CS116_VS01_HINT_SET,
   CS116_VS02_HINT_SET,
@@ -461,6 +484,7 @@ export const CS116_PRODUCTION_HINT_SETS = [
   CS116_LC11_HINT_SET,
   CS116_LC12_HINT_SET,
   CS116_LC13_HINT_SET,
+  CS116_W301_HINT_SET,
 ] as const;
 
 export function registerCs116Hints(registry: HintRegistry): void {
