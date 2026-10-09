@@ -30,6 +30,7 @@ const ACTIVITY_IDS = [
   CS116_PRODUCTION_IDS.activityW301,
   CS116_PRODUCTION_IDS.activityW302,
   CS116_PRODUCTION_IDS.activityW303,
+  CS116_PRODUCTION_IDS.activityW401,
 ] as const;
 
 describe("mission lesson guides", () => {

@@ -644,6 +644,39 @@ const GUIDES: Readonly<Record<string, MissionLessonGuide>> = {
       "Nhìn gap để chẩn đoán overfit/underfit.",
     ],
   },
+  "cs116.data-validation.w401": {
+    title: "Bài học nhanh cho W4-01",
+    summary:
+      "CS116 Bài 4: trước khi fit mô hình, luôn làm sạch dữ liệu. Thứ tự chuẩn: shape → đếm missing → dropna → drop_duplicates. Mỗi bước ghi lại shape để kiểm chứng.",
+    library: "pandas",
+    methods: [
+      "DataFrame.shape",
+      "DataFrame.isna()",
+      "Series.sum()",
+      "DataFrame.dropna()",
+      "DataFrame.drop_duplicates()",
+    ],
+    newTopics: [
+      {
+        label: "Đếm missing values",
+        explanation:
+          "df.isna() trả về mặt nạ boolean cùng kích thước; .sum() cộng dồn theo cột, trả về Series với số missing của mỗi cột. Truy cập bằng tên cột để lấy ra int.",
+        syntax: 'missing_price = int(df["price"].isna().sum())',
+      },
+      {
+        label: "dropna và drop_duplicates",
+        explanation:
+          "Cả hai KHÔNG sửa df gốc — trả về DataFrame mới. Mặc định dropna loại hàng có bất kỳ ô NaN nào; drop_duplicates giữ hàng xuất hiện đầu tiên.",
+        syntax: "clean = df.dropna().drop_duplicates()",
+      },
+    ],
+    workflow: [
+      "Đọc raw_sales.csv và ghi raw_shape.",
+      "Đếm missing_price và missing_quantity bằng isna().sum().",
+      "Dropna → after_dropna_shape.",
+      "Drop_duplicates → final_shape và final_order_ids.",
+    ],
+  },
 };
 
 export function getMissionLessonGuide(activityId: string): MissionLessonGuide | null {
@@ -863,6 +896,19 @@ const QUICK_CHECKS: Readonly<Record<string, MissionQuickCheckDefinition>> = {
     correctOptionIndex: 1,
     explanation:
       "Train cao mà test tụt mạnh là chữ ký của overfit — mô hình đã học thuộc cả nhiễu của tập train thay vì quy luật thật. Khắc phục: thêm dữ liệu, chọn mô hình đơn giản hơn, hoặc regularize.",
+  },
+  "cs116.data-validation.w401": {
+    question:
+      "Sau khi gọi `df_clean = df.dropna()`, biến `df` gốc thay đổi thế nào?",
+    options: [
+      "df bị xóa các hàng có NaN, giờ còn lại ít hàng hơn",
+      "df không đổi — dropna trả về DataFrame mới mà không sửa gốc",
+      "df bị thay thế hoàn toàn bởi df_clean",
+      "df_clean và df là cùng một đối tượng trong bộ nhớ",
+    ],
+    correctOptionIndex: 1,
+    explanation:
+      "pandas mặc định không sửa inplace: dropna, drop_duplicates, fillna đều trả về DataFrame mới. Muốn sửa gốc phải gán lại hoặc dùng inplace=True (nhưng gán lại rõ ràng hơn).",
   },
 };
 

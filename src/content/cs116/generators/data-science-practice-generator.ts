@@ -18,6 +18,7 @@ const configSchema = z
       "LINREG_PIPELINE",
       "TRAIN_VAL_TEST_SPLIT",
       "OVERFIT_DIAGNOSIS",
+      "DATA_CLEANING",
     ]),
   })
   .strict();
@@ -267,6 +268,34 @@ export const dataSciencePracticeGenerator: MissionGenerator = {
               expectedNTrain: 14,
               expectedNVal: 4,
               expectedNTest: 2,
+            } as JsonObject,
+          },
+        };
+
+      case "DATA_CLEANING":
+        return {
+          learner: {
+            objective:
+              "Làm sạch dữ liệu đầu vào: đếm missing values theo cột, loại bỏ hàng thiếu dữ liệu, rồi loại bỏ hàng trùng để sẵn sàng cho mô hình.",
+            context:
+              "Đọc data/raw_sales.csv vào df. Tính raw_shape = list(df.shape); missing_price và missing_quantity (int) từ df.isna().sum(); đổi df bằng dropna() → after_dropna_shape; rồi drop_duplicates() → final_shape và final_order_ids (list theo thứ tự còn lại).",
+          },
+          grading: {
+            data: {
+              expectedRawShape: [12, 4],
+              expectedMissingPrice: 2,
+              expectedMissingQuantity: 1,
+              expectedAfterDropnaShape: [9, 4],
+              expectedFinalShape: [7, 4],
+              expectedFinalOrderIds: [
+                "A001",
+                "A003",
+                "A005",
+                "A006",
+                "A007",
+                "A009",
+                "A010",
+              ],
             } as JsonObject,
           },
         };

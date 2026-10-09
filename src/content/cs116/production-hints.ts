@@ -24,6 +24,7 @@ export const CS116_HINT_SET_ID = {
   W301: "cs116.hints.ml.w301" as HintSetId,
   W302: "cs116.hints.ml.w302" as HintSetId,
   W303: "cs116.hints.ml.w303" as HintSetId,
+  W401: "cs116.hints.data-validation.w401" as HintSetId,
 } as const;
 
 export const CS116_VS01_HINT_SET: HintSet = {
@@ -510,6 +511,28 @@ export const CS116_W303_HINT_SET: HintSet = {
   ],
 };
 
+export const CS116_W401_HINT_SET: HintSet = {
+  id: CS116_HINT_SET_ID.W401,
+  hints: [
+    {
+      level: HintLevel.H1,
+      text: "Luôn làm sạch dữ liệu trước khi fit mô hình. Thứ tự chuẩn CS116: kiểm tra shape → đếm missing → bỏ hàng thiếu (dropna) → bỏ hàng trùng (drop_duplicates).",
+    },
+    {
+      level: HintLevel.H2,
+      text: "df.isna().sum() trả về Series số missing cho mỗi cột; truy cập theo tên cột để lấy ra int. df.dropna() và df.drop_duplicates() đều trả về DataFrame mới (không sửa gốc).",
+    },
+    {
+      level: HintLevel.H3,
+      text: 'missing_price = int(df["price"].isna().sum()); df_no_na = df.dropna(); after_dropna_shape = list(df_no_na.shape).',
+    },
+    {
+      level: HintLevel.H4,
+      text: 'clean = df_no_na.drop_duplicates(); final_shape = list(clean.shape); final_order_ids = clean["order_id"].tolist().',
+    },
+  ],
+};
+
 export const CS116_PRODUCTION_HINT_SETS = [
   CS116_VS01_HINT_SET,
   CS116_VS02_HINT_SET,
@@ -533,6 +556,7 @@ export const CS116_PRODUCTION_HINT_SETS = [
   CS116_W301_HINT_SET,
   CS116_W302_HINT_SET,
   CS116_W303_HINT_SET,
+  CS116_W401_HINT_SET,
 ] as const;
 
 export function registerCs116Hints(registry: HintRegistry): void {
