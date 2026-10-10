@@ -767,7 +767,7 @@ const QUICK_CHECKS: Readonly<Record<string, MissionQuickCheckDefinition>> = {
     explanation: "Nhận diện nhóm kỹ năng trước giúp bạn chọn đúng mẫu thao tác: tạo ndarray, đọc shape, indexing hay filtering.",
   },
   "cs116.local.numpy.lc01": {
-    question: "Điểm khác quan trọng nhất của Local Python so với Pyodide trong app là gì?",
+    question: "LC-01 chạy bằng Pyodide trong trình duyệt. Điểm khác biệt của Local Python là gì?",
     options: [
       "Local Python chỉ chạy được print",
       "Local Python dùng Python và tài nguyên thật trên máy",
@@ -775,7 +775,7 @@ const QUICK_CHECKS: Readonly<Record<string, MissionQuickCheckDefinition>> = {
       "Local Python bắt buộc phải viết notebook",
     ],
     correctOptionIndex: 1,
-    explanation: "Local Python chạy learner code trong child process của Python cài trên máy, nên có thể dùng package native và tài nguyên local; notebook không phải yêu cầu.",
+    explanation: "LC-01 dùng Pyodide chạy trong trình duyệt với hệ thống tệp ảo. Local Python chạy learner code bằng Python cài trên máy, nên có thể dùng package native và tài nguyên local; notebook không phải yêu cầu.",
   },
   "cs116.local.pandas.lc02": {
     question: "Hàm pandas nào thường dùng để đọc file CSV thành DataFrame?",
