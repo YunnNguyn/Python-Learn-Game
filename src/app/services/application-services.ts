@@ -25,6 +25,7 @@ import { generateMissionInstance, MissionEngine } from "../../core/missions";
 import {
   createBrowserLearningPersistence,
   type LearningPersistence,
+  type PersistenceScope,
 } from "../../core/persistence";
 import {
   CORE_RUNTIME_ID,
@@ -79,16 +80,55 @@ export interface ApplicationServices {
   getMetaProgressionPersistenceKind(): "indexeddb" | "memory";
 }
 
-export function createApplicationServices(): ApplicationServices {
+export interface CreateApplicationServicesOptions {
+  /**
+   * Local persistence namespace for BOTH learning and meta-progression storage.
+   * Omitted (or `undefined`) means Guest, the production default. Pass
+   * `GUEST_SCOPE` to state Guest intent explicitly.
+   *
+   * An account scope is an opaque storage namespace, NOT proof of authentication.
+   * It must come from trusted application code after a future verified session;
+   * never derive it from a URL, localStorage, form input or any other
+   * user-editable source. An invalid scope throws and never falls back to Guest.
+   */
+  readonly scope?: PersistenceScope;
+}
+
+/**
+ * Builds one self-contained service set for a single persistence scope.
+ *
+ * Every call creates new registries, engines and persistence instances; nothing
+ * is cached at module level, so two sets never share mutable state. Sets built
+ * for the same scope see the same stored data (IndexedDB), not each other's
+ * in-memory state.
+ *
+ * Lifecycle note for FUTURE verified-account switching (not implemented here):
+ * there is no dispose() and no runtime switching. Changing the active account
+ * means building a NEW set and retiring the old one, which requires:
+ * - replacing the service set held by `App.tsx` / `ApplicationServicesProvider`
+ *   (React consumers subscribed to the old engines must be unmounted);
+ * - disposing every open MissionAttemptSession from the old set (its
+ *   `onAttemptRecord` closure still writes to the OLD scope's engines);
+ * - cancelling pending draft saves that target the old set;
+ * - closing the old IndexedDB connections (persistence classes expose no
+ *   close(), so connections stay open until page unload);
+ * - never reusing an old set's in-memory engine state under another scope.
+ */
+export function createApplicationServices(
+  options: CreateApplicationServicesOptions = {},
+): ApplicationServices {
+  // Persistence is created first so an invalid scope throws before any registry
+  // work or storage access. Both factories validate the same scope value, and
+  // neither opens IndexedDB until the first operation.
+  const persistence = createBrowserLearningPersistence(options.scope);
+  const metaPersistence = createBrowserMetaProgressionPersistence(options.scope);
+
   const content = new ContentRegistry();
   const generators = new GeneratorRegistry();
   const graders = new GraderRegistry();
   const hints = new HintRegistry();
-  const persistence = createBrowserLearningPersistence();
   const learning = new LearningEngine(persistence);
-  const metaProgression = new MetaProgressionEngine(
-    createBrowserMetaProgressionPersistence(),
-  );
+  const metaProgression = new MetaProgressionEngine(metaPersistence);
   let initializePromise: Promise<void> | null = null;
 
   registerCs116Generators(generators);

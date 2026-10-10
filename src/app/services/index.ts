@@ -1,6 +1,7 @@
 export { createApplicationServices, deriveActivityVariantSeed } from "./application-services";
 export type {
   ApplicationServices,
+  CreateApplicationServicesOptions,
   CreateMissionSessionOptions,
   CreateMissionSessionResult,
   PlayableMissionSession,
