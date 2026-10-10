@@ -11,3 +11,18 @@ export type {
   SyncDtoIssue,
   SyncDtoResult,
 } from "./sync-attempt-dto";
+export {
+  AttemptConflictReason,
+  AttemptMergeStatus,
+  planAttemptMerge,
+} from "./attempt-merge";
+export type {
+  AttemptMergeEntry,
+  AttemptMergePlan,
+  ConflictEntry,
+  ExistsEntry,
+  InvalidRemoteEntry,
+  LocalOnlyEntry,
+  RemoteOnlyEntry,
+  UnsyncableLocalEntry,
+} from "./attempt-merge";
