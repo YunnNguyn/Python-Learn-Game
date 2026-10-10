@@ -6,7 +6,13 @@ import {
   type AttemptRecord,
   type LearningActivityId,
 } from "../domain";
-import type { LearningPersistence, MissionDraftRecord } from "./learning-persistence";
+import { classifyStoredAttempt, parseAttemptForImport } from "./attempt-import";
+import type {
+  AddAttemptIfAbsentResult,
+  LearningPersistence,
+  MissionDraftRecord,
+} from "./learning-persistence";
+import { DuplicateAttemptError } from "./persistence-errors";
 
 const DATABASE_NAME = "python-learn-game";
 const DATABASE_VERSION = 1;
@@ -29,11 +35,65 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
   constructor(private readonly indexedDb: IDBFactory = indexedDB) {}
 
   async addAttempt(record: AttemptRecord): Promise<void> {
+    const outcome = await this.insertAttempt(record, () => "exists");
+    if (outcome !== "added") throw new DuplicateAttemptError(String(record.id));
+  }
+
+  async addAttemptIfAbsent(record: AttemptRecord): Promise<AddAttemptIfAbsentResult> {
+    const parsed = parseAttemptForImport(record);
+    const status = await this.insertAttempt(parsed, (stored) =>
+      classifyStoredAttempt(parsed, stored),
+    );
+    return { status };
+  }
+
+  /**
+   * Single readwrite transaction: look the id up, then add only if absent.
+   * IndexedDB serializes overlapping readwrite transactions on the same store,
+   * so concurrent calls cannot interleave between the lookup and the add. The
+   * add happens inside the lookup's success callback, so the transaction never
+   * sits idle across unrelated async work (which would auto-commit it).
+   *
+   * Duplicates are detected by the lookup rather than by interpreting a
+   * ConstraintError, because transactionDone() reports a failed `add` as a
+   * generic Error (transaction.error is still null when `onerror` fires).
+   * Genuine storage errors still reject and remain visible to the caller.
+   */
+  private async insertAttempt(
+    record: AttemptRecord,
+    classifyExisting: (stored: unknown) => "exists" | "conflict",
+  ): Promise<"added" | "exists" | "conflict"> {
     const database = await this.getDatabase();
     const transaction = database.transaction(ATTEMPT_STORE, "readwrite");
     const done = transactionDone(transaction);
-    transaction.objectStore(ATTEMPT_STORE).add(structuredClone(record));
-    await done;
+    const store = transaction.objectStore(ATTEMPT_STORE);
+
+    // Mutated from the request callback; a holder keeps TypeScript from narrowing it.
+    const state: { outcome?: "added" | "exists" | "conflict"; failure?: unknown } = {};
+    const lookup = store.get(record.id);
+    lookup.onsuccess = () => {
+      try {
+        if (lookup.result === undefined) {
+          store.add(structuredClone(record));
+          state.outcome = "added";
+        } else {
+          state.outcome = classifyExisting(lookup.result);
+        }
+      } catch (error) {
+        state.failure = error;
+        transaction.abort();
+      }
+    };
+
+    try {
+      await done;
+    } catch (error) {
+      throw state.failure ?? error;
+    }
+    if (state.outcome === undefined) {
+      throw new Error("IndexedDB attempt insert finished without an outcome.");
+    }
+    return state.outcome;
   }
 
   async getAttempts(): Promise<readonly AttemptRecord[]> {

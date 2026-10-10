@@ -8,6 +8,7 @@ import {
   type LearningActivityId,
 } from "../../src/core/domain";
 import {
+  DuplicateAttemptError,
   IndexedDbLearningPersistence,
   type MissionDraftRecord,
 } from "../../src/core/persistence";
@@ -107,7 +108,7 @@ describe("IndexedDbLearningPersistence (fake-indexeddb)", () => {
       ]);
     });
 
-    it("rejects a duplicate attempt id at the IndexedDB store and keeps the original", async () => {
+    it("rejects a duplicate attempt id with DuplicateAttemptError and keeps the original", async () => {
       const { store } = createStore();
       const original = makeAttempt();
       await store.addAttempt(original);
@@ -115,7 +116,7 @@ describe("IndexedDbLearningPersistence (fake-indexeddb)", () => {
       const error = await store
         .addAttempt(makeAttempt({ passed: false }))
         .then(() => null, (caught: unknown) => caught);
-      expect(error).not.toBeNull();
+      expect(error).toBeInstanceOf(DuplicateAttemptError);
 
       expect(await store.getAttempts()).toEqual([original]);
     });

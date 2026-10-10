@@ -8,7 +8,9 @@ import {
   type LearningActivityId,
 } from "../../src/core/domain";
 import {
+  DuplicateAttemptError,
   IndexedDbLearningPersistence,
+  InvalidAttemptRecordError,
   MemoryLearningPersistence,
   ResilientLearningPersistence,
   type LearningPersistence,
@@ -76,6 +78,7 @@ describe("ResilientLearningPersistence over IndexedDB", () => {
     const unavailable: LearningPersistence = {
       kind: "indexeddb",
       addAttempt: () => Promise.reject(new Error("storage unavailable")),
+      addAttemptIfAbsent: () => Promise.reject(new Error("storage unavailable")),
       getAttempts: () => Promise.reject(new Error("storage unavailable")),
       clearAttempts: () => Promise.reject(new Error("storage unavailable")),
       getMissionDraft: () => Promise.reject(new Error("storage unavailable")),
@@ -92,29 +95,30 @@ describe("ResilientLearningPersistence over IndexedDB", () => {
   });
 
   /**
-   * KNOWN RISK (PHASE-04B.2A, Task C) - NOT a product requirement.
-   *
-   * ResilientLearningPersistence.execute() catches *every* error from the
-   * primary. A duplicate attempt id is a normal ConstraintError of the store,
-   * not an outage, yet it flips `failedOver` permanently. From then on:
-   *   - reads come from an empty in-memory store (existing IndexedDB attempts
-   *     become invisible to the app), and
-   *   - writes never reach IndexedDB again until a full page reload.
-   *
-   * The two tests below assert the DESIRED invariants with `it.fails`, so the
-   * suite is green today and turns red the moment the wrapper is fixed. When
-   * that happens, change `it.fails` to `it` and delete this comment.
-   * They deliberately accept either outcome of the duplicate call itself
-   * (throw or ignore) - the fix policy is not decided here.
+   * Regression for the duplicate-key failover bug (PHASE-04B.2A found it,
+   * PHASE-04B.2B fixed it). A duplicate attempt id is a domain error, not a
+   * storage outage, so a healthy IndexedDB must stay the active store.
    */
-  describe("duplicate attempt id (known risk, desired invariants)", () => {
+  describe("duplicate attempt id", () => {
     async function addDuplicate(resilient: ResilientLearningPersistence) {
       await resilient.addAttempt(A1);
       await resilient.addAttempt(A2);
-      await resilient.addAttempt(A1).catch(() => undefined);
+      return resilient.addAttempt(A1).then(
+        () => null,
+        (error: unknown) => error,
+      );
     }
 
-    it.fails("a duplicate id must not switch the store to memory or hide stored attempts", async () => {
+    it("rejects with DuplicateAttemptError and does not switch to memory", async () => {
+      const { resilient } = create();
+      const error = await addDuplicate(resilient);
+
+      expect(error).toBeInstanceOf(DuplicateAttemptError);
+      expect((error as DuplicateAttemptError).attemptId).toBe("attempt.1");
+      expect(resilient.kind).toBe("indexeddb");
+    });
+
+    it("keeps already stored attempts visible", async () => {
       const { resilient } = create();
       await addDuplicate(resilient);
 
@@ -122,7 +126,7 @@ describe("ResilientLearningPersistence over IndexedDB", () => {
       expect(await resilient.getAttempts()).toEqual([A1, A2]);
     });
 
-    it.fails("attempts written after a duplicate id must still reach IndexedDB", async () => {
+    it("keeps later attempts durable across a fresh instance", async () => {
       const { factory, resilient } = create();
       await addDuplicate(resilient);
       await resilient.addAttempt(A3);
@@ -134,6 +138,42 @@ describe("ResilientLearningPersistence over IndexedDB", () => {
         "attempt.3",
       ]);
     });
+
+    it("does not warn about unavailable storage for a duplicate", async () => {
+      const { resilient } = create();
+      const warn = vi.mocked(console.warn);
+      await addDuplicate(resilient);
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("addAttemptIfAbsent", () => {
+    it("never fails over for exists, conflict or invalid records", async () => {
+      const { factory, resilient } = create();
+      await resilient.addAttempt(A1);
+
+      expect(await resilient.addAttemptIfAbsent(A1)).toEqual({ status: "exists" });
+      expect(await resilient.addAttemptIfAbsent({ ...A1, passed: false })).toEqual({
+        status: "conflict",
+      });
+      await expect(
+        resilient.addAttemptIfAbsent({ ...A1, id: "attempt.bad", submissionIndex: 0 } as never),
+      ).rejects.toBeInstanceOf(InvalidAttemptRecordError);
+
+      expect(resilient.kind).toBe("indexeddb");
+      const fresh = idb.track(new IndexedDbLearningPersistence(factory));
+      expect(await fresh.getAttempts()).toEqual([A1]);
+    });
+
+    it("still falls back to memory on a genuine storage failure", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const broken = idb.track(new IndexedDbLearningPersistence(idb.createFactory()));
+      vi.spyOn(broken, "addAttemptIfAbsent").mockRejectedValue(new Error("disk failure"));
+      const resilient = new ResilientLearningPersistence(broken);
+
+      expect(await resilient.addAttemptIfAbsent(A1)).toEqual({ status: "added" });
+      expect(resilient.kind).toBe("memory");
+    });
   });
 });
 
@@ -142,5 +182,6 @@ describe("MemoryLearningPersistence duplicate contract (reference for the Indexe
     const memory = new MemoryLearningPersistence();
     await memory.addAttempt(A1);
     await expect(memory.addAttempt(A1)).rejects.toThrow("Attempt already exists");
+    await expect(memory.addAttempt(A1)).rejects.toBeInstanceOf(DuplicateAttemptError);
   });
 });

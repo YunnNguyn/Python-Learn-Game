@@ -1,6 +1,11 @@
 import type { AttemptRecord, LearningActivityId } from "../domain";
 import { MemoryLearningPersistence } from "./memory-learning-persistence";
-import type { LearningPersistence, MissionDraftRecord } from "./learning-persistence";
+import type {
+  AddAttemptIfAbsentResult,
+  LearningPersistence,
+  MissionDraftRecord,
+} from "./learning-persistence";
+import { PersistenceDomainError } from "./persistence-errors";
 
 export class ResilientLearningPersistence implements LearningPersistence {
   private readonly fallback = new MemoryLearningPersistence();
@@ -14,6 +19,10 @@ export class ResilientLearningPersistence implements LearningPersistence {
 
   addAttempt(record: AttemptRecord): Promise<void> {
     return this.execute((store) => store.addAttempt(record));
+  }
+
+  addAttemptIfAbsent(record: AttemptRecord): Promise<AddAttemptIfAbsentResult> {
+    return this.execute((store) => store.addAttemptIfAbsent(record));
   }
 
   getAttempts(): Promise<readonly AttemptRecord[]> {
@@ -50,6 +59,9 @@ export class ResilientLearningPersistence implements LearningPersistence {
     try {
       return await operation(this.primary);
     } catch (error) {
+      // Expected domain outcomes (e.g. duplicate attempt id) are the caller's
+      // concern, not a storage outage: keep the healthy primary and rethrow.
+      if (error instanceof PersistenceDomainError) throw error;
       console.warn("IndexedDB unavailable; falling back to in-memory learning data.", error);
       this.failedOver = true;
       return operation(this.fallback);

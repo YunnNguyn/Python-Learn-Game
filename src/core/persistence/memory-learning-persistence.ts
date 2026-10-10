@@ -1,5 +1,11 @@
 import type { AttemptRecord, LearningActivityId } from "../domain";
-import type { LearningPersistence, MissionDraftRecord } from "./learning-persistence";
+import { classifyStoredAttempt, parseAttemptForImport } from "./attempt-import";
+import type {
+  AddAttemptIfAbsentResult,
+  LearningPersistence,
+  MissionDraftRecord,
+} from "./learning-persistence";
+import { DuplicateAttemptError } from "./persistence-errors";
 
 export class MemoryLearningPersistence implements LearningPersistence {
   readonly kind = "memory" as const;
@@ -8,9 +14,20 @@ export class MemoryLearningPersistence implements LearningPersistence {
 
   async addAttempt(record: AttemptRecord): Promise<void> {
     if (this.attempts.has(record.id)) {
-      throw new Error(`Attempt already exists: ${String(record.id)}`);
+      throw new DuplicateAttemptError(String(record.id));
     }
     this.attempts.set(record.id, structuredClone(record));
+  }
+
+  async addAttemptIfAbsent(record: AttemptRecord): Promise<AddAttemptIfAbsentResult> {
+    const parsed = parseAttemptForImport(record);
+    // No await between lookup and insert, so this is atomic on the JS event loop.
+    const stored = this.attempts.get(parsed.id);
+    if (stored === undefined) {
+      this.attempts.set(parsed.id, structuredClone(parsed));
+      return { status: "added" };
+    }
+    return { status: classifyStoredAttempt(parsed, stored) };
   }
 
   async getAttempts(): Promise<readonly AttemptRecord[]> {
