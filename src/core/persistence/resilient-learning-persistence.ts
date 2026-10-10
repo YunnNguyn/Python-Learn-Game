@@ -2,10 +2,11 @@ import type { AttemptRecord, LearningActivityId } from "../domain";
 import { MemoryLearningPersistence } from "./memory-learning-persistence";
 import type {
   AddAttemptIfAbsentResult,
+  AttemptImportOrigin,
   LearningPersistence,
   MissionDraftRecord,
 } from "./learning-persistence";
-import { PersistenceDomainError } from "./persistence-errors";
+import { ImportRequiresDurableStorageError, PersistenceDomainError } from "./persistence-errors";
 
 export class ResilientLearningPersistence implements LearningPersistence {
   private readonly fallback = new MemoryLearningPersistence();
@@ -25,8 +26,35 @@ export class ResilientLearningPersistence implements LearningPersistence {
     return this.execute((store) => store.addAttemptIfAbsent(record));
   }
 
+  /**
+   * FAIL CLOSED. An import is reported successful only if it reached durable
+   * storage, so this never writes to the in-memory fallback and never flips
+   * `failedOver`:
+   *  - already failed over            -> ImportRequiresDurableStorageError;
+   *  - domain errors (validation, blocked upgrade, ...) -> rethrown as is;
+   *  - any other primary failure      -> ImportRequiresDurableStorageError
+   *    (cause attached). Ordinary operations decide on failover themselves.
+   */
+  async importAttemptIfAbsent(
+    record: AttemptRecord,
+    origin: AttemptImportOrigin,
+  ): Promise<AddAttemptIfAbsentResult> {
+    if (this.failedOver) return this.fallback.importAttemptIfAbsent(record, origin);
+
+    try {
+      return await this.primary.importAttemptIfAbsent(record, origin);
+    } catch (error) {
+      if (error instanceof PersistenceDomainError) throw error;
+      throw new ImportRequiresDurableStorageError({ cause: error });
+    }
+  }
+
   getAttempts(): Promise<readonly AttemptRecord[]> {
     return this.execute((store) => store.getAttempts());
+  }
+
+  getRewardEligibleAttemptsSnapshot(): Promise<readonly AttemptRecord[]> {
+    return this.execute((store) => store.getRewardEligibleAttemptsSnapshot());
   }
 
   clearAttempts(): Promise<void> {

@@ -1,5 +1,6 @@
 import { AttemptRecordSchema, type AttemptRecord } from "../domain";
-import { InvalidAttemptRecordError } from "./persistence-errors";
+import { ATTEMPT_IMPORT_ORIGINS, type AttemptImportOrigin } from "./learning-persistence";
+import { InvalidAttemptRecordError, InvalidImportOriginError } from "./persistence-errors";
 
 /**
  * Pure helpers for `addAttemptIfAbsent`. They never touch storage, so every
@@ -15,6 +16,17 @@ export function parseAttemptForImport(record: unknown): AttemptRecord {
     );
   }
   return result.data;
+}
+
+/**
+ * The origin is chosen by the trusted import call site, never read from the
+ * attempt payload; anything outside the known set is rejected before storage.
+ */
+export function parseImportOrigin(origin: unknown): AttemptImportOrigin {
+  if (typeof origin === "string" && (ATTEMPT_IMPORT_ORIGINS as readonly string[]).includes(origin)) {
+    return origin as AttemptImportOrigin;
+  }
+  throw new InvalidImportOriginError();
 }
 
 /**

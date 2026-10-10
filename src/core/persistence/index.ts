@@ -3,10 +3,16 @@ export { IndexedDbLearningPersistence } from "./indexeddb-learning-persistence";
 export { MemoryLearningPersistence } from "./memory-learning-persistence";
 export { ResilientLearningPersistence } from "./resilient-learning-persistence";
 export {
+  AttemptProvenanceUnreadableError,
   DuplicateAttemptError,
+  ImportRequiresDurableStorageError,
   InvalidAttemptRecordError,
+  InvalidImportOriginError,
   PersistenceDomainError,
+  PersistenceUpgradeBlockedError,
+  PersistenceUpgradeFailureReason,
 } from "./persistence-errors";
+export { ATTEMPT_IMPORT_ORIGINS } from "./learning-persistence";
 export {
   GUEST_DATABASE_BASE_NAMES,
   GUEST_SCOPE,
@@ -19,6 +25,7 @@ export {
 export type { PersistenceScope } from "./persistence-scope";
 export type {
   AddAttemptIfAbsentResult,
+  AttemptImportOrigin,
   LearningPersistence,
   MissionDraftRecord,
 } from "./learning-persistence";

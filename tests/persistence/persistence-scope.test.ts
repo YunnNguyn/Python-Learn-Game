@@ -99,9 +99,12 @@ function brokenFactory(): IDBFactory {
   } as unknown as IDBFactory;
 }
 
-const LEARNING_V1_LAYOUT = {
-  version: 1,
+// PHASE-04C.3B: Learning is now schema v2 (additive `attemptProvenance` store);
+// the v1 stores and indexes are unchanged. The Meta database stays at v1.
+const LEARNING_V2_LAYOUT = {
+  version: 2,
   stores: {
+    attemptProvenance: { keyPath: "attemptId", indexes: {} },
     attempts: {
       keyPath: "id",
       indexes: {
@@ -358,8 +361,8 @@ describe("IndexedDB persistence scopes (fake-indexeddb)", () => {
     });
   });
 
-  describe("schema versions are unchanged", () => {
-    it("Guest and account databases all use version 1 with the original layout", async () => {
+  describe("schema versions", () => {
+    it("Guest and account Learning databases use v2 and Meta databases stay at v1", async () => {
       const factory = idb.createFactory();
       for (const scope of [GUEST_SCOPE, scopeA, scopeB]) {
         const learningStore = learning(factory, scope);
@@ -368,7 +371,7 @@ describe("IndexedDB persistence scopes (fake-indexeddb)", () => {
         await metaStore.loadState();
 
         expect(await rawDescribeSchema(factory, learningStore.databaseName)).toEqual(
-          LEARNING_V1_LAYOUT,
+          LEARNING_V2_LAYOUT,
         );
         expect(await rawDescribeSchema(factory, metaStore.databaseName)).toEqual(META_V1_LAYOUT);
       }

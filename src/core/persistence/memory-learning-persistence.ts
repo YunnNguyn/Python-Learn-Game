@@ -1,11 +1,12 @@
 import type { AttemptRecord, LearningActivityId } from "../domain";
-import { classifyStoredAttempt, parseAttemptForImport } from "./attempt-import";
+import { classifyStoredAttempt, parseAttemptForImport, parseImportOrigin } from "./attempt-import";
 import type {
   AddAttemptIfAbsentResult,
+  AttemptImportOrigin,
   LearningPersistence,
   MissionDraftRecord,
 } from "./learning-persistence";
-import { DuplicateAttemptError } from "./persistence-errors";
+import { DuplicateAttemptError, ImportRequiresDurableStorageError } from "./persistence-errors";
 
 export class MemoryLearningPersistence implements LearningPersistence {
   readonly kind = "memory" as const;
@@ -30,10 +31,32 @@ export class MemoryLearningPersistence implements LearningPersistence {
     return { status: classifyStoredAttempt(parsed, stored) };
   }
 
+  /**
+   * Memory is volatile, so an import can never be durable. Inputs are validated
+   * first (consistent errors with the durable store), then the call fails closed
+   * and stores NOTHING - an imported attempt must never live only in RAM.
+   */
+  async importAttemptIfAbsent(
+    record: AttemptRecord,
+    origin: AttemptImportOrigin,
+  ): Promise<AddAttemptIfAbsentResult> {
+    parseAttemptForImport(record);
+    parseImportOrigin(origin);
+    throw new ImportRequiresDurableStorageError();
+  }
+
   async getAttempts(): Promise<readonly AttemptRecord[]> {
     return [...this.attempts.values()]
       .map((record) => structuredClone(record))
       .sort((left, right) => left.submittedAt.localeCompare(right.submittedAt));
+  }
+
+  /**
+   * Imports are impossible in memory, so every attempt here is locally
+   * originated and eligible. Returns detached copies (same as getAttempts).
+   */
+  async getRewardEligibleAttemptsSnapshot(): Promise<readonly AttemptRecord[]> {
+    return this.getAttempts();
   }
 
   async clearAttempts(): Promise<void> {

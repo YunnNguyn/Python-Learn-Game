@@ -254,12 +254,15 @@ describe("IndexedDbLearningPersistence (fake-indexeddb)", () => {
   });
 
   describe("on-disk layout (compatibility contract for existing user data)", () => {
-    it("keeps database name, version, stores and indexes stable", async () => {
+    // PHASE-04C.3B: the version is deliberately 2 now (additive `attemptProvenance`
+    // store). Every v1 store and index below is asserted unchanged.
+    it("keeps database name, stores and indexes stable; v2 only adds attemptProvenance", async () => {
       const { factory, store } = createStore();
       await store.getAttempts();
       expect(await rawDescribeSchema(factory, DATABASE_NAME)).toEqual({
-        version: 1,
+        version: 2,
         stores: {
+          attemptProvenance: { keyPath: "attemptId", indexes: {} },
           attempts: {
             keyPath: "id",
             indexes: {
