@@ -3,8 +3,13 @@ import {
   type MetaProgressionState,
 } from "./meta-types";
 import type { MetaProgressionPersistence } from "./meta-progression-persistence";
+import {
+  GUEST_DATABASE_BASE_NAMES,
+  GUEST_SCOPE,
+  resolveScopedDatabaseName,
+  type PersistenceScope,
+} from "../persistence/persistence-scope";
 
-const DATABASE_NAME = "python-learn-game-meta";
 const DATABASE_VERSION = 1;
 const STATE_STORE = "progressionState";
 const PRIMARY_KEY = "primary";
@@ -20,7 +25,15 @@ export class IndexedDbMetaProgressionPersistence
   readonly kind = "indexeddb" as const;
   private databasePromise: Promise<IDBDatabase> | null = null;
 
-  constructor(private readonly indexedDb: IDBFactory = indexedDB) {}
+  /** Resolved from `scope` at construction; an invalid scope throws here, never opens Guest. */
+  readonly databaseName: string;
+
+  constructor(
+    private readonly indexedDb: IDBFactory = indexedDB,
+    scope: PersistenceScope = GUEST_SCOPE,
+  ) {
+    this.databaseName = resolveScopedDatabaseName(GUEST_DATABASE_BASE_NAMES.meta, scope);
+  }
 
   async loadState(): Promise<MetaProgressionState | null> {
     const database = await this.getDatabase();
@@ -62,14 +75,14 @@ export class IndexedDbMetaProgressionPersistence
   }
 
   private getDatabase(): Promise<IDBDatabase> {
-    this.databasePromise ??= openDatabase(this.indexedDb);
+    this.databasePromise ??= openDatabase(this.indexedDb, this.databaseName);
     return this.databasePromise;
   }
 }
 
-function openDatabase(indexedDb: IDBFactory): Promise<IDBDatabase> {
+function openDatabase(indexedDb: IDBFactory, databaseName: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDb.open(DATABASE_NAME, DATABASE_VERSION);
+    const request = indexedDb.open(databaseName, DATABASE_VERSION);
 
     request.onupgradeneeded = () => {
       const database = request.result;

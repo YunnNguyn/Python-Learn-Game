@@ -7,6 +7,16 @@ export {
   InvalidAttemptRecordError,
   PersistenceDomainError,
 } from "./persistence-errors";
+export {
+  GUEST_DATABASE_BASE_NAMES,
+  GUEST_SCOPE,
+  InvalidPersistenceScopeError,
+  InvalidPersistenceScopeReason,
+  MAX_ACCOUNT_ID_LENGTH,
+  accountScope,
+  resolveScopedDatabaseName,
+} from "./persistence-scope";
+export type { PersistenceScope } from "./persistence-scope";
 export type {
   AddAttemptIfAbsentResult,
   LearningPersistence,
