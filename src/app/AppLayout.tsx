@@ -1,10 +1,15 @@
 import { NavLink, Outlet } from "react-router-dom";
 
+import { StartupFailurePanel } from "./StartupFailurePanel";
+import { useApplicationInitialization } from "./services";
+
 function navigationClassName({ isActive }: { isActive: boolean }): string {
   return isActive ? "app-nav__link app-nav__link--active" : "app-nav__link";
 }
 
 export function AppLayout() {
+  const initialization = useApplicationInitialization();
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -31,7 +36,15 @@ export function AppLayout() {
       </header>
 
       <main className="app-main">
-        <Outlet />
+        {initialization.status === "pending" ? (
+          <p role="status" aria-live="polite">
+            Đang khởi tạo dữ liệu học tập...
+          </p>
+        ) : initialization.status === "failed" ? (
+          <StartupFailurePanel error={initialization.error} />
+        ) : (
+          <Outlet />
+        )}
       </main>
 
       <footer className="app-footer">

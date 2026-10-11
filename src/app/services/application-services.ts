@@ -36,6 +36,11 @@ import { createLocalPythonRuntimeManager } from "../../core/runtime/local-python
 import { createPyodideRuntimeManager } from "../../core/runtime/pyodide";
 import { getActivityAccess } from "../learning-path";
 
+const PENDING_INITIALIZATION: ApplicationInitializationState = Object.freeze({
+  status: "pending",
+});
+const READY_INITIALIZATION: ApplicationInitializationState = Object.freeze({ status: "ready" });
+
 export interface PlayableMissionSession {
   readonly session: MissionAttemptSession;
   readonly initialCode: string;
@@ -55,6 +60,15 @@ export type CreateMissionSessionResult =
   | { readonly ok: true; readonly value: PlayableMissionSession }
   | { readonly ok: false; readonly error: RuntimeSystemError };
 
+/**
+ * Observable result of startup (see `createApplicationServices`). `failed` is
+ * terminal for a given service set: it is never reset to `pending`.
+ */
+export type ApplicationInitializationState =
+  | { readonly status: "pending" }
+  | { readonly status: "ready" }
+  | { readonly status: "failed"; readonly error: unknown };
+
 export interface ApplicationServices {
   readonly content: ContentRegistry;
   readonly generators: GeneratorRegistry;
@@ -62,7 +76,15 @@ export interface ApplicationServices {
   readonly hints: HintRegistry;
   readonly learning: LearningEngine;
   readonly metaProgression: MetaProgressionEngine;
+  /**
+   * Runs (once) and returns the startup promise. On failure it rejects with the
+   * underlying error - every call, forever - because a service set that failed
+   * to start is never retried in place.
+   */
   initialize(): Promise<void>;
+  /** Stable object identity until the status changes (safe for useSyncExternalStore). */
+  getInitializationState(): ApplicationInitializationState;
+  subscribeInitialization(listener: () => void): () => void;
   createMissionSession(
     activityId: string,
     options?: CreateMissionSessionOptions,
@@ -113,6 +135,30 @@ export interface CreateApplicationServicesOptions {
  * - closing the old IndexedDB connections (persistence classes expose no
  *   close(), so connections stay open until page unload);
  * - never reusing an old set's in-memory engine state under another scope.
+ *
+ * Startup sequence (started eagerly, runs once per set):
+ *  1. `persistence.getRewardEligibleAttemptsSnapshot()` - one atomic read of the
+ *     attempts that may earn LOCAL rewards (locally submitted + legacy v1
+ *     attempts; every `cloud-import` / `guest-copy` attempt is excluded). It is
+ *     read from this set's own scoped persistence and BEFORE any engine starts.
+ *  2. `learning.initialize()` - loads ALL attempts, imported ones included, so
+ *     history, activity progress, concept progress and unlocks see them.
+ *  3. `metaProgression.initialize()` - loads stored reward state.
+ *  4. `metaProgression.reconcileAttempts(snapshot)` - fed ONLY the snapshot from
+ *     step 1. There is no fallback to `learning.getAttempts()` or to any
+ *     unfiltered list; if step 1 fails, steps 2-4 never run.
+ *
+ * Failure policy: any failed step (blocked upgrade, schema newer than this
+ * build, unreadable provenance, ...) rejects `initialize()` with the underlying
+ * error, moves `getInitializationState()` to `failed`, and is handled for the
+ * eager call, so it never becomes an unhandled rejection. `createMissionSession`
+ * then returns a failure result and `clearLearningData` rejects. Nothing falls
+ * back to Guest, another scope or an empty in-memory store.
+ *
+ * Recovery: a failed set is NOT retried in place (its engines may be half
+ * initialized and cache their own rejected promises). Recovery means building a
+ * new set (reloading the page, as the startup failure screen does), after the
+ * cause is fixed - e.g. other tabs closed for a blocked upgrade.
  */
 export function createApplicationServices(
   options: CreateApplicationServicesOptions = {},
@@ -155,16 +201,41 @@ export function createApplicationServices(
 
   registerCs116ProductionContent(content);
 
+  let initializationState: ApplicationInitializationState = PENDING_INITIALIZATION;
+  const initializationListeners = new Set<() => void>();
+
+  function setInitializationState(next: ApplicationInitializationState): void {
+    initializationState = next;
+    for (const listener of initializationListeners) listener();
+  }
+
+  async function runStartup(): Promise<void> {
+    // Read the reward-eligible snapshot first: if provenance cannot be read, no
+    // engine has started and nothing has been reconciled.
+    const rewardEligibleAttempts = await persistence.getRewardEligibleAttemptsSnapshot();
+    await learning.initialize();
+    await metaProgression.initialize();
+    await metaProgression.reconcileAttempts(rewardEligibleAttempts);
+  }
+
   function initialize(): Promise<void> {
-    initializePromise ??= (async () => {
-      await learning.initialize();
-      await metaProgression.initialize();
-      await metaProgression.reconcileAttempts(learning.getAttempts());
-    })();
+    initializePromise ??= runStartup().then(
+      () => {
+        setInitializationState(READY_INITIALIZATION);
+      },
+      (error: unknown) => {
+        console.error("Application initialization failed.", error);
+        setInitializationState(Object.freeze({ status: "failed", error }));
+        throw error;
+      },
+    );
     return initializePromise;
   }
 
-  void initialize();
+  // Eager start. The rejection is observed here (so it cannot surface as an
+  // unhandled rejection) and stays visible through getInitializationState() and
+  // through every explicit `initialize()` call, which still rejects.
+  initialize().catch(() => undefined);
 
   return {
     content,
@@ -175,8 +246,29 @@ export function createApplicationServices(
     metaProgression,
     initialize,
 
+    getInitializationState() {
+      return initializationState;
+    },
+
+    subscribeInitialization(listener) {
+      initializationListeners.add(listener);
+      return () => {
+        initializationListeners.delete(listener);
+      };
+    },
+
     async createMissionSession(activityId, options = {}) {
-      await initialize();
+      try {
+        await initialize();
+      } catch {
+        // A mission must never start on a service set whose startup failed.
+        // The raw error stays in getInitializationState() and the console
+        // diagnostic; the user-facing message deliberately omits it.
+        return failure(
+          "APPLICATION_INITIALIZATION_FAILED",
+          "Ứng dụng chưa khởi tạo được dữ liệu học tập cục bộ nên chưa thể mở bài thực hành. Hãy đóng các tab khác của ứng dụng rồi tải lại trang.",
+        );
+      }
       const activity = content.getActivity(activityId as LearningActivityId);
       if (activity === undefined) {
         return failure(
@@ -297,6 +389,8 @@ export function createApplicationServices(
     },
 
     async clearLearningData() {
+      // Rejects with the startup error when initialization failed: clearing
+      // must not run against half-initialized engines.
       await initialize();
       await learning.clearAttempts();
       await persistence.clearMissionDrafts();
