@@ -12,11 +12,13 @@ import {
   type AddAttemptIfAbsentResult,
   type AttemptImportOrigin,
   type LearningPersistence,
+  type LearningPersistenceCloseState,
   type MissionDraftRecord,
 } from "./learning-persistence";
 import {
   AttemptProvenanceUnreadableError,
   DuplicateAttemptError,
+  PersistenceClosedError,
   PersistenceDomainError,
   PersistenceUpgradeBlockedError,
   PersistenceUpgradeFailureReason,
@@ -71,6 +73,13 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
   readonly kind = "indexeddb" as const;
   /** The in-flight or established connection (test helpers read `handle.database` to close it). */
   private handle: OpenHandle | null = null;
+  /**
+   * Set synchronously by close(); never reset, so a closed instance never opens
+   * or reopens a connection and never starts another transaction.
+   */
+  private closed = false;
+  /** True while an open request issued before close() has not settled yet. */
+  private lateOpenPending = false;
 
   /** Resolved from `scope` at construction; an invalid scope throws here, never opens Guest. */
   readonly databaseName: string;
@@ -83,11 +92,13 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
   }
 
   async addAttempt(record: AttemptRecord): Promise<void> {
+    this.assertOpen();
     const outcome = await this.insertAttempt(record, () => "exists");
     if (outcome !== "added") throw new DuplicateAttemptError(String(record.id));
   }
 
   async addAttemptIfAbsent(record: AttemptRecord): Promise<AddAttemptIfAbsentResult> {
+    this.assertOpen();
     const parsed = parseAttemptForImport(record);
     const status = await this.insertAttempt(parsed, (stored) =>
       classifyStoredAttempt(parsed, stored),
@@ -112,7 +123,7 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
     classifyExisting: (stored: unknown) => "exists" | "conflict",
   ): Promise<AttemptOutcome> {
     const database = await this.getDatabase();
-    const transaction = database.transaction(ATTEMPT_STORE, "readwrite");
+    const transaction = this.beginTransaction(database, ATTEMPT_STORE, "readwrite");
     const done = transactionDone(transaction);
     const store = transaction.objectStore(ATTEMPT_STORE);
 
@@ -164,6 +175,7 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
     record: AttemptRecord,
     origin: AttemptImportOrigin,
   ): Promise<AddAttemptIfAbsentResult> {
+    this.assertOpen();
     const parsed = parseAttemptForImport(record);
     const parsedOrigin = parseImportOrigin(origin);
     const provenance = AttemptProvenanceSchema.parse({
@@ -173,7 +185,7 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
     });
 
     const database = await this.getDatabase();
-    const transaction = database.transaction([ATTEMPT_STORE, PROVENANCE_STORE], "readwrite");
+    const transaction = this.beginTransaction(database, [ATTEMPT_STORE, PROVENANCE_STORE], "readwrite");
     const done = transactionDone(transaction);
     const attempts = transaction.objectStore(ATTEMPT_STORE);
     const provenanceStore = transaction.objectStore(PROVENANCE_STORE);
@@ -207,8 +219,9 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
   }
 
   async getAttempts(): Promise<readonly AttemptRecord[]> {
+    this.assertOpen();
     const database = await this.getDatabase();
-    const transaction = database.transaction(ATTEMPT_STORE, "readonly");
+    const transaction = this.beginTransaction(database, ATTEMPT_STORE, "readonly");
     const [values] = await Promise.all([
       requestResult<unknown[]>(transaction.objectStore(ATTEMPT_STORE).getAll()),
       transactionDone(transaction),
@@ -226,6 +239,7 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
    * read or trusted the call rejects; it never falls back to unfiltered data.
    */
   async getRewardEligibleAttemptsSnapshot(): Promise<readonly AttemptRecord[]> {
+    this.assertOpen();
     // Outside the boundary on purpose: an unavailable database, a blocked upgrade
     // or a newer schema keep their existing semantics (see openDatabase).
     const database = await this.getDatabase();
@@ -237,7 +251,7 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
     // instead of failing over to an empty memory store.
     let transaction: IDBTransaction | undefined;
     try {
-      transaction = database.transaction([ATTEMPT_STORE, PROVENANCE_STORE], "readonly");
+      transaction = this.beginTransaction(database, [ATTEMPT_STORE, PROVENANCE_STORE], "readonly");
       const [attemptRows, provenanceRows] = await Promise.all([
         requestResult<unknown[]>(transaction.objectStore(ATTEMPT_STORE).getAll()),
         requestResult<unknown[]>(transaction.objectStore(PROVENANCE_STORE).getAll()),
@@ -263,8 +277,9 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
 
   /** Attempts and their provenance are removed in one transaction. */
   async clearAttempts(): Promise<void> {
+    this.assertOpen();
     const database = await this.getDatabase();
-    const transaction = database.transaction([ATTEMPT_STORE, PROVENANCE_STORE], "readwrite");
+    const transaction = this.beginTransaction(database, [ATTEMPT_STORE, PROVENANCE_STORE], "readwrite");
     const done = transactionDone(transaction);
     transaction.objectStore(ATTEMPT_STORE).clear();
     transaction.objectStore(PROVENANCE_STORE).clear();
@@ -272,8 +287,9 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
   }
 
   async getMissionDraft(activityId: LearningActivityId): Promise<MissionDraftRecord | null> {
+    this.assertOpen();
     const database = await this.getDatabase();
-    const transaction = database.transaction(DRAFT_STORE, "readonly");
+    const transaction = this.beginTransaction(database, DRAFT_STORE, "readonly");
     const [raw] = await Promise.all([
       requestResult<unknown>(transaction.objectStore(DRAFT_STORE).get(activityId)),
       transactionDone(transaction),
@@ -287,33 +303,37 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
   }
 
   async saveMissionDraft(record: MissionDraftRecord): Promise<void> {
+    this.assertOpen();
     const parsed = MissionDraftSchema.parse(record);
     const database = await this.getDatabase();
-    const transaction = database.transaction(DRAFT_STORE, "readwrite");
+    const transaction = this.beginTransaction(database, DRAFT_STORE, "readwrite");
     const done = transactionDone(transaction);
     transaction.objectStore(DRAFT_STORE).put(parsed);
     await done;
   }
 
   async deleteMissionDraft(activityId: LearningActivityId): Promise<void> {
+    this.assertOpen();
     const database = await this.getDatabase();
-    const transaction = database.transaction(DRAFT_STORE, "readwrite");
+    const transaction = this.beginTransaction(database, DRAFT_STORE, "readwrite");
     const done = transactionDone(transaction);
     transaction.objectStore(DRAFT_STORE).delete(activityId);
     await done;
   }
 
   async clearMissionDrafts(): Promise<void> {
+    this.assertOpen();
     const database = await this.getDatabase();
-    const transaction = database.transaction(DRAFT_STORE, "readwrite");
+    const transaction = this.beginTransaction(database, DRAFT_STORE, "readwrite");
     const done = transactionDone(transaction);
     transaction.objectStore(DRAFT_STORE).clear();
     await done;
   }
 
   async clearAll(): Promise<void> {
+    this.assertOpen();
     const database = await this.getDatabase();
-    const transaction = database.transaction(
+    const transaction = this.beginTransaction(database,
       [ATTEMPT_STORE, PROVENANCE_STORE, DRAFT_STORE],
       "readwrite",
     );
@@ -337,16 +357,68 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
    * the blocking tab closes, the same request completes the upgrade and the
    * resulting connection becomes the cached one.
    */
-  private getDatabase(): Promise<IDBDatabase> {
-    if (this.handle === null) {
-      const handle: OpenHandle = openDatabase(this.indexedDb, this.databaseName, () =>
-        this.forget(handle),
+  private async getDatabase(): Promise<IDBDatabase> {
+    this.assertOpen();
+    let handle = this.handle;
+    if (handle === null) {
+      const created: OpenHandle = openDatabase(this.indexedDb, this.databaseName, () =>
+        this.forget(created),
       );
-      this.handle = handle;
-      handle.database.catch(() => this.forget(handle));
+      created.database.catch(() => this.forget(created));
+      this.handle = created;
+      handle = created;
     }
     // `database` first: once it has resolved it wins over an earlier `blocked`.
-    return Promise.race([this.handle.database, this.handle.blocked]);
+    const database = await Promise.race([handle.database, handle.blocked]);
+    // close() may have run while this caller was waiting: no transaction starts.
+    this.assertOpen();
+    return database;
+  }
+
+  /**
+   * The only place a transaction starts. The closed check and `transaction()`
+   * run in one synchronous step, and close() sets the flag before it closes the
+   * connection, so a closed instance never begins new IndexedDB work - and never
+   * hits the InvalidStateError of a closing connection (which Resilient would
+   * otherwise mistake for an outage).
+   */
+  private beginTransaction(
+    database: IDBDatabase,
+    storeNames: string | string[],
+    mode: IDBTransactionMode,
+  ): IDBTransaction {
+    this.assertOpen();
+    return database.transaction(storeNames, mode);
+  }
+
+  /**
+   * See LearningPersistence.close. Resolves once the instance is closed and its
+   * connection released: an open connection is closed now (in-flight
+   * transactions still finish first), a still-outstanding open request is
+   * retired (its late connection is closed on arrival, never used). It never
+   * waits for that request, which a blocking tab may hold forever.
+   */
+  close(): Promise<void> {
+    if (this.closed) return Promise.resolve();
+    this.closed = true;
+    const handle = this.handle;
+    this.handle = null;
+    if (handle !== null) {
+      const released = handle.retire(() => {
+        this.lateOpenPending = false;
+      });
+      this.lateOpenPending = !released;
+    }
+    return Promise.resolve();
+  }
+
+  getCloseState(): LearningPersistenceCloseState {
+    if (!this.closed) return "open";
+    return this.lateOpenPending ? "closed-pending-open" : "closed";
+  }
+
+  private assertOpen(): void {
+    if (this.closed) throw new PersistenceClosedError();
   }
 
   private forget(handle: OpenHandle): void {
@@ -360,6 +432,15 @@ interface OpenHandle {
   readonly database: Promise<IDBDatabase>;
   /** Rejects (once, never resolves) when the upgrade is blocked by another connection. */
   readonly blocked: Promise<never>;
+  /**
+   * Retires the handle for close(). Callers still waiting on it reject with
+   * PersistenceClosedError right away. Returns true when nothing is left to
+   * release (an open connection was closed now, or the request already failed).
+   * Returns false while the open request is still outstanding: it cannot be
+   * cancelled, so its connection is closed the moment it arrives - never exposed
+   * as usable - and `onReleased` runs once the request settles.
+   */
+  retire(onReleased: () => void): boolean;
 }
 
 function parseAndSortAttempts(values: readonly unknown[]): AttemptRecord[] {
@@ -386,6 +467,12 @@ function parseAndSortAttempts(values: readonly unknown[]): AttemptRecord[] {
  *   reported as a typed error rather than a generic failure.
  * - A healthy connection closes itself on `versionchange` so it never blocks
  *   another tab's upgrade, and reports via `onClosed` so the owner can reopen.
+ * - `retire()` (close of the owning instance) is final: an open connection is
+ *   closed, and a request still outstanding - possibly blocked forever by
+ *   another tab - is never awaited; if it succeeds later its connection is
+ *   closed immediately and never handed to anyone. A late upgrade requested
+ *   before the close still runs as it would have (it is additive and was
+ *   already queued by the browser); no data is touched by the retirement.
  */
 function openDatabase(indexedDb: IDBFactory, databaseName: string, onClosed: () => void): OpenHandle {
   let rejectBlocked: (error: Error) => void = () => undefined;
@@ -394,14 +481,32 @@ function openDatabase(indexedDb: IDBFactory, databaseName: string, onClosed: () 
   });
   blocked.catch(() => undefined); // observed by callers via race; never an unhandled rejection
 
+  let retired = false;
+  let settled = false;
+  let connection: IDBDatabase | null = null;
+  let onLateRelease: (() => void) | null = null;
+  let cancelGraceTimer: () => void = () => undefined;
+
   const database = new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDb.open(databaseName, DATABASE_VERSION);
+    let request: IDBOpenDBRequest;
+    try {
+      request = indexedDb.open(databaseName, DATABASE_VERSION);
+    } catch (error) {
+      // The factory threw synchronously, so no browser request exists and none
+      // will ever fire a handler. The attempt is terminal right now: marking it
+      // settled lets retire() report "released" instead of a phantom pending
+      // open. The original error is kept for callers that observe it.
+      settled = true;
+      reject(error);
+      return;
+    }
 
     let graceTimer: ReturnType<typeof setTimeout> | undefined;
     const upgradeProceeding = () => {
       if (graceTimer !== undefined) clearTimeout(graceTimer);
       graceTimer = undefined;
     };
+    cancelGraceTimer = upgradeProceeding;
 
     request.onupgradeneeded = () => {
       upgradeProceeding();
@@ -422,7 +527,17 @@ function openDatabase(indexedDb: IDBFactory, databaseName: string, onClosed: () 
 
     request.onsuccess = () => {
       upgradeProceeding();
+      settled = true;
       const opened = request.result;
+      if (retired) {
+        // close() ran while this request was outstanding: never expose the late
+        // connection. The rejection is observed by the owner's catch handler.
+        opened.close();
+        reject(new PersistenceClosedError());
+        onLateRelease?.();
+        return;
+      }
+      connection = opened;
       opened.onversionchange = () => {
         opened.close();
         onClosed();
@@ -433,12 +548,14 @@ function openDatabase(indexedDb: IDBFactory, databaseName: string, onClosed: () 
 
     request.onerror = () => {
       upgradeProceeding();
+      settled = true;
       const error = request.error;
       if (error?.name === "VersionError") {
         reject(new PersistenceUpgradeBlockedError(PersistenceUpgradeFailureReason.VERSION_NEWER_THAN_CODE));
-        return;
+      } else {
+        reject(error ?? new Error("Không thể mở IndexedDB."));
       }
-      reject(error ?? new Error("Không thể mở IndexedDB."));
+      if (retired) onLateRelease?.();
     };
 
     request.onblocked = () => {
@@ -449,7 +566,25 @@ function openDatabase(indexedDb: IDBFactory, databaseName: string, onClosed: () 
     };
   });
 
-  return { database, blocked };
+  const retire = (onReleased: () => void): boolean => {
+    if (!retired) {
+      retired = true;
+      cancelGraceTimer();
+      // Waiting callers settle now instead of waiting on the browser. A no-op if
+      // `blocked` already rejected (the first rejection wins).
+      rejectBlocked(new PersistenceClosedError());
+    }
+    if (connection !== null) {
+      connection.close();
+      connection = null;
+      return true;
+    }
+    if (settled) return true;
+    onLateRelease = onReleased;
+    return false;
+  };
+
+  return { database, blocked, retire };
 }
 
 /** Aborts a read transaction that is still running; never throws (it may already be finished). */

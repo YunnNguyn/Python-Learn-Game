@@ -4,13 +4,21 @@ import type {
   AddAttemptIfAbsentResult,
   AttemptImportOrigin,
   LearningPersistence,
+  LearningPersistenceCloseState,
   MissionDraftRecord,
 } from "./learning-persistence";
-import { ImportRequiresDurableStorageError, PersistenceDomainError } from "./persistence-errors";
+import {
+  ImportRequiresDurableStorageError,
+  PersistenceClosedError,
+  PersistenceDomainError,
+} from "./persistence-errors";
 
 export class ResilientLearningPersistence implements LearningPersistence {
   private readonly fallback = new MemoryLearningPersistence();
   private failedOver = false;
+  /** Set synchronously by close(); never reset. Checked again on the failover path. */
+  private closed = false;
+  private closing: Promise<void> | null = null;
 
   constructor(private readonly primary: LearningPersistence) {}
 
@@ -39,6 +47,7 @@ export class ResilientLearningPersistence implements LearningPersistence {
     record: AttemptRecord,
     origin: AttemptImportOrigin,
   ): Promise<AddAttemptIfAbsentResult> {
+    if (this.closed) throw new PersistenceClosedError();
     if (this.failedOver) return this.fallback.importAttemptIfAbsent(record, origin);
 
     try {
@@ -81,15 +90,40 @@ export class ResilientLearningPersistence implements LearningPersistence {
     return this.execute((store) => store.clearAll());
   }
 
+  /**
+   * Closes the primary and the memory fallback (idempotent; see
+   * LearningPersistence.close). Nothing is cleared or copied between them.
+   */
+  close(): Promise<void> {
+    if (this.closing !== null) return this.closing;
+    this.closed = true;
+    this.closing = Promise.all([this.primary.close(), this.fallback.close()]).then(
+      () => undefined,
+    );
+    return this.closing;
+  }
+
+  getCloseState(): LearningPersistenceCloseState {
+    if (!this.closed) return "open";
+    // The fallback is memory: it never holds a pending browser request.
+    return this.primary.getCloseState() === "closed-pending-open" ? "closed-pending-open" : "closed";
+  }
+
   private async execute<T>(operation: (store: LearningPersistence) => Promise<T>): Promise<T> {
+    if (this.closed) throw new PersistenceClosedError();
     if (this.failedOver) return operation(this.fallback);
 
     try {
       return await operation(this.primary);
     } catch (error) {
-      // Expected domain outcomes (e.g. duplicate attempt id) are the caller's
-      // concern, not a storage outage: keep the healthy primary and rethrow.
+      // Expected domain outcomes (e.g. duplicate attempt id, and an intentional
+      // close via PersistenceClosedError) are the caller's concern, not a
+      // storage outage: keep the healthy primary and rethrow.
       if (error instanceof PersistenceDomainError) throw error;
+      // close() ran while this operation was in flight and the primary then
+      // failed for a genuine reason. Report that real error; never retry the
+      // operation in memory and never flip to failover after an intentional close.
+      if (this.closed) throw error;
       console.warn("IndexedDB unavailable; falling back to in-memory learning data.", error);
       this.failedOver = true;
       return operation(this.fallback);

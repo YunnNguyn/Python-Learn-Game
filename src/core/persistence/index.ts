@@ -8,6 +8,7 @@ export {
   ImportRequiresDurableStorageError,
   InvalidAttemptRecordError,
   InvalidImportOriginError,
+  PersistenceClosedError,
   PersistenceDomainError,
   PersistenceUpgradeBlockedError,
   PersistenceUpgradeFailureReason,
@@ -27,5 +28,6 @@ export type {
   AddAttemptIfAbsentResult,
   AttemptImportOrigin,
   LearningPersistence,
+  LearningPersistenceCloseState,
   MissionDraftRecord,
 } from "./learning-persistence";

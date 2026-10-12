@@ -4,16 +4,24 @@ import type {
   AddAttemptIfAbsentResult,
   AttemptImportOrigin,
   LearningPersistence,
+  LearningPersistenceCloseState,
   MissionDraftRecord,
 } from "./learning-persistence";
-import { DuplicateAttemptError, ImportRequiresDurableStorageError } from "./persistence-errors";
+import {
+  DuplicateAttemptError,
+  ImportRequiresDurableStorageError,
+  PersistenceClosedError,
+} from "./persistence-errors";
 
 export class MemoryLearningPersistence implements LearningPersistence {
   readonly kind = "memory" as const;
   private readonly attempts = new Map<string, AttemptRecord>();
   private readonly drafts = new Map<LearningActivityId, MissionDraftRecord>();
+  /** Set by close(); never reset. Closing keeps the data (it is not a clear). */
+  private closed = false;
 
   async addAttempt(record: AttemptRecord): Promise<void> {
+    this.assertOpen();
     if (this.attempts.has(record.id)) {
       throw new DuplicateAttemptError(String(record.id));
     }
@@ -21,6 +29,7 @@ export class MemoryLearningPersistence implements LearningPersistence {
   }
 
   async addAttemptIfAbsent(record: AttemptRecord): Promise<AddAttemptIfAbsentResult> {
+    this.assertOpen();
     const parsed = parseAttemptForImport(record);
     // No await between lookup and insert, so this is atomic on the JS event loop.
     const stored = this.attempts.get(parsed.id);
@@ -40,12 +49,14 @@ export class MemoryLearningPersistence implements LearningPersistence {
     record: AttemptRecord,
     origin: AttemptImportOrigin,
   ): Promise<AddAttemptIfAbsentResult> {
+    this.assertOpen();
     parseAttemptForImport(record);
     parseImportOrigin(origin);
     throw new ImportRequiresDurableStorageError();
   }
 
   async getAttempts(): Promise<readonly AttemptRecord[]> {
+    this.assertOpen();
     return [...this.attempts.values()]
       .map((record) => structuredClone(record))
       .sort((left, right) => left.submittedAt.localeCompare(right.submittedAt));
@@ -56,32 +67,52 @@ export class MemoryLearningPersistence implements LearningPersistence {
    * originated and eligible. Returns detached copies (same as getAttempts).
    */
   async getRewardEligibleAttemptsSnapshot(): Promise<readonly AttemptRecord[]> {
+    this.assertOpen();
     return this.getAttempts();
   }
 
   async clearAttempts(): Promise<void> {
+    this.assertOpen();
     this.attempts.clear();
   }
 
   async getMissionDraft(activityId: LearningActivityId): Promise<MissionDraftRecord | null> {
+    this.assertOpen();
     const draft = this.drafts.get(activityId);
     return draft ? structuredClone(draft) : null;
   }
 
   async saveMissionDraft(record: MissionDraftRecord): Promise<void> {
+    this.assertOpen();
     this.drafts.set(record.activityId, structuredClone(record));
   }
 
   async deleteMissionDraft(activityId: LearningActivityId): Promise<void> {
+    this.assertOpen();
     this.drafts.delete(activityId);
   }
 
   async clearMissionDrafts(): Promise<void> {
+    this.assertOpen();
     this.drafts.clear();
   }
 
   async clearAll(): Promise<void> {
+    this.assertOpen();
     this.attempts.clear();
     this.drafts.clear();
+  }
+
+  close(): Promise<void> {
+    this.closed = true;
+    return Promise.resolve();
+  }
+
+  getCloseState(): LearningPersistenceCloseState {
+    return this.closed ? "closed" : "open";
+  }
+
+  private assertOpen(): void {
+    if (this.closed) throw new PersistenceClosedError();
   }
 }

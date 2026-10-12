@@ -18,8 +18,10 @@ interface HasDatabasePromise {
 }
 
 /**
- * The persistence classes expose no close(). Tests close the connection the
- * class opened lazily (private `databasePromise` / `handle`) so no handle outlives a test.
+ * Meta persistence exposes no close(), and tests must not depend on the
+ * learning close() contract under test. So tests close the connection the
+ * class opened lazily (private `databasePromise` / `handle`) so no handle
+ * outlives a test. After a learning close() the handle is already released.
  */
 async function closeOpenedConnection(store: object): Promise<void> {
   const holder = store as HasDatabasePromise;

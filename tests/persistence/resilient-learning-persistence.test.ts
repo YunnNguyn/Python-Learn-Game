@@ -88,6 +88,8 @@ describe("ResilientLearningPersistence over IndexedDB", () => {
       deleteMissionDraft: () => Promise.reject(new Error("storage unavailable")),
       clearMissionDrafts: () => Promise.reject(new Error("storage unavailable")),
       clearAll: () => Promise.reject(new Error("storage unavailable")),
+      close: () => Promise.resolve(),
+      getCloseState: () => "open",
     };
     const resilient = new ResilientLearningPersistence(unavailable);
 

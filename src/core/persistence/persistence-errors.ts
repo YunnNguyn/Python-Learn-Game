@@ -105,3 +105,19 @@ export class PersistenceUpgradeBlockedError extends PersistenceDomainError {
     this.reason = reason;
   }
 }
+
+/**
+ * The persistence instance was closed with `close()` (PHASE-04C.3D.3). Closing is
+ * permanent: every later operation rejects with this error, and an operation
+ * that was still waiting for its connection when close() ran rejects with it
+ * before starting any IndexedDB transaction.
+ *
+ * A domain error on purpose: an intentional close is never an IndexedDB outage,
+ * so ResilientLearningPersistence rethrows it and never fails over to memory.
+ */
+export class PersistenceClosedError extends PersistenceDomainError {
+  constructor() {
+    super("Learning persistence has been closed and accepts no further operations.");
+    this.name = "PersistenceClosedError";
+  }
+}

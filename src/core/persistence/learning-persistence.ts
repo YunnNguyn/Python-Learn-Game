@@ -29,6 +29,18 @@ export type AddAttemptIfAbsentResult =
 export const ATTEMPT_IMPORT_ORIGINS = ["cloud-import", "guest-copy"] as const;
 export type AttemptImportOrigin = (typeof ATTEMPT_IMPORT_ORIGINS)[number];
 
+/**
+ * Lifecycle of a LearningPersistence instance (see `close()`):
+ *  - open:                close() has not been called.
+ *  - closed:              closed; no connection is held and none is pending.
+ *  - closed-pending-open: closed, but a browser open request issued BEFORE
+ *                         close() is still outstanding (typically an upgrade
+ *                         blocked by another tab). Its connection is closed the
+ *                         moment it arrives and is never used; the state then
+ *                         becomes `closed`. This can last indefinitely.
+ */
+export type LearningPersistenceCloseState = "open" | "closed" | "closed-pending-open";
+
 export interface LearningPersistence {
   readonly kind: "indexeddb" | "memory";
   /** Inserts a new attempt. Rejects with DuplicateAttemptError if the id is already stored. */
@@ -66,4 +78,24 @@ export interface LearningPersistence {
   deleteMissionDraft(activityId: LearningActivityId): Promise<void>;
   clearMissionDrafts(): Promise<void>;
   clearAll(): Promise<void>;
+  /**
+   * Permanently closes this instance (idempotent). The instance is marked closed
+   * synchronously, before any asynchronous cleanup, so from that moment:
+   *  - every operation called later rejects with PersistenceClosedError;
+   *  - an operation still waiting for its connection rejects with it before
+   *    starting a transaction;
+   *  - a transaction that already started settles normally (IndexedDB finishes
+   *    in-flight transactions before the connection really closes) and its
+   *    caller receives the real result or error;
+   *  - nothing is ever retried in, or redirected to, another store.
+   * Stored data, provenance and schema are left untouched, and nothing is ever
+   * reopened. close() never waits for a browser open request that is still
+   * outstanding (it may be blocked by another tab forever); `getCloseState()`
+   * reports that case as `closed-pending-open`.
+   *
+   * This is resource release only. It does NOT drain application workflows
+   * (Submit, draft saves); coordinating those is the caller's job.
+   */
+  close(): Promise<void>;
+  getCloseState(): LearningPersistenceCloseState;
 }
