@@ -18,6 +18,30 @@ export interface MissionSubmitWithAttempt extends MissionSubmitResult {
   readonly attemptRecord: AttemptRecord;
 }
 
+export const MISSION_SUBMIT_CANCELLED = "MISSION_SUBMIT_CANCELLED";
+
+/**
+ * Thrown by `MissionAttemptSession.submit()` when the session was disposed
+ * while the Submit was still waiting for the runtime/grading. It is a
+ * cancellation, NOT learner work: no AttemptRecord exists and the persistence
+ * callback was never invoked. Callers should treat it as benign.
+ */
+export class MissionSubmitCancelledError extends Error {
+  readonly code = MISSION_SUBMIT_CANCELLED;
+
+  constructor(options?: { readonly cause?: unknown }) {
+    super("Mission Submit was cancelled because the session was disposed before grading finished.");
+    this.name = "MissionSubmitCancelledError";
+    if (options?.cause !== undefined) this.cause = options.cause;
+  }
+}
+
+export function isMissionSubmitCancelledError(
+  error: unknown,
+): error is MissionSubmitCancelledError {
+  return error instanceof MissionSubmitCancelledError;
+}
+
 export interface MissionAttemptSessionOptions {
   readonly now?: () => Date;
   readonly hintEngine?: HintEngine;
@@ -65,7 +89,28 @@ export class MissionAttemptSession {
   async submit(code: string): Promise<MissionSubmitWithAttempt> {
     this.assertActive();
     const runCountBeforeSubmit = this.runCount;
-    const result = await this.engine.submit(code);
+    let result: MissionSubmitResult;
+    try {
+      result = await this.engine.submit(code);
+    } catch (error) {
+      // Grading rejected. After dispose() that is a consequence of the
+      // cancellation, not a learner or application failure; while the session is
+      // active the original error is preserved untouched. Only the grading await
+      // is inside this try: persistence errors below are never reinterpreted.
+      if (this.disposed) throw new MissionSubmitCancelledError({ cause: error });
+      throw error;
+    }
+
+    // Cancellation boundary. dispose() terminates the runtime, which resolves a
+    // pending Submit with a RUNTIME_DISPOSED failure result (or, for a runtime
+    // that cannot abort, a late genuine result). Neither is learner work, so a
+    // session disposed while grading was pending records nothing. This check
+    // and the onAttemptRecord call below are separated only by synchronous code,
+    // so once persistence starts, a later dispose() cannot cancel it.
+    if (this.disposed) {
+      throw new MissionSubmitCancelledError();
+    }
+
     this.submissionIndex += 1;
     if (result.execution.status !== RUNTIME_EXECUTION_STATUS.SUCCESS) {
       this.runtimeErrorCount += 1;

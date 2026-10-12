@@ -24,12 +24,21 @@ import { MissionQuickCheck } from "./MissionQuickCheck";
 import { MissionObjectivePanel } from "./MissionObjectivePanel";
 import { MissionOutputPanel } from "./MissionOutputPanel";
 import { PythonEditor } from "./PythonEditor";
+import {
+  isActiveSession,
+  releaseSession,
+  shouldDeleteDraftAfterSubmit,
+  submitMission,
+} from "./submit-mission";
 import { GradingFeedback } from "./grading-feedback";
 import { getMissionLessonGuide, getMissionQuickCheck } from "./mission-lesson-guides";
 
 type WorkspaceOperation = "run" | "submit" | "reload" | null;
 type RetryMode = "same" | "variant";
 type MissionWorkspaceTab = "lesson" | "prompt" | "data" | "practice";
+
+const SUBMIT_FAILURE_NOTICE =
+  "Không thể lưu lần nộp này. Bằng chứng học tập có thể chưa được ghi lại đầy đủ; hãy thử nộp lại.";
 
 export function MissionWorkspacePage() {
   const { missionId } = useParams();
@@ -96,8 +105,8 @@ export function MissionWorkspacePage() {
 
     return () => {
       cancelled = true;
-      sessionRef.current?.dispose();
-      sessionRef.current = null;
+      // Also invalidates every in-flight handler's isCurrent() check.
+      releaseSession(sessionRef);
     };
   }, [routeId, services, loadRetryToken]);
 
@@ -199,26 +208,61 @@ export function MissionWorkspacePage() {
 
   async function handleSubmit() {
     if (!session || operationRef.current !== null) return;
+    const submittingSession = session;
+    // False once this session was disposed or replaced (unmount, retry, route
+    // change). Then the page state belongs to someone else: a stale Submit must
+    // not update it, and must not reset the operation lock of a newer session.
+    const isCurrent = () => isActiveSession(sessionRef, submittingSession);
     operationRef.current = "submit";
     setOperation("submit");
     setRuntimeActionNotice(null);
     try {
-      const result = await session.submit(code);
-      setExecution(result.execution);
-      if (result.execution.workspace !== undefined) {
-        setWorkspace(result.execution.workspace);
+      // submitMission never rejects, so `void handleSubmit()` cannot leak an
+      // unhandled rejection from here.
+      const outcome = await submitMission(submittingSession, code);
+      if (outcome.kind === "cancelled") return;
+      if (outcome.kind === "failed") {
+        console.error("Mission submit failed.", outcome.error);
+        if (isCurrent()) setRuntimeActionNotice(SUBMIT_FAILURE_NOTICE);
+        return;
       }
-      setGrading(result.grading ?? null);
-      setAttempt(result.attemptRecord);
-      if (result.attemptRecord.passed) {
+
+      const { result } = outcome;
+      if (isCurrent()) {
+        setExecution(result.execution);
+        if (result.execution.workspace !== undefined) {
+          setWorkspace(result.execution.workspace);
+        }
+        setGrading(result.grading ?? null);
+        setAttempt(result.attemptRecord);
+      }
+      if (result.attemptRecord.passed && isCurrent()) {
         setDraftSuppressed(true);
         setDraftNotice(null);
-        await services.deleteMissionDraft(session.activity.id);
+      }
+      // Only the live session may clean up its draft, bound to the original
+      // services. A stale completion (page left mid-persist, retry, reopen) must
+      // not delete a draft saved by a newer session; the attempt itself is
+      // already saved and is never cancelled.
+      // KNOWN LIMITS (M5, draft ownership/versioning): (1) a passed mission left
+      // mid-persist keeps its old draft, which a later open may resume; (2) a
+      // draft save/delete already issued before navigation is not versioned, so
+      // ordering against a newer session's draft relies on IndexedDB's
+      // per-store transaction order only.
+      if (shouldDeleteDraftAfterSubmit(outcome, isCurrent())) {
+        try {
+          await services.deleteMissionDraft(submittingSession.activity.id);
+        } catch (error) {
+          // The attempt itself is already saved; a stale draft is not worth an error banner.
+          console.warn("Could not delete the mission draft after a passed submit.", error);
+        }
       }
     } finally {
-      operationRef.current = null;
-      setOperation(null);
-      setStopPending(false);
+      if (isCurrent()) {
+        operationRef.current = null;
+        setOperation(null);
+        setStopPending(false);
+      }
     }
   }
 
@@ -261,8 +305,7 @@ export function MissionWorkspacePage() {
     const previousSeed = session.instance.seed;
     const previousVariantIndex = bundle.variantIndex;
 
-    session.dispose();
-    sessionRef.current = null;
+    releaseSession(sessionRef);
 
     const options: CreateMissionSessionOptions =
       mode === "same"
