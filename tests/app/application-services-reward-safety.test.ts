@@ -21,7 +21,10 @@ import {
   IndexedDbMetaProgressionPersistence,
   MemoryMetaProgressionPersistence,
   MetaProgressionEngine,
+  MetaProgressionStateUnreadableError,
+  MetaProgressionStorageUnavailableError,
   RewardReason,
+  STARTER_ROBOT_BLUEPRINT,
   createEmptyInventory,
   type MetaProgressionState,
 } from "../../src/core/meta-progression";
@@ -694,5 +697,212 @@ describe("startup failure safety", () => {
     expect(notifications).toEqual(["ready"]);
     expect(services.getInitializationState()).toEqual({ status: "ready" });
     expect(services.getInitializationState()).toBe(services.getInitializationState());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PHASE-04C.3D.4 (M3): reward storage failures fail startup closed - never a
+// silent volatile profile, never a fresh profile over unreadable saved rewards.
+describe("meta persistence failure policy at startup", () => {
+  const PROGRESSION = "progressionState";
+
+  async function startupError(services: ApplicationServices): Promise<unknown> {
+    const error = await services.initialize().then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    expect(error).not.toBeNull();
+    const state = services.getInitializationState();
+    expect(state.status).toBe("failed");
+    if (state.status === "failed") expect(state.error).toBe(error);
+    expect(services.metaProgression.getSnapshot().ready).toBe(false);
+    expect(services.getMetaProgressionPersistenceKind()).toBe("indexeddb"); // never memory
+    const mission = await services.createMissionSession("activity.does-not-matter");
+    expect(mission.ok).toBe(false);
+    if (!mission.ok) expect(mission.error.code).toBe("APPLICATION_INITIALIZATION_FAILED");
+    expect(fake.counters.created).toBe(0);
+    return error;
+  }
+
+  it("M3-1. unreadable saved rewards fail startup; the saved record and the attempts stay untouched", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const factory = useFactory();
+    await seedLocal(factory, scopeA, makeAttempt("local.1"));
+    const seedMeta = new IndexedDbMetaProgressionPersistence(factory, scopeA);
+    await seedMeta.loadState(); // creates the meta database
+    await seedMeta.close();
+    const corrupted = { key: "primary", state: { version: 1, inventory: "lots" } };
+    await rawPut(factory, metaDb(scopeA), PROGRESSION, corrupted);
+    const reconcile = vi.spyOn(MetaProgressionEngine.prototype, "reconcileAttempts");
+
+    const services = createApplicationServices({ scope: scopeA });
+    const error = await startupError(services);
+
+    expect(error).toBeInstanceOf(MetaProgressionStateUnreadableError);
+    expect(reconcile).not.toHaveBeenCalled(); // no fresh profile was re-rewarded
+    expect(await rawGetAll(factory, metaDb(scopeA), PROGRESSION)).toEqual([corrupted]);
+    expect(await rawGetAll(factory, learningDb(scopeA), "attempts")).toHaveLength(1);
+  });
+
+  it("M3-2. a reward database newer than this build fails startup without any memory fallback", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const factory = useFactory();
+    await new Promise<void>((resolve, reject) => {
+      const request = factory.open(metaDb(GUEST_SCOPE), 4);
+      request.onupgradeneeded = () => undefined;
+      request.onsuccess = () => {
+        request.result.close();
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+
+    const services = createApplicationServices();
+    const error = await startupError(services);
+
+    expect(error).toBeInstanceOf(PersistenceUpgradeBlockedError);
+    expect((error as PersistenceUpgradeBlockedError).reason).toBe(
+      PersistenceUpgradeFailureReason.VERSION_NEWER_THAN_CODE,
+    );
+    expect(services.getPersistenceKind()).toBe("indexeddb");
+    expect(warn).not.toHaveBeenCalled();
+    const meta = (await factory.databases()).find((info) => info.name === metaDb(GUEST_SCOPE));
+    expect(meta?.version).toBe(4); // neither upgraded nor downgraded
+  });
+
+  it("M3-3. unavailable storage fails startup instead of presenting volatile rewards", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined); // learning's own (unchanged) failover
+    const failure = new DOMException("IndexedDB is disabled.", "SecurityError");
+    vi.stubGlobal("indexedDB", {
+      open() {
+        throw failure;
+      },
+    });
+    const collector = unhandled.collect();
+    try {
+      const services = createApplicationServices();
+      expect(await startupError(services)).toBe(failure);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(collector.seen).toEqual([]);
+    } finally {
+      collector.stop();
+    }
+  });
+
+  it("M3-4. a failed reward write during startup reconciliation never duplicates rewards after restart", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const factory = useFactory();
+    const attempts = [
+      makeAttempt("local.1", { submittedAt: today(1) }),
+      makeAttempt("local.2", { activityId: "activity.other", submittedAt: today(2) }),
+    ];
+    await seedLocal(factory, GUEST_SCOPE, ...attempts);
+    const writeFailure = new DOMException("Quota exceeded.", "QuotaExceededError");
+    const save = vi
+      .spyOn(IndexedDbMetaProgressionPersistence.prototype, "saveState")
+      .mockImplementation(() => Promise.reject(writeFailure));
+
+    const failed = createApplicationServices();
+    await expect(failed.initialize()).rejects.toBe(writeFailure);
+    expect(failed.getInitializationState().status).toBe("failed");
+    expect(await metaStateIn(factory, GUEST_SCOPE)).toBeUndefined(); // nothing claimed durable
+    save.mockRestore();
+
+    const restarted = await start();
+    expectSameRewards(restarted, await reference(attempts));
+    const stored = await metaStateIn(factory, GUEST_SCOPE);
+    expect([...(stored?.processedAttemptIds ?? [])].sort()).toEqual(["local.1", "local.2"]);
+
+    const again = await start(); // a further restart changes nothing
+    expectSameRewards(again, await reference(attempts));
+    expect(await metaStateIn(factory, GUEST_SCOPE)).toEqual(stored);
+  });
+
+  it("M3-5. a failed reward write after startup rejects and is granted exactly once on the next start", async () => {
+    const factory = useFactory();
+    const services = await start();
+    const submitted = makeAttempt("local.submit", { submittedAt: today(5) });
+    await services.learning.recordAttempt(submitted);
+
+    const save = vi
+      .spyOn(IndexedDbMetaProgressionPersistence.prototype, "saveState")
+      .mockImplementation(() => Promise.reject(new DOMException("Write failed.", "UnknownError")));
+    await expect(services.metaProgression.recordAttempt(submitted)).rejects.toBeInstanceOf(DOMException);
+    expect(services.metaProgression.getRewardGrantsForAttempt("local.submit")).toEqual([]);
+    expect(services.metaProgression.getSnapshot().inventory).toEqual(createEmptyInventory());
+    save.mockRestore();
+
+    const restarted = await start();
+    expectSameRewards(restarted, await reference([submitted]));
+    expect((await metaStateIn(factory, GUEST_SCOPE))?.processedAttemptIds).toEqual(["local.submit"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PHASE-04C.3D.4-R1: a browser without ANY IndexedDB API never gets volatile
+// rewards; startup fails through the normal failed state instead.
+describe("startup without an IndexedDB API", () => {
+  it("R1-1. services construct, initialize() rejects, startup fails, and no reward mutation succeeds", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.stubGlobal("indexedDB", undefined);
+    expect(typeof indexedDB).toBe("undefined"); // truly absent, not a throwing factory
+    const collector = unhandled.collect();
+    try {
+      let services: ApplicationServices | undefined;
+      expect(() => {
+        services = createApplicationServices();
+      }).not.toThrow();
+      const built = services!;
+      expect(built.getInitializationState().status).toBe("pending");
+
+      const error = await built.initialize().then(
+        () => null,
+        (caught: unknown) => caught,
+      );
+      expect(error).toBeInstanceOf(MetaProgressionStorageUnavailableError);
+      await expect(built.initialize()).rejects.toBe(error);
+      const state = built.getInitializationState();
+      expect(state.status).toBe("failed");
+      if (state.status === "failed") expect(state.error).toBe(error);
+
+      // Rewards are not ready and memory progression was not selected.
+      expect(built.metaProgression.getSnapshot().ready).toBe(false);
+      expect(built.getMetaProgressionPersistenceKind()).not.toBe("memory");
+
+      // No reward mutation succeeds, and none is published.
+      const outcomes = await Promise.allSettled([
+        built.metaProgression.recordAttempt(makeAttempt("local.1")),
+        built.metaProgression.reconcileAttempts([makeAttempt("local.2")]),
+        built.metaProgression.buildRobotPart(STARTER_ROBOT_BLUEPRINT.parts[0]!.id),
+        built.metaProgression.assembleStarterRobot(),
+        built.metaProgression.clearAll(),
+      ]);
+      for (const outcome of outcomes) expect(outcome.status).toBe("rejected");
+      expect(built.metaProgression.getSnapshot().inventory).toEqual(createEmptyInventory());
+      expect(built.metaProgression.getSnapshot().revision).toBe(0);
+
+      const mission = await built.createMissionSession("activity.does-not-matter");
+      expect(mission.ok).toBe(false);
+      if (!mission.ok) expect(mission.error.code).toBe("APPLICATION_INITIALIZATION_FAILED");
+      expect(fake.counters.created).toBe(0);
+      expect(warn).not.toHaveBeenCalled();
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(collector.seen).toEqual([]);
+    } finally {
+      collector.stop();
+    }
+  });
+
+  it("R1-2. explicit MemoryMetaProgressionPersistence keeps working for deliberate use", async () => {
+    vi.stubGlobal("indexedDB", undefined);
+    const engine = new MetaProgressionEngine(new MemoryMetaProgressionPersistence());
+    const attempt = makeAttempt("local.1", { submittedAt: today(1) });
+    await engine.recordAttempt(attempt);
+    expect(engine.getPersistenceKind()).toBe("memory");
+    expect(engine.getSnapshot().inventory).toEqual((await reference([attempt])).inventory);
   });
 });

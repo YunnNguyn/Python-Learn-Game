@@ -45,14 +45,39 @@ export type AssembleRobotResult =
 
 type Listener = () => void;
 
+/** What a queued mutation derived: whether it must be written, and its caller's result. */
+interface MutationOutcome<T> {
+  readonly persist: boolean;
+  readonly result: T;
+}
+
 const EMPTY_DAILY_STATS: DailyStudyStats = {
   attempts: 0,
   passes: 0,
   focusedPasses: 0,
 };
 
+/**
+ * Mutation ordering contract (PHASE-04C.3D.4-R1):
+ *  - Every state-changing operation (reconcileAttempts, recordAttempt,
+ *    buildRobotPart, assembleStarterRobot, clearAll) runs through ONE FIFO
+ *    queue, in call order. Derivation, the durable write and publication form a
+ *    single logical mutation; the next one starts only after the previous one
+ *    settled (succeeded or failed).
+ *  - `state` only ever holds COMMITTED state: loaded from, or durably written
+ *    to, persistence. A mutation derives its next state from it, writes that,
+ *    and commits/publishes only after the write succeeded. Readers
+ *    (getSnapshot, getRewardGrantsForAttempt) therefore never see an undurable
+ *    change, a failed mutation leaves nothing behind for a later one to
+ *    persist, and a successful one is never undone by an earlier failure.
+ *  - Each caller receives its own real result or rejection; a failure never
+ *    blocks the queue for later operations.
+ */
 export class MetaProgressionEngine {
+  /** Committed state only (see the mutation ordering contract above). */
   private state: MetaProgressionState = createEmptyMetaProgressionState();
+  /** Tail of the mutation queue; never rejects, so one failure cannot poison it. */
+  private mutationTail: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<Listener>();
   private initializePromise: Promise<void> | null = null;
   private readyState = false;
@@ -71,106 +96,140 @@ export class MetaProgressionEngine {
     return this.initializePromise;
   }
 
-  async reconcileAttempts(attempts: readonly AttemptRecord[]): Promise<void> {
-    await this.initialize();
-    const sorted = [...attempts].sort((left, right) =>
-      left.submittedAt.localeCompare(right.submittedAt),
+  reconcileAttempts(attempts: readonly AttemptRecord[]): Promise<void> {
+    return this.enqueue(() =>
+      this.commitDerived(() => {
+        const sorted = [...attempts].sort((left, right) =>
+          left.submittedAt.localeCompare(right.submittedAt),
+        );
+        let changed = false;
+
+        for (const attempt of sorted) {
+          if (this.state.processedAttemptIds.includes(attempt.id)) continue;
+          const dateKey = localDateKey(new Date(attempt.submittedAt));
+          const allowDailyRewards = dateKey === this.currentDateKey();
+          this.applyAttempt(attempt, allowDailyRewards);
+          changed = true;
+        }
+
+        if (this.tryClaimCurrentDailyBonus()) changed = true;
+        return { persist: changed, result: undefined };
+      }),
     );
-    let changed = false;
-
-    for (const attempt of sorted) {
-      if (this.state.processedAttemptIds.includes(attempt.id)) continue;
-      const dateKey = localDateKey(new Date(attempt.submittedAt));
-      const allowDailyRewards = dateKey === this.currentDateKey();
-      this.applyAttempt(attempt, allowDailyRewards);
-      changed = true;
-    }
-
-    if (this.tryClaimCurrentDailyBonus()) changed = true;
-    if (changed) await this.persistAndPublish();
   }
 
-  async recordAttempt(attempt: AttemptRecord): Promise<void> {
-    await this.initialize();
-    if (this.state.processedAttemptIds.includes(attempt.id)) return;
+  recordAttempt(attempt: AttemptRecord): Promise<void> {
+    return this.enqueue(() =>
+      this.commitDerived(() => {
+        if (this.state.processedAttemptIds.includes(attempt.id)) {
+          return { persist: false, result: undefined };
+        }
 
-    const dateKey = localDateKey(new Date(attempt.submittedAt));
-    this.applyAttempt(attempt, dateKey === this.currentDateKey());
-    this.tryClaimCurrentDailyBonus(attempt.id, attempt.activityId);
-    await this.persistAndPublish();
-  }
-
-  async buildRobotPart(partId: RobotPartId): Promise<BuildRobotPartResult> {
-    await this.initialize();
-    const part = getStarterRobotPart(partId);
-    if (!part) {
-      return {
-        ok: false,
-        code: "UNKNOWN_PART",
-        message: "Không tìm thấy bộ phận robot này.",
-      };
-    }
-    if (this.state.builtRobotPartIds.includes(partId)) {
-      return {
-        ok: false,
-        code: "ALREADY_BUILT",
-        message: "Bộ phận này đã được chế tạo.",
-      };
-    }
-    if (!canAfford(this.state.inventory, part.cost)) {
-      return {
-        ok: false,
-        code: "INSUFFICIENT_ITEMS",
-        message: "Bạn chưa đủ vật liệu để chế tạo bộ phận này.",
-      };
-    }
-
-    this.state = {
-      ...this.state,
-      inventory: subtractInventory(this.state.inventory, part.cost),
-      builtRobotPartIds: [...this.state.builtRobotPartIds, partId],
-    };
-    await this.persistAndPublish();
-    return { ok: true };
-  }
-
-  async assembleStarterRobot(): Promise<AssembleRobotResult> {
-    await this.initialize();
-    if (this.state.assembledRobotIds.includes(RobotId.STARTER_SCOUT)) {
-      return {
-        ok: false,
-        code: "ALREADY_ASSEMBLED",
-        message: "Scout-01 đã được lắp ráp hoàn chỉnh.",
-      };
-    }
-
-    const allPartsBuilt = STARTER_ROBOT_BLUEPRINT.parts.every((part) =>
-      this.state.builtRobotPartIds.includes(part.id),
+        const dateKey = localDateKey(new Date(attempt.submittedAt));
+        this.applyAttempt(attempt, dateKey === this.currentDateKey());
+        this.tryClaimCurrentDailyBonus(attempt.id, attempt.activityId);
+        return { persist: true, result: undefined };
+      }),
     );
-    if (!allPartsBuilt) {
-      return {
-        ok: false,
-        code: "MISSING_PARTS",
-        message: "Hãy chế tạo đủ sáu bộ phận trước khi lắp ráp Scout-01.",
-      };
-    }
-
-    this.state = {
-      ...this.state,
-      assembledRobotIds: [
-        ...this.state.assembledRobotIds,
-        RobotId.STARTER_SCOUT,
-      ],
-    };
-    await this.persistAndPublish();
-    return { ok: true };
   }
 
-  async clearAll(): Promise<void> {
-    await this.initialize();
-    await this.persistence.clear();
-    this.state = createEmptyMetaProgressionState();
-    this.publish();
+  buildRobotPart(partId: RobotPartId): Promise<BuildRobotPartResult> {
+    return this.enqueue(() =>
+      this.commitDerived<BuildRobotPartResult>(() => {
+        const part = getStarterRobotPart(partId);
+        if (!part) {
+          return {
+            persist: false,
+            result: {
+              ok: false,
+              code: "UNKNOWN_PART",
+              message: "Không tìm thấy bộ phận robot này.",
+            },
+          };
+        }
+        if (this.state.builtRobotPartIds.includes(partId)) {
+          return {
+            persist: false,
+            result: {
+              ok: false,
+              code: "ALREADY_BUILT",
+              message: "Bộ phận này đã được chế tạo.",
+            },
+          };
+        }
+        if (!canAfford(this.state.inventory, part.cost)) {
+          return {
+            persist: false,
+            result: {
+              ok: false,
+              code: "INSUFFICIENT_ITEMS",
+              message: "Bạn chưa đủ vật liệu để chế tạo bộ phận này.",
+            },
+          };
+        }
+
+        this.state = {
+          ...this.state,
+          inventory: subtractInventory(this.state.inventory, part.cost),
+          builtRobotPartIds: [...this.state.builtRobotPartIds, partId],
+        };
+        return { persist: true, result: { ok: true } };
+      }),
+    );
+  }
+
+  assembleStarterRobot(): Promise<AssembleRobotResult> {
+    return this.enqueue(() =>
+      this.commitDerived<AssembleRobotResult>(() => {
+        if (this.state.assembledRobotIds.includes(RobotId.STARTER_SCOUT)) {
+          return {
+            persist: false,
+            result: {
+              ok: false,
+              code: "ALREADY_ASSEMBLED",
+              message: "Scout-01 đã được lắp ráp hoàn chỉnh.",
+            },
+          };
+        }
+
+        const allPartsBuilt = STARTER_ROBOT_BLUEPRINT.parts.every((part) =>
+          this.state.builtRobotPartIds.includes(part.id),
+        );
+        if (!allPartsBuilt) {
+          return {
+            persist: false,
+            result: {
+              ok: false,
+              code: "MISSING_PARTS",
+              message: "Hãy chế tạo đủ sáu bộ phận trước khi lắp ráp Scout-01.",
+            },
+          };
+        }
+
+        this.state = {
+          ...this.state,
+          assembledRobotIds: [
+            ...this.state.assembledRobotIds,
+            RobotId.STARTER_SCOUT,
+          ],
+        };
+        return { persist: true, result: { ok: true } };
+      }),
+    );
+  }
+
+  /**
+   * Queued like every other mutation: reward/workshop operations called before
+   * it are written first and then cleared; those called after it apply to the
+   * cleared state. A failed clear changes nothing.
+   */
+  clearAll(): Promise<void> {
+    return this.enqueue(async () => {
+      await this.initialize();
+      await this.persistence.clear();
+      this.state = createEmptyMetaProgressionState();
+      this.publish();
+    });
   }
 
   getRewardGrantsForAttempt(attemptId: string): readonly RewardGrant[] {
@@ -193,6 +252,9 @@ export class MetaProgressionEngine {
   }
 
   private async loadInitialState(): Promise<void> {
+    // `null` only means "nothing stored yet". Unreadable stored state rejects
+    // (MetaProgressionStateUnreadableError) and is never replaced by a fresh
+    // profile, so reconciliation can never re-grant rewards over it.
     this.state =
       (await this.persistence.loadState()) ?? createEmptyMetaProgressionState();
     this.readyState = true;
@@ -320,9 +382,47 @@ export class MetaProgressionEngine {
     };
   }
 
-  private async persistAndPublish(): Promise<void> {
-    await this.persistence.saveState(this.state);
+  /**
+   * Appends `mutation` to the FIFO queue. The returned promise carries the
+   * mutation's own result or rejection; the queue tail swallows it so a failed
+   * mutation never blocks or fails the ones queued after it. No queued
+   * mutation enqueues another one, so the queue cannot deadlock.
+   */
+  private enqueue<T>(mutation: () => Promise<T>): Promise<T> {
+    const run = this.mutationTail.then(mutation);
+    this.mutationTail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  /**
+   * One logical mutation, run inside the queue. `derive` computes the next state
+   * synchronously from the committed one (reusing the reward helpers, which
+   * work on `this.state`); the committed state is restored right away, so
+   * readers never see the draft. The draft is committed and published only once
+   * the write succeeded: a failed write rejects to the caller and leaves
+   * nothing behind - not shown, not "already processed", not written later as a
+   * side effect of another save.
+   */
+  private async commitDerived<T>(derive: () => MutationOutcome<T>): Promise<T> {
+    await this.initialize();
+    const committed = this.state;
+    let outcome: MutationOutcome<T>;
+    let next: MetaProgressionState;
+    try {
+      outcome = derive();
+      next = this.state;
+    } finally {
+      this.state = committed;
+    }
+    if (!outcome.persist) return outcome.result;
+
+    await this.persistence.saveState(next);
+    this.state = next;
     this.publish();
+    return outcome.result;
   }
 
   private publish(): void {

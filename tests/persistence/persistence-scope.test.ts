@@ -656,12 +656,14 @@ describe("IndexedDB persistence scopes (fake-indexeddb)", () => {
       );
     });
 
-    it("without IndexedDB returns independent in-memory stores per instance", async () => {
+    it("without IndexedDB returns independent in-memory learning stores per instance", async () => {
       vi.stubGlobal("indexedDB", undefined);
       const first = createBrowserLearningPersistence(scopeA);
       const second = createBrowserLearningPersistence(scopeA);
       expect(first).toBeInstanceOf(MemoryLearningPersistence);
-      expect(createBrowserMetaProgressionPersistence(scopeA)).toBeInstanceOf(
+      // PHASE-04C.3D.4-R1: reward storage never silently becomes memory; it is
+      // unavailable instead (see tests/meta-progression).
+      expect(createBrowserMetaProgressionPersistence(scopeA)).not.toBeInstanceOf(
         MemoryMetaProgressionPersistence,
       );
       await first.addAttempt(makeAttempt("attempt.a"));

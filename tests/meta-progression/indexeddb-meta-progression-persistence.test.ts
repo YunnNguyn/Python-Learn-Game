@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   IndexedDbMetaProgressionPersistence,
+  MetaProgressionStateUnreadableError,
+  MetaProgressionStateUnreadableReason,
   RewardReason,
   RobotPartId,
   createEmptyMetaProgressionState,
@@ -104,7 +106,10 @@ describe("IndexedDbMetaProgressionPersistence (fake-indexeddb)", () => {
     expect(await store.loadState()).toEqual(good);
   });
 
-  describe("invalid persisted state falls back to null", () => {
+  // PHASE-04C.3D.4 reversed the former policy ("invalid persisted state falls back
+  // to null"): an empty profile would let reconciliation re-grant every reward and
+  // the next save overwrite the stored record. Unreadable state now fails closed.
+  describe("invalid persisted state fails closed (never reported as null)", () => {
     async function withRaw(value: unknown) {
       const context = createStore();
       await context.store.loadState(); // forces database creation
@@ -112,39 +117,53 @@ describe("IndexedDbMetaProgressionPersistence (fake-indexeddb)", () => {
       return context;
     }
 
+    async function expectUnreadable(store: IndexedDbMetaProgressionPersistence) {
+      const error = await store.loadState().then(
+        () => null,
+        (caught: unknown) => caught,
+      );
+      expect(error).toBeInstanceOf(MetaProgressionStateUnreadableError);
+      expect((error as MetaProgressionStateUnreadableError).reason).toBe(
+        MetaProgressionStateUnreadableReason.MALFORMED_STATE,
+      );
+    }
+
     it("when the state fails MetaProgressionStateSchema (wrong version)", async () => {
       const { store } = await withRaw({ key: "primary", state: { ...makeState(), version: 2 } });
-      expect(await store.loadState()).toBeNull();
+      await expectUnreadable(store);
     });
 
     it("when the state has an unknown field (strict schema, current behavior)", async () => {
       const { store } = await withRaw({ key: "primary", state: { ...makeState(), accountId: "acc-1" } });
-      expect(await store.loadState()).toBeNull();
+      await expectUnreadable(store);
     });
 
     it("when the record has no 'state' property", async () => {
       const { store } = await withRaw({ key: "primary" });
-      expect(await store.loadState()).toBeNull();
+      await expectUnreadable(store);
     });
 
     it("when the state is not an object", async () => {
       const { store } = await withRaw({ key: "primary", state: "corrupted" });
-      expect(await store.loadState()).toBeNull();
+      await expectUnreadable(store);
     });
 
-    it("does not delete the invalid record on read (data stays recoverable)", async () => {
+    it("does not delete or change the invalid record on read (data stays recoverable)", async () => {
       const { factory, store } = await withRaw({ key: "primary", state: { version: 99 } });
-      await store.loadState();
-      expect(await rawGetAll(factory, DATABASE_NAME, STORE_NAME)).toHaveLength(1);
+      await expectUnreadable(store);
+      expect(await rawGetAll(factory, DATABASE_NAME, STORE_NAME)).toEqual([
+        { key: "primary", state: { version: 99 } },
+      ]);
     });
 
     it("is not treated as a storage failure by the resilient wrapper", async () => {
-      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
       const { store } = await withRaw({ key: "primary", state: { version: 99 } });
       const resilient = new ResilientMetaProgressionPersistence(store);
 
-      expect(await resilient.loadState()).toBeNull();
+      await expect(resilient.loadState()).rejects.toBeInstanceOf(MetaProgressionStateUnreadableError);
       expect(resilient.kind).toBe("indexeddb");
+      expect(warn).not.toHaveBeenCalled();
     });
   });
 

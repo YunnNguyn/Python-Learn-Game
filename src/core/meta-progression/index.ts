@@ -8,7 +8,15 @@ export type {
   AssembleRobotResult,
   BuildRobotPartResult,
 } from "./meta-progression-engine";
-export type { MetaProgressionPersistence } from "./meta-progression-persistence";
+export type {
+  MetaProgressionPersistence,
+  MetaProgressionPersistenceCloseState,
+} from "./meta-progression-persistence";
+export {
+  MetaProgressionStateUnreadableError,
+  MetaProgressionStateUnreadableReason,
+  MetaProgressionStorageUnavailableError,
+} from "./meta-progression-errors";
 export { MemoryMetaProgressionPersistence } from "./memory-meta-progression-persistence";
 export {
   DailyGoalId,
