@@ -16,10 +16,10 @@ import {
 import { GeneratorRegistry } from "../../core/generators";
 import { GraderRegistry, registerCoreGraders } from "../../core/grading";
 import { HintEngine, HintRegistry } from "../../core/hints";
-import { LearningEngine, MissionAttemptSession } from "../../core/learning";
+import type { LearningEngine, MissionAttemptSession } from "../../core/learning";
 import {
   createBrowserMetaProgressionPersistence,
-  MetaProgressionEngine,
+  type MetaProgressionEngine,
 } from "../../core/meta-progression";
 import { generateMissionInstance, MissionEngine } from "../../core/missions";
 import {
@@ -35,6 +35,25 @@ import {
 import { createLocalPythonRuntimeManager } from "../../core/runtime/local-python";
 import { createPyodideRuntimeManager } from "../../core/runtime/pyodide";
 import { getActivityAccess } from "../learning-path";
+import {
+  APPLICATION_SERVICES_RETIRED,
+  ApplicationLifecycle,
+  ApplicationServicesRetiredError,
+  isApplicationServicesRetiredError,
+  resolveDrainTimeout,
+  type ApplicationDisposalFailure,
+  type ApplicationLifecycleState,
+  type ApplicationPersistenceCloseStates,
+  type ApplicationServicesDisposalResult,
+  type DisposeApplicationServicesOptions,
+} from "./application-lifecycle";
+import {
+  admitted,
+  MissionSessionRegistry,
+  ServiceLearningEngine,
+  ServiceMetaProgressionEngine,
+  ServiceOwnedMissionSession,
+} from "./service-owned-resources";
 
 const PENDING_INITIALIZATION: ApplicationInitializationState = Object.freeze({
   status: "pending",
@@ -62,7 +81,9 @@ export type CreateMissionSessionResult =
 
 /**
  * Observable result of startup (see `createApplicationServices`). `failed` is
- * terminal for a given service set: it is never reset to `pending`.
+ * terminal for a given service set: it is never reset to `pending`. A set that
+ * began retiring before startup finished never becomes `ready`: its startup
+ * settles as `failed` with ApplicationServicesRetiredError.
  */
 export type ApplicationInitializationState =
   | { readonly status: "pending" }
@@ -74,7 +95,9 @@ export interface ApplicationServices {
   readonly generators: GeneratorRegistry;
   readonly graders: GraderRegistry;
   readonly hints: HintRegistry;
+  /** Reads are unrestricted; mutations are refused once the set is retiring (see M4 contract). */
   readonly learning: LearningEngine;
+  /** Reads are unrestricted; mutations are refused once the set is retiring (see M4 contract). */
   readonly metaProgression: MetaProgressionEngine;
   /**
    * Runs (once) and returns the startup promise. On failure it rejects with the
@@ -85,10 +108,12 @@ export interface ApplicationServices {
   /** Stable object identity until the status changes (safe for useSyncExternalStore). */
   getInitializationState(): ApplicationInitializationState;
   subscribeInitialization(listener: () => void): () => void;
+  /** Never rejects; returns an error result instead (including after retirement). */
   createMissionSession(
     activityId: string,
     options?: CreateMissionSessionOptions,
   ): Promise<CreateMissionSessionResult>;
+  /** Rejects with ApplicationServicesRetiredError once the set is retiring. */
   saveMissionDraft(input: {
     readonly activityId: LearningActivityId;
     readonly seed: string;
@@ -96,10 +121,21 @@ export interface ApplicationServices {
     readonly code: string;
     readonly hintsUsed: readonly HintLevel[];
   }): Promise<void>;
+  /** Rejects with ApplicationServicesRetiredError once the set is retiring. */
   deleteMissionDraft(activityId: LearningActivityId): Promise<void>;
+  /** Rejects with ApplicationServicesRetiredError once the set is retiring. */
   clearLearningData(): Promise<void>;
   getPersistenceKind(): "indexeddb" | "memory";
   getMetaProgressionPersistenceKind(): "indexeddb" | "memory";
+  /** Stable object identity until the status changes (safe for useSyncExternalStore). */
+  getLifecycleState(): ApplicationLifecycleState;
+  subscribeLifecycle(listener: () => void): () => void;
+  /**
+   * Retires this set (synchronously) and drains it (see the M4 contract on
+   * `createApplicationServices`). Idempotent; never rejects. Throws a
+   * RangeError synchronously - retiring nothing - for an invalid timeout.
+   */
+  dispose(options?: DisposeApplicationServicesOptions): Promise<ApplicationServicesDisposalResult>;
 }
 
 export interface CreateApplicationServicesOptions {
@@ -124,18 +160,6 @@ export interface CreateApplicationServicesOptions {
  * for the same scope see the same stored data (IndexedDB), not each other's
  * in-memory state.
  *
- * Lifecycle note for FUTURE verified-account switching (not implemented here):
- * there is no dispose() and no runtime switching. Changing the active account
- * means building a NEW set and retiring the old one, which requires:
- * - replacing the service set held by `App.tsx` / `ApplicationServicesProvider`
- *   (React consumers subscribed to the old engines must be unmounted);
- * - disposing every open MissionAttemptSession from the old set (its
- *   `onAttemptRecord` closure still writes to the OLD scope's engines);
- * - cancelling pending draft saves that target the old set;
- * - closing the old IndexedDB connections (persistence classes expose no
- *   close(), so connections stay open until page unload);
- * - never reusing an old set's in-memory engine state under another scope.
- *
  * Startup sequence (started eagerly, runs once per set):
  *  1. `persistence.getRewardEligibleAttemptsSnapshot()` - one atomic read of the
  *     attempts that may earn LOCAL rewards (locally submitted + legacy v1
@@ -159,6 +183,52 @@ export interface CreateApplicationServicesOptions {
  * initialized and cache their own rejected promises). Recovery means building a
  * new set (reloading the page, as the startup failure screen does), after the
  * cause is fixed - e.g. other tabs closed for a blocked upgrade.
+ *
+ * Lifecycle (PHASE-04C.3D.5, M4) - independent of initialization:
+ *  active -> retiring -> disposed  (see ApplicationLifecycleState)
+ *  - `dispose()` retires the set SYNCHRONOUSLY: from that moment no mission
+ *    session is created, no Submit can start grading (every owned session is
+ *    disposed, cancelling a pending grading through the M1 contract without an
+ *    AttemptRecord), engines still loading for a session are disposed, and
+ *    every service-owned durable mutation - drafts, clear, rewards, workshop,
+ *    `services.learning` / `services.metaProgression` mutations - is refused
+ *    with ApplicationServicesRetiredError. Remaining startup steps are skipped.
+ *  - A mission load in flight (engine loading, plus the cleanup that follows it)
+ *    is tracked until it has settled: the engine is torn down at retirement, but
+ *    the load's continuation still runs later, so `disposed` is never reported -
+ *    and persistence is never closed - before it is over. A cleanup failure in
+ *    that continuation therefore decides the outcome; a load that does not settle
+ *    within `drainTimeoutMs` yields `DRAIN_TIMEOUT` (with `pendingMissionLoads`),
+ *    never `disposed`. The late result of such a load is never handed out.
+ *  - Durable work admitted earlier (a Submit past its durable-write boundary,
+ *    a started startup step, a draft write, a clear, a workshop build, a queued
+ *    reward mutation) is DRAINED: allowed to settle, with its own result or
+ *    error delivered to its own caller. Nothing is redirected to another scope
+ *    or to memory, and nothing is deleted - attempts, drafts, provenance and
+ *    rewards stay stored.
+ *  - Only after the drain do both persistence instances close (M2/M3 close
+ *    contracts). The result reports each close state, distinguishing `closed`
+ *    from `closed-pending-open` (a browser open request for this set's own
+ *    database still outstanding; harmless to it, but reopening the SAME scope
+ *    may wait for it).
+ *  - `disposed` is reported only when nothing failed: every owned session /
+ *    engine disposed without throwing, both `close()` calls fulfilled, and both
+ *    stores report `closed` or `closed-pending-open`. Otherwise `dispose()`
+ *    resolves `{ status: "incomplete", reason: "RESOURCE_CLEANUP_FAILED" }` with
+ *    the original errors and each store's observed state; the set stays
+ *    `retiring` (never active again, nothing reopened or redirected) and a later
+ *    `dispose()` retries the failed cleanups. One failing resource never stops
+ *    the others from being processed.
+ *  - A drain that does not finish within `drainTimeoutMs` resolves
+ *    `{ status: "incomplete", reason: "DRAIN_TIMEOUT" }`: the set stays
+ *    `retiring`, persistence stays open, and the set must not be replaced for
+ *    its scope yet. A later `dispose()` waits again. A timeout is never reported
+ *    as disposal, and a close failure is never reported as a timeout.
+ *  - Production currently builds exactly one set per page and never disposes
+ *    it; account switching (later milestones) will build a new set only after
+ *    the old one reports `disposed`.
+ *  NOT covered here: draft debounce scheduling (M5) and Clear-vs-Submit
+ *  serialization (M6). Concurrency between admitted operations is unchanged.
  */
 export function createApplicationServices(
   options: CreateApplicationServicesOptions = {},
@@ -169,13 +239,17 @@ export function createApplicationServices(
   const persistence = createBrowserLearningPersistence(options.scope);
   const metaPersistence = createBrowserMetaProgressionPersistence(options.scope);
 
+  const lifecycle = new ApplicationLifecycle();
+  const sessions = new MissionSessionRegistry();
   const content = new ContentRegistry();
   const generators = new GeneratorRegistry();
   const graders = new GraderRegistry();
   const hints = new HintRegistry();
-  const learning = new LearningEngine(persistence);
-  const metaProgression = new MetaProgressionEngine(metaPersistence);
+  const learning = new ServiceLearningEngine(persistence, lifecycle);
+  const metaProgression = new ServiceMetaProgressionEngine(metaPersistence, lifecycle);
   let initializePromise: Promise<void> | null = null;
+  let disposal: Promise<ApplicationServicesDisposalResult> | null = null;
+  let disposed: ApplicationServicesDisposalResult | null = null;
 
   registerCs116Generators(generators);
   registerCoreGraders(graders);
@@ -209,22 +283,37 @@ export function createApplicationServices(
     for (const listener of initializationListeners) listener();
   }
 
+  /** Throws once retirement began: the remaining startup steps must not run. */
+  function assertActive(): void {
+    if (!lifecycle.isActive()) throw new ApplicationServicesRetiredError();
+  }
+
   async function runStartup(): Promise<void> {
     // Read the reward-eligible snapshot first: if provenance cannot be read, no
     // engine has started and nothing has been reconciled.
     const rewardEligibleAttempts = await persistence.getRewardEligibleAttemptsSnapshot();
+    assertActive();
     await learning.initialize();
+    assertActive();
     await metaProgression.initialize();
-    await metaProgression.reconcileAttempts(rewardEligibleAttempts);
+    assertActive();
+    // Admitted as part of the (tracked) startup operation.
+    await admitted.metaReconcileAttempts(metaProgression, rewardEligibleAttempts);
+    // Completed, but the set retired meanwhile: never report it ready.
+    assertActive();
   }
 
   function initialize(): Promise<void> {
-    initializePromise ??= runStartup().then(
+    // Startup is tracked as one durable operation from the moment it starts (at
+    // construction, while active), so a drain waits for its in-flight step.
+    initializePromise ??= lifecycle.trackAdmitted(runStartup).then(
       () => {
         setInitializationState(READY_INITIALIZATION);
       },
       (error: unknown) => {
-        console.error("Application initialization failed.", error);
+        if (!isApplicationServicesRetiredError(error)) {
+          console.error("Application initialization failed.", error);
+        }
         setInitializationState(Object.freeze({ status: "failed", error }));
         throw error;
       },
@@ -236,6 +325,261 @@ export function createApplicationServices(
   // unhandled rejection) and stays visible through getInitializationState() and
   // through every explicit `initialize()` call, which still rejects.
   initialize().catch(() => undefined);
+
+  async function openMissionSession(
+    activityId: string,
+    options: CreateMissionSessionOptions,
+  ): Promise<CreateMissionSessionResult> {
+    try {
+      await initialize();
+    } catch {
+      if (!lifecycle.isActive()) return retiredFailure();
+      // A mission must never start on a service set whose startup failed.
+      // The raw error stays in getInitializationState() and the console
+      // diagnostic; the user-facing message deliberately omits it.
+      return failure(
+        "APPLICATION_INITIALIZATION_FAILED",
+        "Ứng dụng chưa khởi tạo được dữ liệu học tập cục bộ nên chưa thể mở bài thực hành. Hãy đóng các tab khác của ứng dụng rồi tải lại trang.",
+      );
+    }
+    if (!lifecycle.isActive()) return retiredFailure();
+
+    const activity = content.getActivity(activityId as LearningActivityId);
+    if (activity === undefined) {
+      return failure(
+        "ACTIVITY_NOT_FOUND",
+        "Không tìm thấy hoạt động học cần mở.",
+      );
+    }
+
+    const access = getActivityAccess(content, learning, activity.id);
+    if (!access.unlocked) {
+      return failure("ACTIVITY_LOCKED", access.reason);
+    }
+
+    if (
+      activity.type !== LearningActivityType.CODE_MISSION &&
+      activity.type !== LearningActivityType.DEBUG_MISSION &&
+      activity.type !== LearningActivityType.BOSS_MISSION
+    ) {
+      return failure(
+        "ACTIVITY_NOT_EXECUTABLE",
+        "Hoạt động này chưa sử dụng không gian chạy mã Python.",
+      );
+    }
+
+    const template = content.getMissionTemplate(activity.missionTemplateId);
+    if (template === undefined) {
+      return failure(
+        "MISSION_TEMPLATE_NOT_FOUND",
+        "Không tìm thấy cấu hình nhiệm vụ cho hoạt động này.",
+      );
+    }
+
+    const draft =
+      options.seed === undefined && options.resumeDraft !== false
+        ? await persistence.getMissionDraft(activity.id)
+        : null;
+    if (!lifecycle.isActive()) return retiredFailure();
+    const variantIndex = options.variantIndex ?? draft?.variantIndex ?? 0;
+    const seed =
+      options.seed ??
+      draft?.seed ??
+      deriveActivityVariantSeed(activity.id, template.version, variantIndex);
+
+    let instance;
+    try {
+      instance = generateMissionInstance({
+        template,
+        generatorRegistry: generators,
+        baseSeed: seed,
+        difficulty: Difficulty.EASY,
+        validator: getCs116MissionInstanceValidator(template.generator.id),
+      }).instance;
+    } catch (error) {
+      return failure(
+        "MISSION_GENERATION_FAILED",
+        getErrorMessage(error, "Không thể tạo dữ liệu cho nhiệm vụ."),
+      );
+    }
+
+    const hintSet = template.hintSetId
+      ? hints.getHintSet(template.hintSetId)
+      : undefined;
+    if (template.hintSetId && !hintSet) {
+      return failure(
+        "HINT_SET_NOT_FOUND",
+        "Không tìm thấy bộ gợi ý của nhiệm vụ.",
+      );
+    }
+
+    const runtime = createRuntimeManager(template);
+    if (runtime === null) {
+      return failure(
+        "RUNTIME_UNSUPPORTED",
+        "Mission đang yêu cầu một Python runtime mà ứng dụng chưa hỗ trợ.",
+      );
+    }
+    // MissionEngine/MissionAttemptSession mark themselves disposed before they
+    // tear the runtime down, so a retry after a failed teardown goes straight to
+    // the runtime (idempotent by its own contract).
+    const retryRuntimeDispose = () => runtime.dispose();
+    // The load is tracked from the moment its engine exists until the load AND the
+    // cleanup that follows it have settled - not merely while the engine sits in the
+    // registry. Retirement disposes the engine at once, but this continuation still
+    // runs later; `dispose()` waits for it (bounded) before closing persistence or
+    // reporting `disposed`, so a cleanup failure here decides the disposal outcome.
+    // No `await` separates the last `isActive()` check above from this call, so a
+    // load can only start while the set is active.
+    return lifecycle.trackLoad(async (): Promise<CreateMissionSessionResult> => {
+      const engine = new MissionEngine(runtime, graders);
+      // Owned while loading: retirement disposes it even before a session exists.
+      sessions.trackLoading(engine, retryRuntimeDispose);
+      let loaded;
+      try {
+        loaded = await engine.loadMission(template, instance);
+      } catch (error) {
+        // A failing cleanup is retained by the registry; it never replaces `error`.
+        sessions.discardEngine(engine, retryRuntimeDispose);
+        throw error;
+      } finally {
+        sessions.untrackLoading(engine);
+      }
+      if (!lifecycle.isActive()) {
+        // Late completion after retirement: never hand out a session.
+        sessions.discardEngine(engine, retryRuntimeDispose);
+        return retiredFailure();
+      }
+      if (!loaded.ok) {
+        sessions.discardEngine(engine, retryRuntimeDispose);
+        return { ok: false, error: loaded.error };
+      }
+
+      const session = new ServiceOwnedMissionSession(
+        activity,
+        template,
+        instance,
+        engine,
+        {
+          hintEngine: new HintEngine(hintSet ?? null, resumedDraftHintLevels(draft, seed)),
+          // Called only once a Submit crossed the M1 durable-write boundary, i.e.
+          // while this session was not disposed - and retirement disposes every
+          // owned session synchronously first, so the set was still active. The
+          // attempt and its reward are one admitted operation: a retirement that
+          // begins between the two writes cannot split them, and the drain waits.
+          onAttemptRecord: (record) =>
+            lifecycle.trackAdmitted(async () => {
+              await admitted.learningRecordAttempt(learning, record);
+              await admitted.metaRecordAttempt(metaProgression, record);
+            }),
+        },
+        (released) => sessions.release(released),
+        retryRuntimeDispose,
+      );
+      sessions.register(session);
+      const starterCode =
+        instance.learner.starterCode ?? template.starterCode ?? "# Viết mã Python tại đây\n";
+      const resumedDraft =
+        !options.resetCode && draft !== null && draft.seed === seed;
+
+      return {
+        ok: true,
+        value: {
+          session,
+          initialCode: resumedDraft ? draft.code : starterCode,
+          variantIndex,
+          resumedDraft,
+          ...(loaded.workspace !== undefined
+            ? { initialWorkspace: loaded.workspace }
+            : {}),
+        },
+      };
+    });
+  }
+
+  /**
+   * Closes one persistence instance and reports what it actually looks like.
+   * A close that rejects/throws, a `getCloseState()` that throws, and a close
+   * that resolves but leaves the store `open` are all failures - never swallowed
+   * and never turned into a disposal. The original error is kept.
+   */
+  async function closePersistence<State extends string>(
+    resource: "learning-persistence" | "meta-progression-persistence",
+    store: { close(): Promise<void>; getCloseState(): State },
+  ): Promise<{ readonly state: State | "unknown"; readonly failures: ApplicationDisposalFailure[] }> {
+    const failures: ApplicationDisposalFailure[] = [];
+    try {
+      await store.close();
+    } catch (error) {
+      failures.push({ resource, error });
+    }
+    let state: State | "unknown";
+    try {
+      state = store.getCloseState();
+    } catch (error) {
+      state = "unknown";
+      failures.push({ resource, error });
+    }
+    if (state === "open" && failures.length === 0) {
+      failures.push({
+        resource,
+        error: new Error("close() resolved but the persistence instance still reports an open connection."),
+      });
+    }
+    return { state, failures };
+  }
+
+  async function drainAndClose(timeoutMs: number): Promise<ApplicationServicesDisposalResult> {
+    const drained = await lifecycle.waitForDrain(timeoutMs);
+    if (!drained) {
+      lifecycle.markDrainIncomplete();
+      const ownedFailures = sessions.getUnresolvedFailures();
+      const pendingLoads = lifecycle.getPendingMissionLoadCount();
+      return Object.freeze({
+        status: "incomplete",
+        reason: "DRAIN_TIMEOUT",
+        pendingDurableOperations: lifecycle.getPendingDurableOperationCount(),
+        ...(pendingLoads > 0 ? { pendingMissionLoads: pendingLoads } : {}),
+        ...(ownedFailures.length > 0 ? { failures: Object.freeze([...ownedFailures]) } : {}),
+      });
+    }
+    // Nothing service-owned is in flight any more and nothing new can be
+    // admitted, so closing cannot cut off a write. A mission session whose
+    // runtime failed to dispose cannot write either (its session is already
+    // marked disposed, so no Submit can reach the durable-write boundary), so
+    // persistence is closed regardless and the failure is reported alongside.
+    const [learningClose, metaClose] = await Promise.all([
+      closePersistence("learning-persistence", persistence),
+      closePersistence("meta-progression-persistence", metaPersistence),
+    ]);
+    const failures = [
+      ...sessions.getUnresolvedFailures(),
+      ...learningClose.failures,
+      ...metaClose.failures,
+    ];
+    if (failures.length > 0) {
+      // Still non-active. Whatever is already closed stays closed; whatever
+      // failed is reported as it is now - never claimed open or closed blindly.
+      lifecycle.markCleanupFailed();
+      return Object.freeze({
+        status: "incomplete",
+        reason: "RESOURCE_CLEANUP_FAILED",
+        persistence: Object.freeze({
+          learning: learningClose.state,
+          metaProgression: metaClose.state,
+        }),
+        failures: Object.freeze(failures),
+      });
+    }
+    // No failure was recorded, so both states are terminal (`open` and
+    // `unknown` each add a failure above).
+    const closeStates: ApplicationPersistenceCloseStates = Object.freeze({
+      learning: learningClose.state as Exclude<typeof learningClose.state, "open" | "unknown">,
+      metaProgression: metaClose.state as Exclude<typeof metaClose.state, "open" | "unknown">,
+    });
+    lifecycle.markDisposed(closeStates);
+    return Object.freeze({ status: "disposed", persistence: closeStates });
+  }
 
   return {
     content,
@@ -258,143 +602,42 @@ export function createApplicationServices(
     },
 
     async createMissionSession(activityId, options = {}) {
+      if (!lifecycle.isActive()) return retiredFailure();
       try {
-        await initialize();
-      } catch {
-        // A mission must never start on a service set whose startup failed.
-        // The raw error stays in getInitializationState() and the console
-        // diagnostic; the user-facing message deliberately omits it.
-        return failure(
-          "APPLICATION_INITIALIZATION_FAILED",
-          "Ứng dụng chưa khởi tạo được dữ liệu học tập cục bộ nên chưa thể mở bài thực hành. Hãy đóng các tab khác của ứng dụng rồi tải lại trang.",
-        );
-      }
-      const activity = content.getActivity(activityId as LearningActivityId);
-      if (activity === undefined) {
-        return failure(
-          "ACTIVITY_NOT_FOUND",
-          "Không tìm thấy hoạt động học cần mở.",
-        );
-      }
-
-      const access = getActivityAccess(content, learning, activity.id);
-      if (!access.unlocked) {
-        return failure("ACTIVITY_LOCKED", access.reason);
-      }
-
-      if (
-        activity.type !== LearningActivityType.CODE_MISSION &&
-        activity.type !== LearningActivityType.DEBUG_MISSION &&
-        activity.type !== LearningActivityType.BOSS_MISSION
-      ) {
-        return failure(
-          "ACTIVITY_NOT_EXECUTABLE",
-          "Hoạt động này chưa sử dụng không gian chạy mã Python.",
-        );
-      }
-
-      const template = content.getMissionTemplate(activity.missionTemplateId);
-      if (template === undefined) {
-        return failure(
-          "MISSION_TEMPLATE_NOT_FOUND",
-          "Không tìm thấy cấu hình nhiệm vụ cho hoạt động này.",
-        );
-      }
-
-      const draft =
-        options.seed === undefined && options.resumeDraft !== false
-          ? await persistence.getMissionDraft(activity.id)
-          : null;
-      const variantIndex = options.variantIndex ?? draft?.variantIndex ?? 0;
-      const seed =
-        options.seed ??
-        draft?.seed ??
-        deriveActivityVariantSeed(activity.id, template.version, variantIndex);
-
-      let instance;
-      try {
-        instance = generateMissionInstance({
-          template,
-          generatorRegistry: generators,
-          baseSeed: seed,
-          difficulty: Difficulty.EASY,
-          validator: getCs116MissionInstanceValidator(template.generator.id),
-        }).instance;
+        return await openMissionSession(activityId, options);
       } catch (error) {
+        if (!lifecycle.isActive()) return retiredFailure();
+        console.error("Mission session could not be created.", error);
         return failure(
-          "MISSION_GENERATION_FAILED",
-          getErrorMessage(error, "Không thể tạo dữ liệu cho nhiệm vụ."),
+          "MISSION_SESSION_UNAVAILABLE",
+          "Không thể mở bài thực hành lúc này. Hãy tải lại trang để thử lại.",
         );
       }
-
-      const hintSet = template.hintSetId
-        ? hints.getHintSet(template.hintSetId)
-        : undefined;
-      if (template.hintSetId && !hintSet) {
-        return failure(
-          "HINT_SET_NOT_FOUND",
-          "Không tìm thấy bộ gợi ý của nhiệm vụ.",
-        );
-      }
-
-      const runtime = createRuntimeManager(template);
-      if (runtime === null) {
-        return failure(
-          "RUNTIME_UNSUPPORTED",
-          "Mission đang yêu cầu một Python runtime mà ứng dụng chưa hỗ trợ.",
-        );
-      }
-      const engine = new MissionEngine(runtime, graders);
-      const loaded = await engine.loadMission(template, instance);
-      if (!loaded.ok) {
-        engine.dispose();
-        return { ok: false, error: loaded.error };
-      }
-
-      const session = new MissionAttemptSession(activity, template, instance, engine, {
-        hintEngine: new HintEngine(hintSet ?? null, resumedDraftHintLevels(draft, seed)),
-        onAttemptRecord: async (record) => {
-          await learning.recordAttempt(record);
-          await metaProgression.recordAttempt(record);
-        },
-      });
-      const starterCode =
-        instance.learner.starterCode ?? template.starterCode ?? "# Viết mã Python tại đây\n";
-      const resumedDraft =
-        !options.resetCode && draft !== null && draft.seed === seed;
-
-      return {
-        ok: true,
-        value: {
-          session,
-          initialCode: resumedDraft ? draft.code : starterCode,
-          variantIndex,
-          resumedDraft,
-          ...(loaded.workspace !== undefined
-            ? { initialWorkspace: loaded.workspace }
-            : {}),
-        },
-      };
     },
 
-    async saveMissionDraft(input) {
-      await persistence.saveMissionDraft({
-        ...input,
-        updatedAt: new Date().toISOString(),
-      });
+    saveMissionDraft(input) {
+      return lifecycle.runDurable(() =>
+        persistence.saveMissionDraft({
+          ...input,
+          updatedAt: new Date().toISOString(),
+        }),
+      );
     },
 
     deleteMissionDraft(activityId) {
-      return persistence.deleteMissionDraft(activityId);
+      return lifecycle.runDurable(() => persistence.deleteMissionDraft(activityId));
     },
 
-    async clearLearningData() {
-      // Rejects with the startup error when initialization failed: clearing
-      // must not run against half-initialized engines.
-      await initialize();
-      await learning.clearAttempts();
-      await persistence.clearMissionDrafts();
-      await metaProgression.clearAll();
+    clearLearningData() {
+      // Admitted as one operation. Rejects with the startup error when
+      // initialization failed: clearing must not run against half-initialized
+      // engines.
+      return lifecycle.runDurable(async () => {
+        await initialize();
+        await admitted.learningClearAttempts(learning);
+        await persistence.clearMissionDrafts();
+        await admitted.metaClearAll(metaProgression);
+      });
     },
 
     getPersistenceKind() {
@@ -404,8 +647,43 @@ export function createApplicationServices(
     getMetaProgressionPersistenceKind() {
       return metaProgression.getPersistenceKind();
     },
+
+    getLifecycleState() {
+      return lifecycle.getState();
+    },
+
+    subscribeLifecycle(listener) {
+      return lifecycle.subscribe(listener);
+    },
+
+    dispose(disposeOptions) {
+      const timeoutMs = resolveDrainTimeout(disposeOptions);
+      if (disposed !== null) return Promise.resolve(disposed);
+      if (disposal !== null) return disposal;
+
+      // Synchronous retirement: admission closes before anything else runs.
+      if (!lifecycle.beginRetirement()) lifecycle.resumeDrain();
+      sessions.disposeAll();
+
+      const current = drainAndClose(timeoutMs).then((result) => {
+        if (result.status === "disposed") disposed = result;
+        // An incomplete drain may be awaited again by a later dispose().
+        disposal = null;
+        return result;
+      });
+      disposal = current;
+      return current;
+    },
   };
 }
+
+function retiredFailure(): CreateMissionSessionResult {
+  return failure(
+    APPLICATION_SERVICES_RETIRED,
+    "Phiên dữ liệu học tập này đã đóng nên không thể mở bài thực hành. Hãy tải lại trang.",
+  );
+}
+
 
 // Heavy Pyodide packages (pandas, Matplotlib, scikit-learn, OpenCV) can take
 // several seconds to import the first time in a fresh namespace, especially on

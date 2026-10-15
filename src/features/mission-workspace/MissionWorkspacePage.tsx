@@ -40,6 +40,15 @@ type MissionWorkspaceTab = "lesson" | "prompt" | "data" | "practice";
 const SUBMIT_FAILURE_NOTICE =
   "Không thể lưu lần nộp này. Bằng chứng học tập có thể chưa được ghi lại đầy đủ; hãy thử nộp lại.";
 
+/**
+ * A draft save that fails or is refused (e.g. the service set is retiring,
+ * PHASE-04C.3D.5) must stay observed: never an unhandled rejection. The draft is
+ * a convenience copy; the learner's code is still in the editor.
+ */
+function reportDraftSaveFailure(error: unknown): void {
+  console.warn("Could not save the mission draft.", error);
+}
+
 export function MissionWorkspacePage() {
   const { missionId } = useParams();
   const routeId = missionId?.trim();
@@ -119,13 +128,15 @@ export function MissionWorkspacePage() {
     if (!bundle || !session || draftSuppressed || loading) return;
 
     const timeout = window.setTimeout(() => {
-      void services.saveMissionDraft({
-        activityId: session.activity.id,
-        seed: session.instance.seed,
-        variantIndex: bundle.variantIndex,
-        code,
-        hintsUsed: session.getRevealedHints().map((hint) => hint.level),
-      });
+      void services
+        .saveMissionDraft({
+          activityId: session.activity.id,
+          seed: session.instance.seed,
+          variantIndex: bundle.variantIndex,
+          code,
+          hintsUsed: session.getRevealedHints().map((hint) => hint.level),
+        })
+        .catch(reportDraftSaveFailure);
     }, 350);
 
     return () => window.clearTimeout(timeout);
@@ -284,13 +295,15 @@ export function MissionWorkspacePage() {
     if (!hint) return;
     const hints = session.getRevealedHints();
     setRevealedHints(hints);
-    void services.saveMissionDraft({
-      activityId: session.activity.id,
-      seed: session.instance.seed,
-      variantIndex: bundle.variantIndex,
-      code,
-      hintsUsed: hints.map((item) => item.level),
-    });
+    void services
+      .saveMissionDraft({
+        activityId: session.activity.id,
+        seed: session.instance.seed,
+        variantIndex: bundle.variantIndex,
+        code,
+        hintsUsed: hints.map((item) => item.level),
+      })
+      .catch(reportDraftSaveFailure);
     setDraftNotice("Gợi ý vừa mở đã được ghi vào bản nháp và sẽ xuất hiện trong bằng chứng lần nộp.");
   }
 
