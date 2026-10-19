@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import {
   useApplicationServices,
   type CreateMissionSessionOptions,
+  type MissionDraftStatus,
   type PlayableMissionSession,
 } from "../../app/services";
 import { LearningStage, type AttemptRecord } from "../../core/domain";
@@ -24,12 +25,7 @@ import { MissionQuickCheck } from "./MissionQuickCheck";
 import { MissionObjectivePanel } from "./MissionObjectivePanel";
 import { MissionOutputPanel } from "./MissionOutputPanel";
 import { PythonEditor } from "./PythonEditor";
-import {
-  isActiveSession,
-  releaseSession,
-  shouldDeleteDraftAfterSubmit,
-  submitMission,
-} from "./submit-mission";
+import { isActiveSession, releaseSession, submitMission } from "./submit-mission";
 import { GradingFeedback } from "./grading-feedback";
 import { getMissionLessonGuide, getMissionQuickCheck } from "./mission-lesson-guides";
 
@@ -40,13 +36,26 @@ type MissionWorkspaceTab = "lesson" | "prompt" | "data" | "practice";
 const SUBMIT_FAILURE_NOTICE =
   "Không thể lưu lần nộp này. Bằng chứng học tập có thể chưa được ghi lại đầy đủ; hãy thử nộp lại.";
 
+const IDLE_DRAFT_STATUS: MissionDraftStatus = Object.freeze({ kind: "idle" });
+const NO_DRAFT_SUBSCRIPTION = (_listener: () => void): (() => void) => () => undefined;
+
 /**
- * A draft save that fails or is refused (e.g. the service set is retiring,
- * PHASE-04C.3D.5) must stay observed: never an unhandled rejection. The draft is
- * a convenience copy; the learner's code is still in the editor.
+ * What the learner is told about the draft - only what is true: "saved" appears
+ * once the write has actually been stored, never when it was merely scheduled.
  */
-function reportDraftSaveFailure(error: unknown): void {
-  console.warn("Could not save the mission draft.", error);
+function draftStatusText(status: MissionDraftStatus): string | null {
+  switch (status.kind) {
+    case "scheduled":
+      return "Đang chờ lưu bản nháp...";
+    case "saving":
+      return "Đang lưu bản nháp...";
+    case "saved":
+      return "Đã lưu bản nháp.";
+    case "failed":
+      return "Chưa lưu được bản nháp. Mã của bạn vẫn còn trong trình soạn thảo; hãy tiếp tục làm bài hoặc sửa nhẹ để thử lưu lại.";
+    default:
+      return null;
+  }
 }
 
 export function MissionWorkspacePage() {
@@ -65,7 +74,6 @@ export function MissionWorkspacePage() {
   const [grading, setGrading] = useState<GraderResult | null>(null);
   const [attempt, setAttempt] = useState<AttemptRecord | null>(null);
   const [revealedHints, setRevealedHints] = useState<readonly RevealedHint[]>([]);
-  const [draftSuppressed, setDraftSuppressed] = useState(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<MissionWorkspaceTab>("lesson");
   const [stopPending, setStopPending] = useState(false);
@@ -82,7 +90,6 @@ export function MissionWorkspacePage() {
     setGrading(null);
     setAttempt(null);
     setRevealedHints([]);
-    setDraftSuppressed(false);
     setDraftNotice(null);
     setActiveTab("lesson");
     setStopPending(false);
@@ -124,23 +131,26 @@ export function MissionWorkspacePage() {
   const canInterrupt = session?.canInterrupt() === true;
   const executionActive = operation === "run" || operation === "submit";
 
+  // The draft belongs to the session: its debounce timer, write ordering and
+  // cleanup live in the service set (see mission-draft-scheduler.ts). The page
+  // only reports the latest editor state - code and revealed hints as one
+  // snapshot - and has no timer to cancel, so React effect cleanup/remount
+  // (StrictMode) cannot drop or duplicate a save.
+  const draft = bundle?.draft ?? null;
   useEffect(() => {
-    if (!bundle || !session || draftSuppressed || loading) return;
+    if (!draft || !session || loading) return;
+    draft.update({ code, hintsUsed: session.getRevealedHints().map((hint) => hint.level) });
+  }, [code, draft, loading, revealedHints, session]);
 
-    const timeout = window.setTimeout(() => {
-      void services
-        .saveMissionDraft({
-          activityId: session.activity.id,
-          seed: session.instance.seed,
-          variantIndex: bundle.variantIndex,
-          code,
-          hintsUsed: session.getRevealedHints().map((hint) => hint.level),
-        })
-        .catch(reportDraftSaveFailure);
-    }, 350);
-
-    return () => window.clearTimeout(timeout);
-  }, [bundle, code, draftSuppressed, loading, revealedHints, services, session]);
+  const subscribeDraft = useMemo(
+    () => (draft ? (listener: () => void) => draft.subscribe(listener) : NO_DRAFT_SUBSCRIPTION),
+    [draft],
+  );
+  const draftStatus = useSyncExternalStore(
+    subscribeDraft,
+    () => draft?.getStatus() ?? IDLE_DRAFT_STATUS,
+    () => IDLE_DRAFT_STATUS,
+  );
 
   const runtimeNote = useMemo(() => {
     if (loading || operation === "reload") return "Đang chuẩn bị một môi trường Python sạch...";
@@ -186,7 +196,6 @@ export function MissionWorkspacePage() {
     setExecution(null);
     setGrading(null);
     setAttempt(null);
-    setDraftSuppressed(false);
     setDraftNotice(next.resumedDraft ? "Đã khôi phục bản nháp và đề đang làm trước đó." : null);
     setRuntimeActionNotice(null);
     setStopPending(false);
@@ -247,27 +256,12 @@ export function MissionWorkspacePage() {
         setGrading(result.grading ?? null);
         setAttempt(result.attemptRecord);
       }
-      if (result.attemptRecord.passed && isCurrent()) {
-        setDraftSuppressed(true);
-        setDraftNotice(null);
-      }
-      // Only the live session may clean up its draft, bound to the original
-      // services. A stale completion (page left mid-persist, retry, reopen) must
-      // not delete a draft saved by a newer session; the attempt itself is
-      // already saved and is never cancelled.
-      // KNOWN LIMITS (M5, draft ownership/versioning): (1) a passed mission left
-      // mid-persist keeps its old draft, which a later open may resume; (2) a
-      // draft save/delete already issued before navigation is not versioned, so
-      // ordering against a newer session's draft relies on IndexedDB's
-      // per-store transaction order only.
-      if (shouldDeleteDraftAfterSubmit(outcome, isCurrent())) {
-        try {
-          await services.deleteMissionDraft(submittingSession.activity.id);
-        } catch (error) {
-          // The attempt itself is already saved; a stale draft is not worth an error banner.
-          console.warn("Could not delete the mission draft after a passed submit.", error);
-        }
-      }
+      if (result.attemptRecord.passed && isCurrent()) setDraftNotice(null);
+      // The draft needs no handling here: a passed attempt discards it inside the
+      // service set, in the same admitted operation that stored the attempt, and
+      // the draft handle ignores every later change. A failed or cancelled Submit
+      // leaves the draft untouched. This also holds for a completion that arrives
+      // after the page left (the old "stale Submit" limit).
     } finally {
       if (isCurrent()) {
         operationRef.current = null;
@@ -295,16 +289,10 @@ export function MissionWorkspacePage() {
     if (!hint) return;
     const hints = session.getRevealedHints();
     setRevealedHints(hints);
-    void services
-      .saveMissionDraft({
-        activityId: session.activity.id,
-        seed: session.instance.seed,
-        variantIndex: bundle.variantIndex,
-        code,
-        hintsUsed: hints.map((item) => item.level),
-      })
-      .catch(reportDraftSaveFailure);
-    setDraftNotice("Gợi ý vừa mở đã được ghi vào bản nháp và sẽ xuất hiện trong bằng chứng lần nộp.");
+    // Code and hints are saved as one snapshot, now. Whether it is stored is
+    // reported by the draft status below, not claimed here.
+    draft?.update({ code, hintsUsed: hints.map((item) => item.level) }, { immediate: true });
+    setDraftNotice("Gợi ý vừa mở sẽ xuất hiện trong bằng chứng lần nộp.");
   }
 
   async function handleRetry(mode: RetryMode) {
@@ -417,6 +405,11 @@ export function MissionWorkspacePage() {
         Viết mã trực tiếp, dùng Chạy thử để khám phá và Nộp bài khi muốn chấm trên môi trường sạch.
       </p>
       {draftNotice ? <p className="mission-draft-notice">{draftNotice}</p> : null}
+      {draftStatusText(draftStatus) ? (
+        <p className="mission-draft-notice" role="status" aria-live="polite">
+          {draftStatusText(draftStatus)}
+        </p>
+      ) : null}
 
       <nav className="mission-tab-nav" aria-label="Khu vực nội dung của nhiệm vụ">
         <button className={tabClassName(activeTab === "lesson")} type="button" onClick={() => setActiveTab("lesson")}>Bài học</button>

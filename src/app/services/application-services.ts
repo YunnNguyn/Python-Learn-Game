@@ -47,6 +47,7 @@ import {
   type ApplicationServicesDisposalResult,
   type DisposeApplicationServicesOptions,
 } from "./application-lifecycle";
+import { MissionDraftScheduler, type MissionDraftHandle } from "./mission-draft-scheduler";
 import {
   admitted,
   MissionSessionRegistry,
@@ -62,6 +63,13 @@ const READY_INITIALIZATION: ApplicationInitializationState = Object.freeze({ sta
 
 export interface PlayableMissionSession {
   readonly session: MissionAttemptSession;
+  /**
+   * This session's draft (M5): the debounce timer, ordered writes and save status
+   * live here, owned by the service set - not by the page. The session closes it
+   * when it is disposed, and a passed Submit discards it. The page only feeds it
+   * the latest editor state.
+   */
+  readonly draft: MissionDraftHandle;
   readonly initialCode: string;
   readonly variantIndex: number;
   readonly resumedDraft: boolean;
@@ -113,7 +121,11 @@ export interface ApplicationServices {
     activityId: string,
     options?: CreateMissionSessionOptions,
   ): Promise<CreateMissionSessionResult>;
-  /** Rejects with ApplicationServicesRetiredError once the set is retiring. */
+  /**
+   * A direct draft write. Not debounced, but ordered with every other draft write
+   * and delete of the same activity (M5). Rejects with ApplicationServicesRetiredError
+   * once the set is retiring; a write accepted earlier still settles.
+   */
   saveMissionDraft(input: {
     readonly activityId: LearningActivityId;
     readonly seed: string;
@@ -121,7 +133,7 @@ export interface ApplicationServices {
     readonly code: string;
     readonly hintsUsed: readonly HintLevel[];
   }): Promise<void>;
-  /** Rejects with ApplicationServicesRetiredError once the set is retiring. */
+  /** Ordered after every draft write accepted before it. Rejects with ApplicationServicesRetiredError once the set is retiring. */
   deleteMissionDraft(activityId: LearningActivityId): Promise<void>;
   /** Rejects with ApplicationServicesRetiredError once the set is retiring. */
   clearLearningData(): Promise<void>;
@@ -227,8 +239,17 @@ export interface CreateApplicationServicesOptions {
  *  - Production currently builds exactly one set per page and never disposes
  *    it; account switching (later milestones) will build a new set only after
  *    the old one reports `disposed`.
- *  NOT covered here: draft debounce scheduling (M5) and Clear-vs-Submit
- *  serialization (M6). Concurrency between admitted operations is unchanged.
+ *  Mission drafts (PHASE-04C.3D.6, M5): every draft write and delete of this set
+ *  goes through one scheduler (see mission-draft-scheduler.ts). Writes of one
+ *  activity are serialized in acceptance order, the 350 ms debounce lives in the
+ *  per-session draft handle, and each accepted write is a durable operation of
+ *  this lifecycle - so retirement refuses new ones (a timer firing afterwards
+ *  opens nothing) and drains the accepted ones. A passed Submit discards its draft
+ *  inside the same admitted operation that stores the attempt. Resuming waits for
+ *  the activity's earlier draft writes before it reads.
+ *  NOT covered here: Clear-vs-Submit serialization (M6). `clearLearningData()`
+ *  is not ordered against draft writes. Concurrency between other admitted
+ *  operations is unchanged.
  */
 export function createApplicationServices(
   options: CreateApplicationServicesOptions = {},
@@ -241,6 +262,7 @@ export function createApplicationServices(
 
   const lifecycle = new ApplicationLifecycle();
   const sessions = new MissionSessionRegistry();
+  const drafts = new MissionDraftScheduler(persistence, lifecycle);
   const content = new ContentRegistry();
   const generators = new GeneratorRegistry();
   const graders = new GraderRegistry();
@@ -326,6 +348,12 @@ export function createApplicationServices(
   // through every explicit `initialize()` call, which still rejects.
   initialize().catch(() => undefined);
 
+  /** Reads the stored draft after every draft write already accepted for the activity has finished. */
+  async function readMissionDraft(activityId: LearningActivityId) {
+    await drafts.settled(activityId);
+    return persistence.getMissionDraft(activityId);
+  }
+
   async function openMissionSession(
     activityId: string,
     options: CreateMissionSessionOptions,
@@ -376,9 +404,11 @@ export function createApplicationServices(
       );
     }
 
+    // Read-your-writes: a draft write accepted earlier for this activity (typically
+    // the final save of the session the learner just left) lands before the read.
     const draft =
       options.seed === undefined && options.resumeDraft !== false
-        ? await persistence.getMissionDraft(activity.id)
+        ? await readMissionDraft(activity.id)
         : null;
     if (!lifecycle.isActive()) return retiredFailure();
     const variantIndex = options.variantIndex ?? draft?.variantIndex ?? 0;
@@ -455,6 +485,16 @@ export function createApplicationServices(
         return { ok: false, error: loaded.error };
       }
 
+      const resumedDraft =
+        !options.resetCode && draft !== null && draft.seed === seed;
+      // Opened here, synchronously with the session, so it is the newest draft
+      // handle of this activity from the moment the session exists.
+      const missionDraft = drafts.open({
+        activityId: activity.id,
+        seed,
+        variantIndex,
+        persisted: resumedDraft ? { code: draft.code, hintsUsed: draft.hintsUsed } : null,
+      });
       const session = new ServiceOwnedMissionSession(
         activity,
         template,
@@ -467,25 +507,30 @@ export function createApplicationServices(
           // owned session synchronously first, so the set was still active. The
           // attempt and its reward are one admitted operation: a retirement that
           // begins between the two writes cannot split them, and the drain waits.
+          // A PASSED attempt also invalidates the draft, here and only after both
+          // writes succeeded: a failed Submit keeps the learner's draft. The
+          // delete is started inside this operation (so it is drained) but not
+          // awaited, so the Submit result is not held back by it.
           onAttemptRecord: (record) =>
             lifecycle.trackAdmitted(async () => {
               await admitted.learningRecordAttempt(learning, record);
               await admitted.metaRecordAttempt(metaProgression, record);
+              if (record.passed) void missionDraft.discardWithinAdmittedWork();
             }),
         },
         (released) => sessions.release(released),
         retryRuntimeDispose,
+        missionDraft,
       );
       sessions.register(session);
       const starterCode =
         instance.learner.starterCode ?? template.starterCode ?? "# Viết mã Python tại đây\n";
-      const resumedDraft =
-        !options.resetCode && draft !== null && draft.seed === seed;
 
       return {
         ok: true,
         value: {
           session,
+          draft: missionDraft,
           initialCode: resumedDraft ? draft.code : starterCode,
           variantIndex,
           resumedDraft,
@@ -616,16 +661,11 @@ export function createApplicationServices(
     },
 
     saveMissionDraft(input) {
-      return lifecycle.runDurable(() =>
-        persistence.saveMissionDraft({
-          ...input,
-          updatedAt: new Date().toISOString(),
-        }),
-      );
+      return drafts.save(input);
     },
 
     deleteMissionDraft(activityId) {
-      return lifecycle.runDurable(() => persistence.deleteMissionDraft(activityId));
+      return drafts.delete(activityId);
     },
 
     clearLearningData() {

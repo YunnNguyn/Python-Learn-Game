@@ -7,6 +7,13 @@ export type {
   CreateMissionSessionResult,
   PlayableMissionSession,
 } from "./application-services";
+export { MISSION_DRAFT_DEBOUNCE_MS } from "./mission-draft-scheduler";
+export type {
+  MissionDraftHandle,
+  MissionDraftSnapshot,
+  MissionDraftStatus,
+  MissionDraftUpdateOptions,
+} from "./mission-draft-scheduler";
 export {
   APPLICATION_SERVICES_RETIRED,
   ApplicationServicesRetiredError,

@@ -59,6 +59,11 @@ export function releaseSession<S extends { dispose(): void }>(slot: MissionSessi
  * of the session that is STILL the live one. A stale Submit (page left, mission
  * retried or reopened) must not touch drafts, because a newer session may have
  * saved a draft the old Submit knows nothing about.
+ *
+ * Since M5 the page no longer deletes drafts: the service set discards a draft
+ * itself when a passed attempt is stored, and decides staleness by draft
+ * generation (see mission-draft-scheduler.ts). This predicate is kept as the
+ * documented page-level rule and for its existing tests.
  */
 export function shouldDeleteDraftAfterSubmit(
   outcome: MissionSubmitOutcome,

@@ -123,9 +123,10 @@ function runCleanup(
 /**
  * A MissionAttemptSession owned by one service set. Its only additions: being
  * disposed - by the page (`releaseSession`) or by the set's retirement,
- * whichever comes first - removes it from the owner's registry, and a disposal
- * that throws is remembered (original error kept) so the owner can report an
- * incomplete cleanup instead of a disposal. The M1 Submit contract
+ * whichever comes first - removes it from the owner's registry and closes the
+ * session's mission draft (M5), and a disposal that throws is remembered
+ * (original error kept) so the owner can report an incomplete cleanup instead
+ * of a disposal. The M1 Submit contract
  * (cancellation before the durable-write boundary, completion after it) is
  * inherited unchanged: the base class marks itself disposed before anything
  * can throw.
@@ -141,6 +142,7 @@ export class ServiceOwnedMissionSession extends MissionAttemptSession {
     options: MissionAttemptSessionOptions,
     private readonly onReleased: (session: ServiceOwnedMissionSession) => void,
     private readonly retryCleanup?: () => void,
+    private readonly draft?: { close(): void },
   ) {
     super(activity, template, instance, engine, options);
   }
@@ -151,6 +153,13 @@ export class ServiceOwnedMissionSession extends MissionAttemptSession {
   }
 
   override dispose(): void {
+    // The draft belongs to this session (M5): cancel its timer and save the last
+    // unsaved change once. It never throws, so it cannot change the cleanup result.
+    try {
+      this.draft?.close();
+    } catch {
+      // Best effort by contract.
+    }
     this.cleanupFailure = runCleanup(this.cleanupFailure, () => super.dispose(), this.retryCleanup);
     // Still registered while its cleanup is unresolved, so the owner keeps seeing it.
     if (this.cleanupFailure !== null) throw this.cleanupFailure.error;
