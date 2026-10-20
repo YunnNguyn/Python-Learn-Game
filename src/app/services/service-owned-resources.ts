@@ -14,6 +14,7 @@ import {
 import type { MissionEngine } from "../../core/missions";
 import type { LearningPersistence } from "../../core/persistence";
 import type { ApplicationDisposalFailure, ApplicationLifecycle } from "./application-lifecycle";
+import type { OperationGate } from "./operation-gate";
 
 /*
  * Service-owned resources (PHASE-04C.3D.5, M4).
@@ -26,7 +27,9 @@ import type { ApplicationDisposalFailure, ApplicationLifecycle } from "./applica
  * modified.
  *
  * Mutations called from outside are admitted only while the set is active
- * (`runDurable`) and are tracked until they settle. The set's own composite
+ * (`runDurable`) and are tracked until they settle. They also take the set's
+ * OperationGate (M6): ordinary mutations shared, the engines' clear methods
+ * exclusive, so a clear never interleaves with the writes it clears. The set's own composite
  * operations (startup, Submit persistence, clear) were admitted as a whole, so
  * they call the base implementations through `admitted*` below and are not
  * refused half way by a retirement that begins between their steps.
@@ -36,16 +39,17 @@ export class ServiceLearningEngine extends LearningEngine {
   constructor(
     persistence: LearningPersistence,
     private readonly lifecycle: ApplicationLifecycle,
+    private readonly gate: OperationGate,
   ) {
     super(persistence);
   }
 
   override recordAttempt(record: AttemptRecord): Promise<void> {
-    return this.lifecycle.runDurable(() => super.recordAttempt(record));
+    return this.lifecycle.runDurable(() => this.gate.runShared(() => super.recordAttempt(record)));
   }
 
   override clearAttempts(): Promise<void> {
-    return this.lifecycle.runDurable(() => super.clearAttempts());
+    return this.lifecycle.runDurable(() => this.gate.runExclusive(() => super.clearAttempts()));
   }
 }
 
@@ -53,28 +57,29 @@ export class ServiceMetaProgressionEngine extends MetaProgressionEngine {
   constructor(
     persistence: MetaProgressionPersistence,
     private readonly lifecycle: ApplicationLifecycle,
+    private readonly gate: OperationGate,
   ) {
     super(persistence);
   }
 
   override reconcileAttempts(attempts: readonly AttemptRecord[]): Promise<void> {
-    return this.lifecycle.runDurable(() => super.reconcileAttempts(attempts));
+    return this.lifecycle.runDurable(() => this.gate.runShared(() => super.reconcileAttempts(attempts)));
   }
 
   override recordAttempt(attempt: AttemptRecord): Promise<void> {
-    return this.lifecycle.runDurable(() => super.recordAttempt(attempt));
+    return this.lifecycle.runDurable(() => this.gate.runShared(() => super.recordAttempt(attempt)));
   }
 
   override buildRobotPart(partId: RobotPartId): Promise<BuildRobotPartResult> {
-    return this.lifecycle.runDurable(() => super.buildRobotPart(partId));
+    return this.lifecycle.runDurable(() => this.gate.runShared(() => super.buildRobotPart(partId)));
   }
 
   override assembleStarterRobot(): Promise<AssembleRobotResult> {
-    return this.lifecycle.runDurable(() => super.assembleStarterRobot());
+    return this.lifecycle.runDurable(() => this.gate.runShared(() => super.assembleStarterRobot()));
   }
 
   override clearAll(): Promise<void> {
-    return this.lifecycle.runDurable(() => super.clearAll());
+    return this.lifecycle.runDurable(() => this.gate.runExclusive(() => super.clearAll()));
   }
 }
 

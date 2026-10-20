@@ -1,6 +1,7 @@
 import type { HintLevel, LearningActivityId } from "../../core/domain";
 import { PersistenceClosedError, type LearningPersistence } from "../../core/persistence";
 import { isApplicationServicesRetiredError, type ApplicationLifecycle } from "./application-lifecycle";
+import { OperationGate } from "./operation-gate";
 
 /*
  * Mission draft scheduling (PHASE-04C.3D.6, M5).
@@ -47,8 +48,18 @@ import { isApplicationServicesRetiredError, type ApplicationLifecycle } from "./
  *  - `ApplicationServices.saveMissionDraft/deleteMissionDraft` are explicit
  *    direct operations without a session identity. They are ordered with every
  *    other write but not fenced; the UI does not use them.
- *  - `clearLearningData()` is not serialized against draft writes here. That
- *    belongs to M6 (Clear-vs-Submit serialization).
+ *  - Clear (M6): every write and delete here takes the set's OperationGate as a
+ *    SHARED operation, and `clearLearningData()` is EXCLUSIVE. Writes accepted
+ *    before a Clear finish first (`settledAll()`); ones requested while it runs or
+ *    waits are delayed behind it and re-checked when they finally start (a handle
+ *    retired by the Clear is skipped). `resetForClear()` retires every existing
+ *    handle synchronously, so pre-Clear text is never written afterwards - and a
+ *    retired handle can no longer DELETE either (its generation still looks
+ *    "newest", so ownership is "not superseded", never the generation alone). That
+ *    fence also guards the Submit's admitted-work delete. Generations only grow
+ *    and are never reset, so a retired handle can never match a newer one.
+ *    A write the gate delays is no longer enqueued in the caller's turn - only
+ *    while a Clear is pending.
  */
 
 export const MISSION_DRAFT_DEBOUNCE_MS = 350;
@@ -103,9 +114,10 @@ export interface OwnedMissionDraft extends MissionDraftHandle {
   /**
    * Invalidates the draft: cancels the timer and every not yet started write of this
    * handle, synchronously, then deletes the stored draft - ordered after every write
-   * accepted before. Only the newest handle for an activity deletes; an older one
-   * (a newer session already opened the same activity) leaves the draft alone.
-   * Never rejects.
+   * accepted before. Only a handle that still OWNS the draft deletes: one superseded by a
+   * newer session of the activity, or retired by a Clear, leaves the draft alone.
+   * Never rejects. The ownership check is re-evaluated when the delete is admitted, and again
+   * when a delete the gate delayed finally starts.
    */
   discard(): Promise<void>;
   /**
@@ -262,9 +274,21 @@ class DraftChannel {
 }
 
 /** What a draft handle needs from its scheduler. */
+/** What the scheduler may ask a handle when a gate-delayed request finally starts. */
+interface DraftOwner {
+  /** False once a newer handle or a Clear retired it: its obsolete write is skipped. */
+  canWrite(): boolean;
+  /**
+   * False once a newer handle of the activity opened OR a Clear retired this handle.
+   * The newest-generation test alone is not enough: a Clear retires handles without
+   * opening a newer one, so the retired handle would still look "newest".
+   */
+  canDelete(): boolean;
+}
+
 interface DraftSink {
-  requestSave(owner: object, input: MissionDraftWriteInput): Promise<void>;
-  requestDelete(owner: object, activityId: LearningActivityId, admittedWork: boolean): Promise<void>;
+  requestSave(owner: DraftOwner, input: MissionDraftWriteInput): Promise<void>;
+  requestDelete(owner: DraftOwner, activityId: LearningActivityId, admittedWork: boolean): Promise<void>;
   cancelPending(owner: object, activityId: LearningActivityId): void;
   isLatest(activityId: LearningActivityId, generation: number): boolean;
 }
@@ -280,16 +304,35 @@ export class MissionDraftScheduler implements DraftSink {
     private readonly persistence: LearningPersistence,
     private readonly lifecycle: ApplicationLifecycle,
     private readonly debounceMs: number = MISSION_DRAFT_DEBOUNCE_MS,
+    private readonly gate: OperationGate = new OperationGate(),
   ) {}
 
   /** A direct write (not debounced, not coalesced), still ordered with every other write of the activity. */
   save(input: MissionDraftWriteInput): Promise<void> {
-    return this.lifecycle.runDurable(() => this.channel(input.activityId).enqueueSave(input, null, false));
+    return this.lifecycle.runDurable(() =>
+      this.gate.runShared(() => this.channel(input.activityId).enqueueSave(input, null, false)),
+    );
   }
 
   /** A direct delete, ordered after every write accepted before it. */
   delete(activityId: LearningActivityId): Promise<void> {
-    return this.lifecycle.runDurable(() => this.channel(activityId).enqueueDelete(null));
+    return this.lifecycle.runDurable(() => this.gate.runShared(() => this.channel(activityId).enqueueDelete(null)));
+  }
+
+  /**
+   * Clear, step 1 (synchronous, at request time): every existing handle steps down
+   * (timer and unsaved tail dropped, status "closed"). Writes already queued stay -
+   * Clear waits for them. Handles opened afterwards are not affected.
+   */
+  resetForClear(): void {
+    const handles = [...this.newest.values()];
+    this.newest.clear();
+    for (const handle of handles) handle.supersede();
+  }
+
+  /** Clear, step 2: resolves (never rejects) once every write and delete accepted so far has finished. */
+  settledAll(): Promise<void> {
+    return Promise.all([...this.channels.values()].map((channel) => channel.settled())).then(noop);
   }
 
   /** Resolves once every write already accepted for `activityId` has finished (read-your-writes). Never rejects. */
@@ -309,13 +352,29 @@ export class MissionDraftScheduler implements DraftSink {
     return handle;
   }
 
-  requestSave(owner: object, input: MissionDraftWriteInput): Promise<void> {
-    return this.lifecycle.runDurable(() => this.channel(input.activityId).enqueueSave(input, owner, true));
+  requestSave(owner: DraftOwner, input: MissionDraftWriteInput): Promise<void> {
+    return this.lifecycle.runDurable(() =>
+      this.gate.runShared(() =>
+        // Re-checked at the moment it really starts: a Clear may have retired the handle meanwhile.
+        owner.canWrite() ? this.channel(input.activityId).enqueueSave(input, owner, true) : Promise.resolve(),
+      ),
+    );
   }
 
-  requestDelete(owner: object, activityId: LearningActivityId, admittedWork: boolean): Promise<void> {
-    const enqueue = () => this.channel(activityId).enqueueDelete(owner);
-    return admittedWork ? this.lifecycle.trackAdmitted(enqueue) : this.lifecycle.runDurable(enqueue);
+  requestDelete(owner: DraftOwner, activityId: LearningActivityId, admittedWork: boolean): Promise<void> {
+    // The Submit's own delete runs inside its already-gated operation: gating it again would wait for itself.
+    // Still fenced: being inside the Submit's operation is not authority to delete a draft the
+    // handle no longer owns (a Clear retired it, or a newer session took the activity over).
+    if (admittedWork) {
+      return this.lifecycle.trackAdmitted(() =>
+        owner.canDelete() ? this.channel(activityId).enqueueDelete(owner as object) : Promise.resolve(),
+      );
+    }
+    return this.lifecycle.runDurable(() =>
+      this.gate.runShared(() =>
+        owner.canDelete() ? this.channel(activityId).enqueueDelete(owner as object) : Promise.resolve(),
+      ),
+    );
   }
 
   cancelPending(owner: object, activityId: LearningActivityId): void {
@@ -338,7 +397,7 @@ export class MissionDraftScheduler implements DraftSink {
   }
 }
 
-class DraftHandle implements OwnedMissionDraft {
+class DraftHandle implements OwnedMissionDraft, DraftOwner {
   private latest: MissionDraftSnapshot | null;
   /** Incremented for every accepted change; a write carries the revision it was started for. */
   private revision = 0;
@@ -437,7 +496,7 @@ class DraftHandle implements OwnedMissionDraft {
     this.clearTimer();
     this.latest = null;
     this.sink.cancelPending(this, this.identity.activityId);
-    if (this.sink.isLatest(this.identity.activityId, this.generation)) {
+    if (this.canDelete()) {
       this.discarding = this.sink.requestDelete(this, this.identity.activityId, admittedWork).then(
         () => undefined,
         (error: unknown) => {
@@ -447,12 +506,20 @@ class DraftHandle implements OwnedMissionDraft {
         },
       );
     } else {
-      // A newer session opened this activity: its draft is not ours to delete.
+      // A newer session opened this activity, or a Clear retired this handle: the draft is not ours to delete.
       this.discarding = Promise.resolve();
     }
     this.refresh();
     this.releaseIdleWaiters();
     return this.discarding;
+  }
+
+  canWrite(): boolean {
+    return !this.isSuperseded();
+  }
+
+  canDelete(): boolean {
+    return !this.isSuperseded();
   }
 
   /**

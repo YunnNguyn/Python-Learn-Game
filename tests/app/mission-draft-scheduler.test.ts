@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApplicationLifecycle } from "../../src/app/services/application-lifecycle";
+import { OperationGate } from "../../src/app/services/operation-gate";
 import {
   MISSION_DRAFT_DEBOUNCE_MS,
   MissionDraftScheduler,
@@ -1143,5 +1144,227 @@ describe("M5-R2 draft scheduler - superseded handle status", () => {
     expect(statusKind(a)).toBe("closed");
     expect(statusKind(b)).toBe("saved");
     expect(statusKind(otherScope)).toBe("saved");
+  });
+});
+
+/*
+ * PHASE-04C.3D.7-R1 - a handle retired by a Clear may not authorize a delete.
+ * A Clear retires handles without opening a newer one, so the generation alone
+ * ("is this the newest handle?") cannot tell an obsolete handle from the current
+ * one. The delete authority is "not superseded by a newer handle AND not retired
+ * by a Clear", checked where a delete is admitted - including the admitted-work path.
+ */
+describe("M6-R1 draft scheduler - handles retired by Clear cannot delete post-Clear drafts", () => {
+  function setupWithGate() {
+    const store = createGatedStore();
+    const lifecycle = new ApplicationLifecycle();
+    const gate = new OperationGate();
+    const scheduler = new MissionDraftScheduler(store.persistence, lifecycle, undefined, gate);
+    /** What clearLearningData() does to drafts: retire handles now, then clear exclusively after earlier work. */
+    const clear = (): Promise<void> => {
+      scheduler.resetForClear();
+      return gate.runExclusive(async () => {
+        await scheduler.settledAll();
+        await store.inner.clearMissionDrafts();
+      });
+    };
+    const directSave = (code: string, activityId: LearningActivityId = A) =>
+      scheduler.save({ activityId, seed: `seed.${activityId}`, variantIndex: 0, code, hintsUsed: [] });
+    return { store, lifecycle, gate, scheduler, clear, directSave };
+  }
+
+  it("M6R1-1. old handle, Clear, valid direct save, then the old discard(): the valid draft survives", async () => {
+    const { store, scheduler, clear, directSave } = setupWithGate();
+    const old = open(scheduler);
+    old.update(snap("pre-Clear text"), { immediate: true });
+    await flush();
+    await clear();
+    expect(await store.stored(A)).toBeNull();
+
+    await directSave("NEW_AFTER_CLEAR");
+    await old.discard(); // the pre-Clear session's Submit finally completes (passed)
+    await flush();
+    expect(store.startsOf("delete")).toEqual([]);
+    expect((await store.stored(A))?.code).toBe("NEW_AFTER_CLEAR");
+  });
+
+  it("M6R1-2. the same with discardWithinAdmittedWork() inside a gate-held Submit operation", async () => {
+    const { store, gate, lifecycle, scheduler, clear, directSave } = setupWithGate();
+    const old = open(scheduler);
+    old.update(snap("pre-Clear text"), { immediate: true });
+    await flush();
+    await clear();
+    await directSave("NEW_AFTER_CLEAR");
+
+    // How the Submit composite runs: admitted, shared on the gate, discard started inside it.
+    await lifecycle.trackAdmitted(() => gate.runShared(async () => old.discardWithinAdmittedWork()));
+    await flush();
+    expect(store.startsOf("delete")).toEqual([]);
+    expect((await store.stored(A))?.code).toBe("NEW_AFTER_CLEAR");
+  });
+
+  it("M6R1-3. the reviewer's sequence: Clear held, a valid save queued, the old Submit's admitted discard queued behind it", async () => {
+    const { store, gate, lifecycle, scheduler, clear, directSave } = setupWithGate();
+    const old = open(scheduler);
+    old.update(snap("pre-Clear text"), { immediate: true });
+    await flush();
+
+    const release = (() => {
+      let done!: () => void;
+      const held = new Promise<void>((resolve) => {
+        done = resolve;
+      });
+      void gate.runShared(() => held); // an earlier mutation: Clear must wait for it
+      return done;
+    })();
+    const clearing = clear();
+    const saving = directSave("NEW_AFTER_CLEAR"); // queued behind the Clear
+    const submitWork = lifecycle.trackAdmitted(() => gate.runShared(async () => old.discardWithinAdmittedWork())); // behind it too
+    release();
+    await Promise.all([clearing, saving, submitWork]);
+    await flush();
+
+    expect(store.startsOf("delete")).toEqual([]);
+    expect((await store.stored(A))?.code).toBe("NEW_AFTER_CLEAR");
+  });
+
+  it("M6R1-4. a delete admitted BEFORE the Clear is neither cancelled nor reordered: it settles, then Clear clears", async () => {
+    const { store, scheduler, clear } = setupWithGate();
+    const draft = open(scheduler);
+    draft.update(snap("x"), { immediate: true });
+    await flush();
+    const deletion = store.hold("deleteMissionDraft");
+    const discarding = draft.discardWithinAdmittedWork();
+    await deletion.entered;
+
+    const clearing = clear();
+    await flush();
+    expect(store.events.filter((event) => event.startsWith("delete:"))).toEqual([`delete:start:${A}`]);
+    deletion.release();
+    await Promise.all([discarding, clearing]);
+    expect(store.events.slice(-2)).toEqual([`delete:start:${A}`, `delete:ok:${A}`].slice(-2));
+    expect(await store.stored(A)).toBeNull();
+  });
+
+  it("M6R1-5. a fresh handle opened after Clear saves and deletes its own draft normally", async () => {
+    const { store, scheduler, clear } = setupWithGate();
+    const old = open(scheduler);
+    await clear();
+    const fresh = open(scheduler);
+    fresh.update(snap("fresh work"), { immediate: true });
+    await flush();
+    expect((await store.stored(A))?.code).toBe("fresh work");
+
+    await old.discard(); // refused
+    expect((await store.stored(A))?.code).toBe("fresh work");
+    await fresh.discardWithinAdmittedWork(); // allowed
+    expect(await store.stored(A)).toBeNull();
+    expect(store.startsOf("delete")).toEqual([`delete:start:${A}`]);
+  });
+
+  it("M6R1-6. repeated Clears never reactivate a retired handle (generations are never reused)", async () => {
+    const { store, scheduler, clear, directSave } = setupWithGate();
+    const old = open(scheduler);
+    await clear();
+    await clear();
+    await clear();
+    const fresh = open(scheduler); // a new generation, not a recycled one
+    await directSave("NEW_AFTER_CLEAR");
+    await old.discard();
+    old.update(snap("old text"), { immediate: true });
+    old.close();
+    await flush();
+    expect(store.startsOf("delete")).toEqual([]);
+    expect(store.startsOf("save")).toEqual(["save:start:NEW_AFTER_CLEAR"]);
+    expect(statusKind(old)).toBe("closed");
+    expect(statusKind(fresh)).not.toBe("closed");
+    expect((await store.stored(A))?.code).toBe("NEW_AFTER_CLEAR");
+  });
+
+  it("M6R1-7. a FAILED Clear does not give the retired handle its authority back", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { store, scheduler, gate, directSave } = setupWithGate();
+    const old = open(scheduler);
+    scheduler.resetForClear();
+    const failure = new Error("clear failed");
+    await expect(gate.runExclusive(async () => Promise.reject(failure))).rejects.toBe(failure);
+
+    await directSave("VALID_DRAFT");
+    await old.discard();
+    await old.discardWithinAdmittedWork();
+    expect(store.startsOf("delete")).toEqual([]);
+    expect((await store.stored(A))?.code).toBe("VALID_DRAFT");
+  });
+
+  it("M6R1-8. isolation: a retired handle's delete never touches another activity or another scheduler (scope)", async () => {
+    const one = setupWithGate();
+    const two = setupWithGate();
+    const oldA = open(one.scheduler, A);
+    const otherScope = open(two.scheduler, A);
+    otherScope.update(snap("other scope"), { immediate: true });
+    await flush();
+    await one.clear();
+    const freshB = open(one.scheduler, B);
+    freshB.update(snap("activity B"), { immediate: true });
+    await flush();
+
+    await oldA.discardWithinAdmittedWork();
+    await oldA.discard();
+    expect((await one.store.stored(B))?.code).toBe("activity B");
+    expect((await two.store.stored(A))?.code).toBe("other scope");
+    expect(one.store.startsOf("delete")).toEqual([]);
+    expect(two.store.startsOf("delete")).toEqual([]);
+  });
+
+  it("M6R1-10. a delete the gate delayed is re-checked when it starts: retired meanwhile by a Clear or by a newer handle, it is skipped", async () => {
+    const { store, scheduler, gate, clear } = setupWithGate();
+    const release = (() => {
+      let done!: () => void;
+      const held = new Promise<void>((resolve) => {
+        done = resolve;
+      });
+      void gate.runExclusive(() => held); // a Clear is running
+      return done;
+    })();
+    const retiredByClear = open(scheduler, A);
+    const retiredByNewer = open(scheduler, B);
+    retiredByClear.update(snap("a"), { immediate: false });
+    const first = retiredByClear.discard(); // delayed behind the running Clear (still allowed at request time)
+    const second = retiredByNewer.discard(); // delayed too
+    await flush();
+    expect(store.startsOf("delete")).toEqual([]);
+    const retire = clear(); // a second Clear retires `retiredByClear` ...
+    const newerB = open(scheduler, B); // ... and a newer handle takes B over
+    newerB.update(snap("B, valid"), { immediate: true });
+    release();
+    await Promise.all([first, second, retire]);
+    await flush();
+    // Both delayed deletes were skipped when they finally started (no delete reached storage).
+    expect(store.startsOf("delete")).toEqual([]);
+  });
+
+  it("M6R1-9. no unhandled rejection, no leftover timer, and retirement still drains the admitted work", async () => {
+    const collector = unhandled.collect();
+    try {
+      const { store, scheduler, lifecycle, clear, directSave } = setupWithGate();
+      const old = open(scheduler);
+      old.update(snap("pre-Clear tail")); // timer armed
+      await clear();
+      expect(vi.getTimerCount()).toBe(0);
+      await directSave("NEW_AFTER_CLEAR");
+      const inFlight = store.hold("saveMissionDraft");
+      const fresh = open(scheduler);
+      fresh.update(snap("fresh, admitted"), { immediate: true });
+      await inFlight.entered;
+      lifecycle.beginRetirement();
+      const drained = lifecycle.waitForDrain(1000);
+      await old.discardWithinAdmittedWork(); // refused, resolves, holds nothing back
+      inFlight.release();
+      expect(await drained).toBe(true);
+      expect((await store.stored(A))?.code).toBe("fresh, admitted");
+    } finally {
+      collector.stop();
+    }
+    expect(collector.seen).toEqual([]);
   });
 });

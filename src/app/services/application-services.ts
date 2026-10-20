@@ -48,6 +48,7 @@ import {
   type DisposeApplicationServicesOptions,
 } from "./application-lifecycle";
 import { MissionDraftScheduler, type MissionDraftHandle } from "./mission-draft-scheduler";
+import { OperationGate } from "./operation-gate";
 import {
   admitted,
   MissionSessionRegistry,
@@ -247,9 +248,14 @@ export interface CreateApplicationServicesOptions {
  *  opens nothing) and drains the accepted ones. A passed Submit discards its draft
  *  inside the same admitted operation that stores the attempt. Resuming waits for
  *  the activity's earlier draft writes before it reads.
- *  NOT covered here: Clear-vs-Submit serialization (M6). `clearLearningData()`
- *  is not ordered against draft writes. Concurrency between other admitted
- *  operations is unchanged.
+ *  Clear vs everything else (PHASE-04C.3D.7, M6): `clearLearningData()` is the
+ *  EXCLUSIVE operation of an OperationGate (see operation-gate.ts); the Submit
+ *  persistence (attempt + reward + draft delete), the engines' mutations and the
+ *  draft writes are SHARED. Anything accepted before a Clear finishes first and
+ *  is then cleared; anything requested while a Clear runs or waits is delayed
+ *  until it is done and runs against the cleared store. Existing draft handles
+ *  are retired when a Clear is requested; sessions opened afterwards save
+ *  normally. Concurrency between shared operations is unchanged.
  */
 export function createApplicationServices(
   options: CreateApplicationServicesOptions = {},
@@ -262,13 +268,14 @@ export function createApplicationServices(
 
   const lifecycle = new ApplicationLifecycle();
   const sessions = new MissionSessionRegistry();
-  const drafts = new MissionDraftScheduler(persistence, lifecycle);
+  const gate = new OperationGate();
+  const drafts = new MissionDraftScheduler(persistence, lifecycle, undefined, gate);
   const content = new ContentRegistry();
   const generators = new GeneratorRegistry();
   const graders = new GraderRegistry();
   const hints = new HintRegistry();
-  const learning = new ServiceLearningEngine(persistence, lifecycle);
-  const metaProgression = new ServiceMetaProgressionEngine(metaPersistence, lifecycle);
+  const learning = new ServiceLearningEngine(persistence, lifecycle, gate);
+  const metaProgression = new ServiceMetaProgressionEngine(metaPersistence, lifecycle, gate);
   let initializePromise: Promise<void> | null = null;
   let disposal: Promise<ApplicationServicesDisposalResult> | null = null;
   let disposed: ApplicationServicesDisposalResult | null = null;
@@ -350,8 +357,12 @@ export function createApplicationServices(
 
   /** Reads the stored draft after every draft write already accepted for the activity has finished. */
   async function readMissionDraft(activityId: LearningActivityId) {
-    await drafts.settled(activityId);
-    return persistence.getMissionDraft(activityId);
+    // Shared on the OperationGate (M6): a Clear that is running or waiting finishes
+    // first, so a session opened around a Clear never resumes a draft it deleted.
+    return gate.runShared(async () => {
+      await drafts.settled(activityId);
+      return persistence.getMissionDraft(activityId);
+    });
   }
 
   async function openMissionSession(
@@ -512,11 +523,17 @@ export function createApplicationServices(
           // delete is started inside this operation (so it is drained) but not
           // awaited, so the Submit result is not held back by it.
           onAttemptRecord: (record) =>
-            lifecycle.trackAdmitted(async () => {
-              await admitted.learningRecordAttempt(learning, record);
-              await admitted.metaRecordAttempt(metaProgression, record);
-              if (record.passed) void missionDraft.discardWithinAdmittedWork();
-            }),
+            lifecycle.trackAdmitted(() =>
+              // Shared on the OperationGate (M6): a Clear requested earlier finishes
+              // first and this Submit is then stored on the cleared store; a Clear
+              // requested later waits for all of it. The steps below are the ungated
+              // base paths - the gate is taken once, by this outermost operation.
+              gate.runShared(async () => {
+                await admitted.learningRecordAttempt(learning, record);
+                await admitted.metaRecordAttempt(metaProgression, record);
+                if (record.passed) void missionDraft.discardWithinAdmittedWork();
+              }),
+            ),
         },
         (released) => sessions.release(released),
         retryRuntimeDispose,
@@ -672,11 +689,22 @@ export function createApplicationServices(
       // Admitted as one operation. Rejects with the startup error when
       // initialization failed: clearing must not run against half-initialized
       // engines.
-      return lifecycle.runDurable(async () => {
-        await initialize();
-        await admitted.learningClearAttempts(learning);
-        await persistence.clearMissionDrafts();
-        await admitted.metaClearAll(metaProgression);
+      return lifecycle.runDurable(() => {
+        // Synchronous, at request time: every existing draft handle steps down, so
+        // text typed before Clear (a debounce timer, an unsaved tail, a late close)
+        // can never be written afterwards. Handles opened after Clear are unaffected.
+        drafts.resetForClear();
+        // Exclusive (M6): starts when every earlier mutation has finished, blocks
+        // every later one until it is done. Steps are the ungated base paths.
+        return gate.runExclusive(async () => {
+          await initialize();
+          // Draft deletes/saves accepted earlier (including the detached delete of a
+          // passed Submit) finish before storage is cleared.
+          await drafts.settledAll();
+          await admitted.learningClearAttempts(learning);
+          await persistence.clearMissionDrafts();
+          await admitted.metaClearAll(metaProgression);
+        });
       });
     },
 
