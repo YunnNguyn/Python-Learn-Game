@@ -19,13 +19,52 @@
  *   while Guest names contain no ":"), nor a name of the other database family
  *   (the base name precedes the first ":").
  * - The learning and meta families both resolve the SAME scope value, each with
- *   its own base name, so one scope selects both databases.
+ *   its own base name, so one scope selects both databases. The `practice`
+ *   family (PHASE-05) resolves the same scope value with its own base name too.
  */
 
 export const GUEST_DATABASE_BASE_NAMES = {
   learning: "python-learn-game",
   meta: "python-learn-game-meta",
+  /**
+   * Reserved for practice-only storage (imported Exercise Packs, PHASE-05).
+   * It is served by the same schema owner as `learning` (see
+   * `IndexedDbLearningPersistence`), but it is a database of its own: nothing
+   * written to it is ever visible in, or counted by, the `learning` family.
+   */
+  practice: "python-learn-game-practice",
 } as const;
+
+/**
+ * The base names the Learning persistence class may open. This is a CLOSED set:
+ * `meta` is deliberately absent because that database has a different schema,
+ * and an arbitrary string could contain ":" (breaking the injectivity rule
+ * above, since Guest names must never contain ":") or collide with another
+ * family.
+ */
+export const LEARNING_DATABASE_BASE_NAMES = Object.freeze([
+  GUEST_DATABASE_BASE_NAMES.learning,
+  GUEST_DATABASE_BASE_NAMES.practice,
+] as const);
+
+export type LearningDatabaseBaseName = (typeof LEARNING_DATABASE_BASE_NAMES)[number];
+
+/** Thrown for a base name the Learning persistence class does not serve. Never echoes the value. */
+export class InvalidDatabaseBaseNameError extends Error {
+  constructor() {
+    super("Invalid database base name for Learning persistence.");
+    this.name = "InvalidDatabaseBaseNameError";
+  }
+}
+
+/** Throws InvalidDatabaseBaseNameError unless `value` is one of LEARNING_DATABASE_BASE_NAMES. */
+export function assertLearningDatabaseBaseName(
+  value: unknown,
+): asserts value is LearningDatabaseBaseName {
+  if (!(LEARNING_DATABASE_BASE_NAMES as readonly unknown[]).includes(value)) {
+    throw new InvalidDatabaseBaseNameError();
+  }
+}
 
 export const MAX_ACCOUNT_ID_LENGTH = 256;
 

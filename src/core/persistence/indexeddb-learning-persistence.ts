@@ -26,7 +26,9 @@ import {
 import {
   GUEST_DATABASE_BASE_NAMES,
   GUEST_SCOPE,
+  assertLearningDatabaseBaseName,
   resolveScopedDatabaseName,
+  type LearningDatabaseBaseName,
   type PersistenceScope,
 } from "./persistence-scope";
 
@@ -36,8 +38,20 @@ import {
  *  - v2: adds `attemptProvenance` (keyPath `attemptId`). Purely additive; no
  *        existing store, index or row is touched. Attempts without a provenance
  *        row (every v1 attempt, and every locally submitted one) are local.
+ *
+ * Schema ownership (PHASE-05, M7.0): this class's `onupgradeneeded` routine is
+ * the SINGLE owner of the schema of every database family it serves
+ * (`LEARNING_DATABASE_BASE_NAMES`: `learning` and `practice`). A store a family
+ * needs later (e.g. the planned `practicePacks`) must be added HERE, together
+ * with a version bump of THAT family only in `DATABASE_VERSIONS` - never by a
+ * second opener of the same database, which would race this one on the version
+ * number (VersionError / blocked upgrades). The `practice` family starts at the
+ * same schema as `learning` v2, which is created in one step on first open.
  */
-const DATABASE_VERSION = 2;
+const DATABASE_VERSIONS: Readonly<Record<LearningDatabaseBaseName, number>> = Object.freeze({
+  [GUEST_DATABASE_BASE_NAMES.learning]: 2,
+  [GUEST_DATABASE_BASE_NAMES.practice]: 2,
+});
 const ATTEMPT_STORE = "attempts";
 const DRAFT_STORE = "missionDrafts";
 const PROVENANCE_STORE = "attemptProvenance";
@@ -69,6 +83,15 @@ const AttemptProvenanceSchema = z.strictObject({
 
 type AttemptOutcome = "added" | "exists" | "conflict";
 
+export interface IndexedDbLearningPersistenceOptions {
+  /**
+   * Which database family to open. Omitted means `GUEST_DATABASE_BASE_NAMES.learning`
+   * - exactly the database every existing caller has always used. Anything outside
+   * `LEARNING_DATABASE_BASE_NAMES` throws InvalidDatabaseBaseNameError.
+   */
+  readonly databaseBaseName?: LearningDatabaseBaseName;
+}
+
 export class IndexedDbLearningPersistence implements LearningPersistence {
   readonly kind = "indexeddb" as const;
   /** The in-flight or established connection (test helpers read `handle.database` to close it). */
@@ -83,12 +106,22 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
 
   /** Resolved from `scope` at construction; an invalid scope throws here, never opens Guest. */
   readonly databaseName: string;
+  /** The database family this instance serves (default: the original Learning database). */
+  readonly databaseBaseName: LearningDatabaseBaseName;
+  private readonly databaseVersion: number;
 
   constructor(
     private readonly indexedDb: IDBFactory = indexedDB,
     scope: PersistenceScope = GUEST_SCOPE,
+    options: IndexedDbLearningPersistenceOptions = {},
   ) {
-    this.databaseName = resolveScopedDatabaseName(GUEST_DATABASE_BASE_NAMES.learning, scope);
+    // Only `undefined` selects the default; null or any other junk is validated (and rejected) below.
+    const baseName: unknown =
+      options.databaseBaseName === undefined ? GUEST_DATABASE_BASE_NAMES.learning : options.databaseBaseName;
+    assertLearningDatabaseBaseName(baseName);
+    this.databaseBaseName = baseName;
+    this.databaseVersion = DATABASE_VERSIONS[baseName];
+    this.databaseName = resolveScopedDatabaseName(baseName, scope);
   }
 
   async addAttempt(record: AttemptRecord): Promise<void> {
@@ -361,8 +394,11 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
     this.assertOpen();
     let handle = this.handle;
     if (handle === null) {
-      const created: OpenHandle = openDatabase(this.indexedDb, this.databaseName, () =>
-        this.forget(created),
+      const created: OpenHandle = openDatabase(
+        this.indexedDb,
+        this.databaseName,
+        this.databaseVersion,
+        () => this.forget(created),
       );
       created.database.catch(() => this.forget(created));
       this.handle = created;
@@ -452,7 +488,7 @@ function parseAndSortAttempts(values: readonly unknown[]): AttemptRecord[] {
 }
 
 /**
- * Opens the database at DATABASE_VERSION.
+ * Opens the database at the version of its family (DATABASE_VERSIONS).
  *
  * - Upgrades are additive (v0 -> v2 and v1 -> v2 both just create missing stores).
  * - If another connection (typically a tab running older code) does not close on
@@ -474,7 +510,12 @@ function parseAndSortAttempts(values: readonly unknown[]): AttemptRecord[] {
  *   before the close still runs as it would have (it is additive and was
  *   already queued by the browser); no data is touched by the retirement.
  */
-function openDatabase(indexedDb: IDBFactory, databaseName: string, onClosed: () => void): OpenHandle {
+function openDatabase(
+  indexedDb: IDBFactory,
+  databaseName: string,
+  databaseVersion: number,
+  onClosed: () => void,
+): OpenHandle {
   let rejectBlocked: (error: Error) => void = () => undefined;
   const blocked = new Promise<never>((_resolve, reject) => {
     rejectBlocked = reject;
@@ -490,7 +531,7 @@ function openDatabase(indexedDb: IDBFactory, databaseName: string, onClosed: () 
   const database = new Promise<IDBDatabase>((resolve, reject) => {
     let request: IDBOpenDBRequest;
     try {
-      request = indexedDb.open(databaseName, DATABASE_VERSION);
+      request = indexedDb.open(databaseName, databaseVersion);
     } catch (error) {
       // The factory threw synchronously, so no browser request exists and none
       // will ever fire a handler. The attempt is terminal right now: marking it

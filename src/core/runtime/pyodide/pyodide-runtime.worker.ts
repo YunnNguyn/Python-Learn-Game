@@ -21,6 +21,11 @@ import {
   type RuntimeSubmitResultWorkerResponse,
 } from "./worker-protocol";
 import { buildObservationExpression } from "./observation-helper";
+import {
+  isAllowedRuntimeConfigKey,
+  isAllowedRuntimePackage,
+  isSimpleDatasetFilename,
+} from "./runtime-config-rules";
 import { createPythonSetupNamespace } from "./setup-conversion";
 import { validateSetupKeys } from "./setup-validation";
 
@@ -202,22 +207,6 @@ type MissionNamespaceResult =
       readonly error: RuntimeSystemError;
     };
 
-// Pyodide packages enabled for production content. These all ship in the
-// Pyodide package index, so loadPackage can fetch them in the browser. The
-// Data/ML worlds (pandas, Matplotlib, Pillow, scikit-learn, OpenCV) run fully
-// in-browser through this runtime, which is what makes the app hostable as a
-// static site with no local service.
-const ALLOWED_RUNTIME_PACKAGES = new Set([
-  "numpy",
-  "pandas",
-  "matplotlib",
-  "pillow",
-  "scipy",
-  "scikit-learn",
-  "opencv-python",
-]);
-const ALLOWED_RUNTIME_CONFIG_KEYS = new Set(["packages", "workspace"]);
-
 async function ensureRuntimePackages(
   pyodide: PyodideInterface,
   runtimeConfig: JsonObject | undefined,
@@ -227,7 +216,7 @@ async function ensureRuntimePackages(
   }
 
   const unknownKey = Object.keys(runtimeConfig).find(
-    (key) => !ALLOWED_RUNTIME_CONFIG_KEYS.has(key),
+    (key) => !isAllowedRuntimeConfigKey(key),
   );
   if (unknownKey !== undefined) {
     return {
@@ -255,7 +244,7 @@ async function ensureRuntimePackages(
 
   const requestedPackages = [...new Set(packages as string[])];
   const unsupported = requestedPackages.filter(
-    (packageName) => !ALLOWED_RUNTIME_PACKAGES.has(packageName.toLowerCase()),
+    (packageName) => !isAllowedRuntimePackage(packageName),
   );
   if (unsupported.length > 0) {
     return {
@@ -281,8 +270,6 @@ async function ensureRuntimePackages(
     };
   }
 }
-
-const SIMPLE_FILENAME = /^[A-Za-z0-9._-]+$/;
 
 // Stage trusted inline datasets into the Pyodide virtual filesystem and reset
 // artifacts/, mirroring the Local Python workspace contract: before each
@@ -336,7 +323,7 @@ function stageMissionWorkspace(
       };
     }
     const filename = (entry as JsonObject).filename as string;
-    if (!SIMPLE_FILENAME.test(filename)) {
+    if (!isSimpleDatasetFilename(filename)) {
       return {
         code: "INVALID_DATASETS",
         message: `Tên dataset không hợp lệ: ${filename}.`,

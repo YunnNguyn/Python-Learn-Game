@@ -15,28 +15,19 @@ import {
 } from "../../core/domain";
 import { GeneratorRegistry } from "../../core/generators";
 import { GraderRegistry, registerCoreGraders } from "../../core/grading";
-import { HintEngine, HintRegistry } from "../../core/hints";
-import type { LearningEngine, MissionAttemptSession } from "../../core/learning";
+import { HintRegistry } from "../../core/hints";
+import type { LearningEngine } from "../../core/learning";
 import {
   createBrowserMetaProgressionPersistence,
   type MetaProgressionEngine,
 } from "../../core/meta-progression";
-import { generateMissionInstance, MissionEngine } from "../../core/missions";
-import {
-  createBrowserLearningPersistence,
-  type LearningPersistence,
-  type PersistenceScope,
-} from "../../core/persistence";
-import {
-  CORE_RUNTIME_ID,
-  type RuntimeSystemError,
-  type RuntimeWorkspaceInfo,
-} from "../../core/runtime";
+import { generateMissionInstance } from "../../core/missions";
+import { createBrowserLearningPersistence, type PersistenceScope } from "../../core/persistence";
+import { CORE_RUNTIME_ID } from "../../core/runtime";
 import { createLocalPythonRuntimeManager } from "../../core/runtime/local-python";
 import { createPyodideRuntimeManager } from "../../core/runtime/pyodide";
 import { getActivityAccess } from "../learning-path";
 import {
-  APPLICATION_SERVICES_RETIRED,
   ApplicationLifecycle,
   ApplicationServicesRetiredError,
   isApplicationServicesRetiredError,
@@ -47,35 +38,26 @@ import {
   type ApplicationServicesDisposalResult,
   type DisposeApplicationServicesOptions,
 } from "./application-lifecycle";
-import { MissionDraftScheduler, type MissionDraftHandle } from "./mission-draft-scheduler";
+import { MissionDraftScheduler } from "./mission-draft-scheduler";
 import { OperationGate } from "./operation-gate";
 import {
   admitted,
   MissionSessionRegistry,
   ServiceLearningEngine,
   ServiceMetaProgressionEngine,
-  ServiceOwnedMissionSession,
 } from "./service-owned-resources";
+import {
+  failure,
+  openResolvedMissionSession,
+  retiredFailure,
+  type CreateMissionSessionResult,
+  type PlayableMissionSession,
+} from "./resolved-mission-session";
 
 const PENDING_INITIALIZATION: ApplicationInitializationState = Object.freeze({
   status: "pending",
 });
 const READY_INITIALIZATION: ApplicationInitializationState = Object.freeze({ status: "ready" });
-
-export interface PlayableMissionSession {
-  readonly session: MissionAttemptSession;
-  /**
-   * This session's draft (M5): the debounce timer, ordered writes and save status
-   * live here, owned by the service set - not by the page. The session closes it
-   * when it is disposed, and a passed Submit discards it. The page only feeds it
-   * the latest editor state.
-   */
-  readonly draft: MissionDraftHandle;
-  readonly initialCode: string;
-  readonly variantIndex: number;
-  readonly resumedDraft: boolean;
-  readonly initialWorkspace?: RuntimeWorkspaceInfo;
-}
 
 export interface CreateMissionSessionOptions {
   readonly seed?: string;
@@ -84,9 +66,9 @@ export interface CreateMissionSessionOptions {
   readonly resetCode?: boolean;
 }
 
-export type CreateMissionSessionResult =
-  | { readonly ok: true; readonly value: PlayableMissionSession }
-  | { readonly ok: false; readonly error: RuntimeSystemError };
+// Defined next to the opening phase that produces them (PHASE-05-M7.0); re-exported
+// here so every existing import path keeps working.
+export type { CreateMissionSessionResult, PlayableMissionSession };
 
 /**
  * Observable result of startup (see `createApplicationServices`). `failed` is
@@ -461,102 +443,36 @@ export function createApplicationServices(
         "Mission đang yêu cầu một Python runtime mà ứng dụng chưa hỗ trợ.",
       );
     }
-    // MissionEngine/MissionAttemptSession mark themselves disposed before they
-    // tear the runtime down, so a retry after a failed teardown goes straight to
-    // the runtime (idempotent by its own contract).
-    const retryRuntimeDispose = () => runtime.dispose();
-    // The load is tracked from the moment its engine exists until the load AND the
-    // cleanup that follows it have settled - not merely while the engine sits in the
-    // registry. Retirement disposes the engine at once, but this continuation still
-    // runs later; `dispose()` waits for it (bounded) before closing persistence or
-    // reporting `disposed`, so a cleanup failure here decides the disposal outcome.
     // No `await` separates the last `isActive()` check above from this call, so a
-    // load can only start while the set is active.
-    return lifecycle.trackLoad(async (): Promise<CreateMissionSessionResult> => {
-      const engine = new MissionEngine(runtime, graders);
-      // Owned while loading: retirement disposes it even before a session exists.
-      sessions.trackLoading(engine, retryRuntimeDispose);
-      let loaded;
-      try {
-        loaded = await engine.loadMission(template, instance);
-      } catch (error) {
-        // A failing cleanup is retained by the registry; it never replaces `error`.
-        sessions.discardEngine(engine, retryRuntimeDispose);
-        throw error;
-      } finally {
-        sessions.untrackLoading(engine);
-      }
-      if (!lifecycle.isActive()) {
-        // Late completion after retirement: never hand out a session.
-        sessions.discardEngine(engine, retryRuntimeDispose);
-        return retiredFailure();
-      }
-      if (!loaded.ok) {
-        sessions.discardEngine(engine, retryRuntimeDispose);
-        return { ok: false, error: loaded.error };
-      }
-
-      const resumedDraft =
-        !options.resetCode && draft !== null && draft.seed === seed;
-      // Opened here, synchronously with the session, so it is the newest draft
-      // handle of this activity from the moment the session exists.
-      const missionDraft = drafts.open({
-        activityId: activity.id,
-        seed,
-        variantIndex,
-        persisted: resumedDraft ? { code: draft.code, hintsUsed: draft.hintsUsed } : null,
-      });
-      const session = new ServiceOwnedMissionSession(
+    // load can only start while the set is active (openResolvedMissionSession awaits
+    // nothing before it tracks the load either).
+    return openResolvedMissionSession(
+      {
+        lifecycle,
+        gate,
+        drafts,
+        sessions,
+        graders,
+        // The CS116 Submit path: attempt, then reward (both base paths; the helper
+        // admits the operation and holds the gate). Every other caller of the helper
+        // must pass its own callback.
+        recordSubmittedAttempt: async (record) => {
+          await admitted.learningRecordAttempt(learning, record);
+          await admitted.metaRecordAttempt(metaProgression, record);
+        },
+      },
+      {
         activity,
         template,
         instance,
-        engine,
-        {
-          hintEngine: new HintEngine(hintSet ?? null, resumedDraftHintLevels(draft, seed)),
-          // Called only once a Submit crossed the M1 durable-write boundary, i.e.
-          // while this session was not disposed - and retirement disposes every
-          // owned session synchronously first, so the set was still active. The
-          // attempt and its reward are one admitted operation: a retirement that
-          // begins between the two writes cannot split them, and the drain waits.
-          // A PASSED attempt also invalidates the draft, here and only after both
-          // writes succeeded: a failed Submit keeps the learner's draft. The
-          // delete is started inside this operation (so it is drained) but not
-          // awaited, so the Submit result is not held back by it.
-          onAttemptRecord: (record) =>
-            lifecycle.trackAdmitted(() =>
-              // Shared on the OperationGate (M6): a Clear requested earlier finishes
-              // first and this Submit is then stored on the cleared store; a Clear
-              // requested later waits for all of it. The steps below are the ungated
-              // base paths - the gate is taken once, by this outermost operation.
-              gate.runShared(async () => {
-                await admitted.learningRecordAttempt(learning, record);
-                await admitted.metaRecordAttempt(metaProgression, record);
-                if (record.passed) void missionDraft.discardWithinAdmittedWork();
-              }),
-            ),
-        },
-        (released) => sessions.release(released),
-        retryRuntimeDispose,
-        missionDraft,
-      );
-      sessions.register(session);
-      const starterCode =
-        instance.learner.starterCode ?? template.starterCode ?? "# Viết mã Python tại đây\n";
-
-      return {
-        ok: true,
-        value: {
-          session,
-          draft: missionDraft,
-          initialCode: resumedDraft ? draft.code : starterCode,
-          variantIndex,
-          resumedDraft,
-          ...(loaded.workspace !== undefined
-            ? { initialWorkspace: loaded.workspace }
-            : {}),
-        },
-      };
-    });
+        seed,
+        variantIndex,
+        hintSet,
+        runtime,
+        storedDraft: draft,
+        resetCode: Boolean(options.resetCode),
+      },
+    );
   }
 
   /**
@@ -745,14 +661,6 @@ export function createApplicationServices(
   };
 }
 
-function retiredFailure(): CreateMissionSessionResult {
-  return failure(
-    APPLICATION_SERVICES_RETIRED,
-    "Phiên dữ liệu học tập này đã đóng nên không thể mở bài thực hành. Hãy tải lại trang.",
-  );
-}
-
-
 // Heavy Pyodide packages (pandas, Matplotlib, scikit-learn, OpenCV) can take
 // several seconds to import the first time in a fresh namespace, especially on
 // modest machines, so Data/ML missions need a much longer execution deadline
@@ -791,13 +699,6 @@ function createRuntimeManager(template: MissionTemplate) {
   return null;
 }
 
-function resumedDraftHintLevels(
-  draft: Awaited<ReturnType<LearningPersistence["getMissionDraft"]>>,
-  seed: string,
-) {
-  return draft?.seed === seed ? draft.hintsUsed : [];
-}
-
 export function deriveActivityVariantSeed(
   activityId: LearningActivityId,
   templateVersion: number,
@@ -808,10 +709,6 @@ export function deriveActivityVariantSeed(
   }
 
   return `play:${activityId}:v${templateVersion}:variant:${variantIndex}`;
-}
-
-function failure(code: string, message: string): CreateMissionSessionResult {
-  return { ok: false, error: { code, message } };
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
