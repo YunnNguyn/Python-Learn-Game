@@ -37,3 +37,24 @@ export { useApplicationInitialization } from "./use-application-initialization";
 export { useLearningProgress } from "./use-learning-progress";
 
 export { useMetaProgression } from "./use-meta-progression";
+
+export { createPracticeServices } from "./practice-services";
+export type {
+  CreatePracticeServicesOptions,
+  CreatePracticeSessionOptions,
+  InstallPracticePackOutcome,
+  PracticeCatalog,
+  PracticeCorruptPack,
+  PracticeDifficulty,
+  PracticeDisposalResult,
+  PracticeExerciseDetail,
+  PracticeExerciseSummary,
+  PracticePackDetail,
+  PracticePackSummary,
+  PracticeProgressSummary,
+  PracticeReadError,
+  PracticeReadErrorCode,
+  PracticeReadResult,
+  PracticeServices,
+} from "./practice-services";
+export { PracticeServicesProvider, usePracticeServices } from "./PracticeServicesContext";

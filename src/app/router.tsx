@@ -5,6 +5,7 @@ import { CoursePage, LearnPage } from "../features/course";
 import { DebugPage } from "../features/debug";
 import { HomePage } from "../features/home";
 import { LessonPage } from "../features/lesson";
+import { PracticeHomePage, PracticePackPage } from "../features/practice";
 import { SettingsPage } from "../features/settings";
 import { RobotWorkshopPage } from "../features/workshop";
 import { AppLayout } from "./AppLayout";
@@ -42,6 +43,22 @@ export const appRouter = createBrowserRouter([
           const { MissionWorkspacePage } = await import("../features/mission-workspace");
 
           return { Component: MissionWorkspacePage };
+        },
+      },
+      {
+        path: "practice",
+        element: <PracticeHomePage />,
+      },
+      {
+        path: "practice/:packId",
+        element: <PracticePackPage />,
+      },
+      {
+        path: "practice/:packId/:exerciseId",
+        lazy: async () => {
+          const { PracticeExercisePage } = await import("../features/practice/PracticeExercisePage");
+
+          return { Component: PracticeExercisePage };
         },
       },
       {

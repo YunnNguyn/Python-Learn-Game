@@ -11,9 +11,17 @@ import {
   ImportRequiresDurableStorageError,
   PersistenceClosedError,
   PersistenceDomainError,
+  PracticePackRequiresDurableStorageError,
 } from "./persistence-errors";
+import {
+  isPracticePackStore,
+  type InstallPracticePackResult,
+  type PracticePackListing,
+  type PracticePackRecord,
+  type PracticePackStore,
+} from "./practice-pack-store";
 
-export class ResilientLearningPersistence implements LearningPersistence {
+export class ResilientLearningPersistence implements LearningPersistence, PracticePackStore {
   private readonly fallback = new MemoryLearningPersistence();
   private failedOver = false;
   /** Set synchronously by close(); never reset. Checked again on the failover path. */
@@ -88,6 +96,37 @@ export class ResilientLearningPersistence implements LearningPersistence {
 
   clearAll(): Promise<void> {
     return this.execute((store) => store.clearAll());
+  }
+
+  /**
+   * Practice packs FAIL CLOSED, install and reads alike, and never touch the memory
+   * fallback or flip `failedOver`: a pack is durable content, and a fallback that
+   * returned an empty list would make installed packs look lost. Domain errors
+   * (invalid record, closed, blocked upgrade, unsupported family) pass through;
+   * any other primary failure - or a primary that has no pack store - is reported
+   * as PracticePackRequiresDurableStorageError with the cause attached.
+   */
+  installPracticePackIfAbsent(record: PracticePackRecord): Promise<InstallPracticePackResult> {
+    return this.practicePackOperation((store) => store.installPracticePackIfAbsent(record));
+  }
+
+  getPracticePack(packId: string): Promise<PracticePackRecord | null> {
+    return this.practicePackOperation((store) => store.getPracticePack(packId));
+  }
+
+  listPracticePacks(): Promise<PracticePackListing> {
+    return this.practicePackOperation((store) => store.listPracticePacks());
+  }
+
+  private async practicePackOperation<T>(operation: (store: PracticePackStore) => Promise<T>): Promise<T> {
+    if (this.closed) throw new PersistenceClosedError();
+    if (!isPracticePackStore(this.primary)) throw new PracticePackRequiresDurableStorageError();
+    try {
+      return await operation(this.primary);
+    } catch (error) {
+      if (error instanceof PersistenceDomainError) throw error;
+      throw new PracticePackRequiresDurableStorageError({ cause: error });
+    }
   }
 
   /**

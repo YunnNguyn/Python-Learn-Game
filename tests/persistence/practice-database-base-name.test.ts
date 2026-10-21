@@ -147,7 +147,7 @@ describe("practice database base name (M7.0 Task A)", () => {
   });
 
   describe("storage behavior", () => {
-    it("opens the practice database lazily with the same v2 layout, and nothing else", async () => {
+    it("opens the practice database lazily at v3: the v2 layout plus practicePacks, and nothing else", async () => {
       const factory = idb.createFactory();
       const practice = idb.track(
         new IndexedDbLearningPersistence(factory, undefined, { databaseBaseName: GUEST_DATABASE_BASE_NAMES.practice }),
@@ -157,10 +157,12 @@ describe("practice database base name (M7.0 Task A)", () => {
 
       expect(await databaseNames(factory)).toEqual([PRACTICE]);
       const schema = await rawDescribeSchema(factory, PRACTICE);
-      expect(schema.version).toBe(2);
-      expect(Object.keys(schema.stores).sort()).toEqual(V2_STORES);
-      // No `practicePacks` store yet (explicitly out of scope for M7.0).
-      expect(schema.stores).not.toHaveProperty("practicePacks");
+      // PHASE-05-M7 contract change (approved by the M7 brief): ONLY the practice family
+      // moved from v2 to v3, to add the `practicePacks` store through the same upgrade owner.
+      expect(schema.version).toBe(3);
+      expect(Object.keys(schema.stores).sort()).toEqual([...V2_STORES, "practicePacks"].sort());
+      // The learning-layout stores are byte-for-byte the v2 layout.
+      for (const name of V2_STORES) expect(schema.stores).toHaveProperty(name);
     });
 
     it("keeps the learning database at v2 with unchanged stores when used by existing callers", async () => {

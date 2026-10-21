@@ -121,3 +121,38 @@ export class PersistenceClosedError extends PersistenceDomainError {
     this.name = "PersistenceClosedError";
   }
 }
+
+/** `installPracticePackIfAbsent` was given a record that fails PracticePackRecordSchema, or a stored row is unreadable. */
+export class InvalidPracticePackRecordError extends PersistenceDomainError {
+  readonly issues: readonly string[];
+
+  constructor(issues: readonly string[]) {
+    super(`Invalid practice pack record: ${issues.join("; ")}`);
+    this.name = "InvalidPracticePackRecordError";
+    this.issues = issues;
+  }
+}
+
+/**
+ * Practice data may only be written to, and is only read from, durable storage.
+ * Thrown when the store is volatile (memory), when the database is unusable, or
+ * when it failed during the operation - so a pack is never silently kept only in
+ * RAM, and an empty list is never shown for packs that exist on disk. The
+ * durable-only practice store (R1) also uses it for attempts and drafts when
+ * IndexedDB does not exist at all.
+ */
+export class PracticePackRequiresDurableStorageError extends PersistenceDomainError {
+  constructor(options?: { readonly cause?: unknown }) {
+    super("Practice data requires durable IndexedDB storage.");
+    this.name = "PracticePackRequiresDurableStorageError";
+    if (options?.cause !== undefined) this.cause = options.cause;
+  }
+}
+
+/** A practice pack operation was called on a database family that has no `practicePacks` store. */
+export class PracticePackStoreNotSupportedError extends PersistenceDomainError {
+  constructor() {
+    super("This database family does not store practice packs.");
+    this.name = "PracticePackStoreNotSupportedError";
+  }
+}

@@ -134,6 +134,7 @@ function setup(recordSubmittedAttempt: (record: AttemptRecord) => Promise<void> 
     runtime,
     storedDraft: null,
     resetCode: false,
+    opening: drafts.beginOpening(missionId),
   };
   return { persistence, lifecycle, gate, drafts, sessions, dependencies, runtime, input };
 }

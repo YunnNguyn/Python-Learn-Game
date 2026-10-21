@@ -38,7 +38,8 @@ import {
   type ApplicationServicesDisposalResult,
   type DisposeApplicationServicesOptions,
 } from "./application-lifecycle";
-import { MissionDraftScheduler } from "./mission-draft-scheduler";
+import { MissionDraftScheduler, type MissionOpening } from "./mission-draft-scheduler";
+import { pyodideExecutionTimeoutMs } from "./pyodide-execution-timeout";
 import { OperationGate } from "./operation-gate";
 import {
   admitted,
@@ -350,6 +351,7 @@ export function createApplicationServices(
   async function openMissionSession(
     activityId: string,
     options: CreateMissionSessionOptions,
+    opening: MissionOpening,
   ): Promise<CreateMissionSessionResult> {
     try {
       await initialize();
@@ -471,6 +473,7 @@ export function createApplicationServices(
         runtime,
         storedDraft: draft,
         resetCode: Boolean(options.resetCode),
+        opening,
       },
     );
   }
@@ -581,8 +584,11 @@ export function createApplicationServices(
 
     async createMissionSession(activityId, options = {}) {
       if (!lifecycle.isActive()) return retiredFailure();
+      // The opening ticket is taken NOW, synchronously, before the first await (M7-R2): the newest
+      // request owns the activity whatever order the resolutions and loads finish in.
+      const opening = drafts.beginOpening(activityId as LearningActivityId);
       try {
-        return await openMissionSession(activityId, options);
+        return await openMissionSession(activityId, options, opening);
       } catch (error) {
         if (!lifecycle.isActive()) return retiredFailure();
         console.error("Mission session could not be created.", error);
@@ -659,32 +665,6 @@ export function createApplicationServices(
       return current;
     },
   };
-}
-
-// Heavy Pyodide packages (pandas, Matplotlib, scikit-learn, OpenCV) can take
-// several seconds to import the first time in a fresh namespace, especially on
-// modest machines, so Data/ML missions need a much longer execution deadline
-// than the light NumPy exercises. We widen the timeout only for missions that
-// actually request those packages (or stage a dataset workspace); plain NumPy
-// missions keep a snappy deadline so infinite loops recover quickly.
-const PYODIDE_LIGHT_TIMEOUT_MS = 15_000;
-const PYODIDE_HEAVY_TIMEOUT_MS = 60_000;
-
-function pyodideExecutionTimeoutMs(template: MissionTemplate): number {
-  const config = template.runtime.config;
-  if (config === undefined) {
-    return PYODIDE_LIGHT_TIMEOUT_MS;
-  }
-  const packages = Array.isArray(config.packages)
-    ? (config.packages as unknown[])
-    : [];
-  const hasHeavyPackage = packages.some(
-    (name) => typeof name === "string" && name.toLowerCase() !== "numpy",
-  );
-  const hasWorkspace = config.workspace !== undefined;
-  return hasHeavyPackage || hasWorkspace
-    ? PYODIDE_HEAVY_TIMEOUT_MS
-    : PYODIDE_LIGHT_TIMEOUT_MS;
 }
 
 function createRuntimeManager(template: MissionTemplate) {

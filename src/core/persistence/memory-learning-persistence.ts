@@ -11,9 +11,16 @@ import {
   DuplicateAttemptError,
   ImportRequiresDurableStorageError,
   PersistenceClosedError,
+  PracticePackRequiresDurableStorageError,
 } from "./persistence-errors";
+import type {
+  InstallPracticePackResult,
+  PracticePackListing,
+  PracticePackRecord,
+  PracticePackStore,
+} from "./practice-pack-store";
 
-export class MemoryLearningPersistence implements LearningPersistence {
+export class MemoryLearningPersistence implements LearningPersistence, PracticePackStore {
   readonly kind = "memory" as const;
   private readonly attempts = new Map<string, AttemptRecord>();
   private readonly drafts = new Map<LearningActivityId, MissionDraftRecord>();
@@ -101,6 +108,26 @@ export class MemoryLearningPersistence implements LearningPersistence {
     this.assertOpen();
     this.attempts.clear();
     this.drafts.clear();
+  }
+
+  /**
+   * Practice packs are never kept in memory: an installed pack that vanishes on
+   * reload would be worse than a refused install. All three fail closed, reads
+   * included, so an empty list is never shown in place of packs stored on disk.
+   */
+  async installPracticePackIfAbsent(_record: PracticePackRecord): Promise<InstallPracticePackResult> {
+    this.assertOpen();
+    throw new PracticePackRequiresDurableStorageError();
+  }
+
+  async getPracticePack(_packId: string): Promise<PracticePackRecord | null> {
+    this.assertOpen();
+    throw new PracticePackRequiresDurableStorageError();
+  }
+
+  async listPracticePacks(): Promise<PracticePackListing> {
+    this.assertOpen();
+    throw new PracticePackRequiresDurableStorageError();
   }
 
   close(): Promise<void> {

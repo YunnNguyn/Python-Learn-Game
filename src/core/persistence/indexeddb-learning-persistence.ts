@@ -18,11 +18,22 @@ import {
 import {
   AttemptProvenanceUnreadableError,
   DuplicateAttemptError,
+  InvalidPracticePackRecordError,
   PersistenceClosedError,
   PersistenceDomainError,
   PersistenceUpgradeBlockedError,
   PersistenceUpgradeFailureReason,
+  PracticePackStoreNotSupportedError,
 } from "./persistence-errors";
+import {
+  MAX_INSTALLED_PRACTICE_PACKS,
+  parsePracticePackRecord,
+  PracticePackRecordSchema,
+  type InstallPracticePackResult,
+  type PracticePackListing,
+  type PracticePackRecord,
+  type PracticePackStore,
+} from "./practice-pack-store";
 import {
   GUEST_DATABASE_BASE_NAMES,
   GUEST_SCOPE,
@@ -38,23 +49,28 @@ import {
  *  - v2: adds `attemptProvenance` (keyPath `attemptId`). Purely additive; no
  *        existing store, index or row is touched. Attempts without a provenance
  *        row (every v1 attempt, and every locally submitted one) are local.
+ *  - practice v3 (PHASE-05-M7): the `practice` family only. Adds `practicePacks`
+ *        (keyPath `packId`) - imported Exercise Packs. Purely additive. The
+ *        `learning` family stays at v2 and never gets this store.
  *
  * Schema ownership (PHASE-05, M7.0): this class's `onupgradeneeded` routine is
  * the SINGLE owner of the schema of every database family it serves
  * (`LEARNING_DATABASE_BASE_NAMES`: `learning` and `practice`). A store a family
- * needs later (e.g. the planned `practicePacks`) must be added HERE, together
- * with a version bump of THAT family only in `DATABASE_VERSIONS` - never by a
- * second opener of the same database, which would race this one on the version
- * number (VersionError / blocked upgrades). The `practice` family starts at the
- * same schema as `learning` v2, which is created in one step on first open.
+ * needs is added HERE, together with a version bump of THAT family only in
+ * `DATABASE_VERSIONS` - never by a second opener of the same database, which
+ * would race this one on the version number (VersionError / blocked upgrades).
+ * `practicePacks` (M7) is exactly that: created below for the `practice` family
+ * only, which moved from v2 to v3 to get it. A practice database still at v2
+ * (opened by M7.0 code) upgrades in place; a fresh one is created at v3 in one step.
  */
 const DATABASE_VERSIONS: Readonly<Record<LearningDatabaseBaseName, number>> = Object.freeze({
   [GUEST_DATABASE_BASE_NAMES.learning]: 2,
-  [GUEST_DATABASE_BASE_NAMES.practice]: 2,
+  [GUEST_DATABASE_BASE_NAMES.practice]: 3,
 });
 const ATTEMPT_STORE = "attempts";
 const DRAFT_STORE = "missionDrafts";
 const PROVENANCE_STORE = "attemptProvenance";
+const PACK_STORE = "practicePacks";
 
 /**
  * Browsers fire `blocked` as soon as ANY other connection is still open, which
@@ -92,7 +108,7 @@ export interface IndexedDbLearningPersistenceOptions {
   readonly databaseBaseName?: LearningDatabaseBaseName;
 }
 
-export class IndexedDbLearningPersistence implements LearningPersistence {
+export class IndexedDbLearningPersistence implements LearningPersistence, PracticePackStore {
   readonly kind = "indexeddb" as const;
   /** The in-flight or established connection (test helpers read `handle.database` to close it). */
   private handle: OpenHandle | null = null;
@@ -109,6 +125,8 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
   /** The database family this instance serves (default: the original Learning database). */
   readonly databaseBaseName: LearningDatabaseBaseName;
   private readonly databaseVersion: number;
+  /** Only the practice family has the `practicePacks` store. */
+  private readonly hasPracticePackStore: boolean;
 
   constructor(
     private readonly indexedDb: IDBFactory = indexedDB,
@@ -121,6 +139,7 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
     assertLearningDatabaseBaseName(baseName);
     this.databaseBaseName = baseName;
     this.databaseVersion = DATABASE_VERSIONS[baseName];
+    this.hasPracticePackStore = baseName === GUEST_DATABASE_BASE_NAMES.practice;
     this.databaseName = resolveScopedDatabaseName(baseName, scope);
   }
 
@@ -363,6 +382,10 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
     await done;
   }
 
+  /**
+   * Clears learner PROGRESS (attempts, provenance, drafts). It deliberately does
+   * not list `practicePacks`: installed Exercise Packs are content, not progress.
+   */
   async clearAll(): Promise<void> {
     this.assertOpen();
     const database = await this.getDatabase();
@@ -375,6 +398,126 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
     transaction.objectStore(PROVENANCE_STORE).clear();
     transaction.objectStore(DRAFT_STORE).clear();
     await done;
+  }
+
+  /**
+   * Durable, atomic, idempotent install of an Exercise Pack (practice family only).
+   *
+   * ONE readwrite transaction on `practicePacks`: look the id up; if absent, count
+   * the installed packs and add (all inside the lookup's success callback, so the
+   * transaction never idles across unrelated async work); if present, compare the
+   * stored content hash. IndexedDB serializes overlapping readwrite transactions on
+   * the store - in this tab and across tabs - so concurrent installs cannot
+   * interleave between the lookup and the add, and the pack limit cannot be
+   * overshot. Nothing is ever overwritten: a different content for an existing id
+   * is a `conflict` result.
+   *
+   * The record is validated before any storage access. A failed or aborted
+   * transaction commits nothing.
+   */
+  async installPracticePackIfAbsent(record: PracticePackRecord): Promise<InstallPracticePackResult> {
+    this.assertOpen();
+    this.assertPracticePackStore();
+    const parsedRecord = PracticePackRecordSchema.safeParse(record);
+    if (!parsedRecord.success) {
+      throw new InvalidPracticePackRecordError(parsedRecord.error.issues.map((entry) => entry.message));
+    }
+    const incoming = parsedRecord.data as PracticePackRecord;
+
+    const database = await this.getDatabase();
+    const transaction = this.beginTransaction(database, PACK_STORE, "readwrite");
+    const done = transactionDone(transaction);
+    const store = transaction.objectStore(PACK_STORE);
+
+    const state: { result?: InstallPracticePackResult; failure?: unknown } = {};
+    const fail = (error: unknown) => {
+      state.failure = error;
+      transaction.abort();
+    };
+    const lookup = store.get(incoming.packId);
+    lookup.onsuccess = () => {
+      try {
+        if (lookup.result !== undefined) {
+          const existing = parsePracticePackRecord(lookup.result);
+          if (existing !== undefined && existing.contentHash === incoming.contentHash) {
+            state.result = { status: "already-installed" };
+          } else {
+            state.result = {
+              status: "conflict",
+              existingPackVersion: existing?.packVersion ?? null,
+              existingContentHash: existing?.contentHash ?? null,
+            };
+          }
+          return;
+        }
+        const counted = store.count();
+        counted.onsuccess = () => {
+          try {
+            if (counted.result >= MAX_INSTALLED_PRACTICE_PACKS) {
+              state.result = { status: "limit-reached", limit: MAX_INSTALLED_PRACTICE_PACKS };
+              return;
+            }
+            store.add(structuredClone(incoming));
+            state.result = { status: "installed" };
+          } catch (error) {
+            fail(error);
+          }
+        };
+      } catch (error) {
+        fail(error);
+      }
+    };
+
+    try {
+      await done;
+    } catch (error) {
+      throw state.failure ?? error;
+    }
+    if (state.result === undefined) {
+      throw new Error("IndexedDB practice pack install finished without an outcome.");
+    }
+    return state.result;
+  }
+
+  async getPracticePack(packId: string): Promise<PracticePackRecord | null> {
+    this.assertOpen();
+    this.assertPracticePackStore();
+    const database = await this.getDatabase();
+    const transaction = this.beginTransaction(database, PACK_STORE, "readonly");
+    const [raw] = await Promise.all([
+      requestResult<unknown>(transaction.objectStore(PACK_STORE).get(packId)),
+      transactionDone(transaction),
+    ]);
+    if (raw === undefined) return null;
+    const record = parsePracticePackRecord(raw);
+    if (record === undefined) throw new InvalidPracticePackRecordError(["stored row is unreadable"]);
+    return record;
+  }
+
+  async listPracticePacks(): Promise<PracticePackListing> {
+    this.assertOpen();
+    this.assertPracticePackStore();
+    const database = await this.getDatabase();
+    const transaction = this.beginTransaction(database, PACK_STORE, "readonly");
+    const [rows] = await Promise.all([
+      requestResult<unknown[]>(transaction.objectStore(PACK_STORE).getAll()),
+      transactionDone(transaction),
+    ]);
+    const records: PracticePackRecord[] = [];
+    let unreadableCount = 0;
+    for (const row of rows) {
+      const record = parsePracticePackRecord(row);
+      if (record === undefined) unreadableCount += 1;
+      else records.push(record);
+    }
+    records.sort(
+      (left, right) => left.installedAt.localeCompare(right.installedAt) || left.packId.localeCompare(right.packId),
+    );
+    return { records, unreadableCount };
+  }
+
+  private assertPracticePackStore(): void {
+    if (!this.hasPracticePackStore) throw new PracticePackStoreNotSupportedError();
   }
 
   /**
@@ -398,6 +541,7 @@ export class IndexedDbLearningPersistence implements LearningPersistence {
         this.indexedDb,
         this.databaseName,
         this.databaseVersion,
+        this.hasPracticePackStore,
         () => this.forget(created),
       );
       created.database.catch(() => this.forget(created));
@@ -514,6 +658,7 @@ function openDatabase(
   indexedDb: IDBFactory,
   databaseName: string,
   databaseVersion: number,
+  withPracticePacks: boolean,
   onClosed: () => void,
 ): OpenHandle {
   let rejectBlocked: (error: Error) => void = () => undefined;
@@ -563,6 +708,11 @@ function openDatabase(
       }
       if (!created.objectStoreNames.contains(PROVENANCE_STORE)) {
         created.createObjectStore(PROVENANCE_STORE, { keyPath: "attemptId" });
+      }
+      // Practice family only (see the schema history above): the learning
+      // database never receives this store.
+      if (withPracticePacks && !created.objectStoreNames.contains(PACK_STORE)) {
+        created.createObjectStore(PACK_STORE, { keyPath: "packId" });
       }
     };
 

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import {
   useApplicationServices,
   type CreateMissionSessionOptions,
+  type CreateMissionSessionResult,
   type MissionDraftStatus,
   type PlayableMissionSession,
 } from "../../app/services";
@@ -58,10 +59,55 @@ function draftStatusText(status: MissionDraftStatus): string | null {
   }
 }
 
+/**
+ * What differs between the CS116 course workspace and the practice workspace
+ * (PHASE-05-M7). Everything else - the Monaco editor, Run/Submit, hints, the
+ * draft handle, output and grading panels - is the same code for both.
+ */
+export interface MissionWorkspaceProfile {
+  readonly kind: "course" | "practice";
+  /** Where the heading link and the error screen lead back to. */
+  readonly backTo: string;
+  readonly backLabel: string;
+  /** Practice: replaces "Thực hành · <stage>" in the eyebrow. */
+  readonly eyebrow?: string;
+  /** Practice: the exercise brief shown on the "Đề bài" tab (course uses the mission objective). */
+  readonly renderPrompt?: (session: MissionAttemptSession) => ReactNode;
+  /** Practice: shown above the editor controls (for example the review-before-running notice). */
+  readonly editorNotice?: ReactNode;
+  /** Practice: shown after a Submit with its attempt (feedback, explanation, next exercise). */
+  readonly renderOutcome?: (attempt: AttemptRecord) => ReactNode;
+}
+
+const COURSE_PROFILE: MissionWorkspaceProfile = Object.freeze({
+  kind: "course",
+  backTo: "/learn",
+  backLabel: "Về lộ trình",
+});
+
+/** The CS116 mission route. Behavior is unchanged: it only supplies its session opener. */
 export function MissionWorkspacePage() {
   const { missionId } = useParams();
   const routeId = missionId?.trim();
   const services = useApplicationServices();
+  const openSession = useCallback(
+    (options: CreateMissionSessionOptions) => services.createMissionSession(routeId ?? "", options),
+    [routeId, services],
+  );
+  return <MissionWorkspace routeKey={routeId} openSession={openSession} profile={COURSE_PROFILE} />;
+}
+
+export interface MissionWorkspaceProps {
+  /** Identifies the mission; a change reloads the workspace. Undefined/empty = no mission in the route. */
+  readonly routeKey: string | undefined;
+  /** MUST be stable (useCallback): a new identity reloads the workspace. */
+  readonly openSession: (options: CreateMissionSessionOptions) => Promise<CreateMissionSessionResult>;
+  readonly profile: MissionWorkspaceProfile;
+}
+
+export function MissionWorkspace({ routeKey: routeId, openSession, profile }: MissionWorkspaceProps) {
+  const isPractice = profile.kind === "practice";
+  const defaultTab: MissionWorkspaceTab = isPractice ? "prompt" : "lesson";
   const sessionRef = useRef<MissionAttemptSession | null>(null);
   const [bundle, setBundle] = useState<PlayableMissionSession | null>(null);
   const [loadError, setLoadError] = useState<RuntimeSystemError | null>(null);
@@ -75,7 +121,7 @@ export function MissionWorkspacePage() {
   const [attempt, setAttempt] = useState<AttemptRecord | null>(null);
   const [revealedHints, setRevealedHints] = useState<readonly RevealedHint[]>([]);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<MissionWorkspaceTab>("lesson");
+  const [activeTab, setActiveTab] = useState<MissionWorkspaceTab>(defaultTab);
   const [stopPending, setStopPending] = useState(false);
   const [runtimeActionNotice, setRuntimeActionNotice] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<RuntimeWorkspaceInfo | null>(null);
@@ -91,7 +137,7 @@ export function MissionWorkspacePage() {
     setAttempt(null);
     setRevealedHints([]);
     setDraftNotice(null);
-    setActiveTab("lesson");
+    setActiveTab(defaultTab);
     setStopPending(false);
     setRuntimeActionNotice(null);
     setWorkspace(null);
@@ -102,7 +148,7 @@ export function MissionWorkspacePage() {
       return () => undefined;
     }
 
-    void services.createMissionSession(routeId, { resumeDraft: true }).then((result) => {
+    void openSession({ resumeDraft: true }).then((result) => {
       if (cancelled) {
         if (result.ok) result.value.session.dispose();
         return;
@@ -124,7 +170,7 @@ export function MissionWorkspacePage() {
       // Also invalidates every in-flight handler's isCurrent() check.
       releaseSession(sessionRef);
     };
-  }, [routeId, services, loadRetryToken]);
+  }, [routeId, openSession, loadRetryToken, defaultTab]);
 
   const session = bundle?.session ?? null;
   const isLocalRuntime = session?.template.runtime.id === CORE_RUNTIME_ID.LOCAL_PYTHON;
@@ -202,7 +248,7 @@ export function MissionWorkspacePage() {
     setWorkspace(next.initialWorkspace ?? null);
     setLoading(false);
     setOperation(null);
-    setActiveTab("lesson");
+    setActiveTab(defaultTab);
     operationRef.current = null;
   }
 
@@ -322,7 +368,7 @@ export function MissionWorkspacePage() {
             resetCode: true,
           };
 
-    const result = await services.createMissionSession(routeId, options);
+    const result = await openSession(options);
     if (!result.ok) {
       setLoadError(result.error);
       setBundle(null);
@@ -342,7 +388,7 @@ export function MissionWorkspacePage() {
   }
 
   if (loadError) {
-    const localRuntimeUnavailable = loadError.code === "LOCAL_RUNTIME_UNAVAILABLE";
+    const localRuntimeUnavailable = !isPractice && loadError.code === "LOCAL_RUNTIME_UNAVAILABLE";
     return (
       <section className="page-card" aria-labelledby="mission-title">
         <p className="eyebrow">Thực hành</p>
@@ -364,8 +410,8 @@ export function MissionWorkspacePage() {
             </button>
           </section>
         ) : null}
-        <Link className="secondary-action mission-error-back-link" to="/learn">
-          Về không gian học
+        <Link className="secondary-action mission-error-back-link" to={profile.backTo}>
+          {isPractice ? profile.backLabel : "Về không gian học"}
         </Link>
       </section>
     );
@@ -385,20 +431,22 @@ export function MissionWorkspacePage() {
   }
 
   const data = session.instance.learner.data ?? {};
-  const lessonGuide = getMissionLessonGuide(session.activity.id);
-  const quickCheck = getMissionQuickCheck(session.activity.id);
+  const lessonGuide = isPractice ? null : getMissionLessonGuide(session.activity.id);
+  const quickCheck = isPractice ? null : getMissionQuickCheck(session.activity.id);
 
   return (
     <section className="page-card mission-workspace" aria-labelledby="mission-title">
       <div className="mission-heading-row">
         <div>
           <p className="eyebrow">
-            Thực hành · {stageLabel(session.activity.stage)} · Biến thể #{bundle.variantIndex + 1}
+            {isPractice
+              ? (profile.eyebrow ?? "Luyện tập")
+              : `Thực hành · ${stageLabel(session.activity.stage)} · Biến thể #${bundle.variantIndex + 1}`}
           </p>
           <h1 id="mission-title">{session.activity.title}</h1>
         </div>
-        <Link className="secondary-action mission-back-link" to="/learn">
-          Về lộ trình
+        <Link className="secondary-action mission-back-link" to={profile.backTo}>
+          {profile.backLabel}
         </Link>
       </div>
       <p className="page-lead">
@@ -412,7 +460,9 @@ export function MissionWorkspacePage() {
       ) : null}
 
       <nav className="mission-tab-nav" aria-label="Khu vực nội dung của nhiệm vụ">
-        <button className={tabClassName(activeTab === "lesson")} type="button" onClick={() => setActiveTab("lesson")}>Bài học</button>
+        {isPractice ? null : (
+          <button className={tabClassName(activeTab === "lesson")} type="button" onClick={() => setActiveTab("lesson")}>Bài học</button>
+        )}
         <button className={tabClassName(activeTab === "prompt")} type="button" onClick={() => setActiveTab("prompt")}>Đề bài</button>
         <button className={tabClassName(activeTab === "data")} type="button" onClick={() => setActiveTab("data")}>Dữ liệu</button>
         <button className={tabClassName(activeTab === "practice")} type="button" onClick={() => setActiveTab("practice")}>Làm bài</button>
@@ -489,6 +539,8 @@ export function MissionWorkspacePage() {
 
           {runtimeActionNotice ? <p className="mission-runtime-notice">{runtimeActionNotice}</p> : null}
 
+          {profile.editorNotice ?? null}
+
           <MissionControls
             runDisabled={operation !== null}
             submitDisabled={operation !== null}
@@ -538,14 +590,18 @@ export function MissionWorkspacePage() {
               </div>
               <div className="mission-retry-actions">
                 <button className="secondary-action secondary-action--button" type="button" onClick={() => void handleRetry("same")}>Làm lại cùng đề</button>
-                <button className="primary-action" type="button" onClick={() => void handleRetry("variant")}>Tạo đề mới</button>
+                {isPractice ? null : (
+                  <button className="primary-action" type="button" onClick={() => void handleRetry("variant")}>Tạo đề mới</button>
+                )}
               </div>
             </section>
           ) : null}
+
+          {attempt && profile.renderOutcome ? profile.renderOutcome(attempt) : null}
         </>
       ) : null}
 
-      {activeTab === "lesson" ? (
+      {activeTab === "lesson" && !isPractice ? (
         <div className="mission-lesson-stack">
           <MissionLessonPanel guide={lessonGuide} />
           <MissionQuickCheck definition={quickCheck} activityId={session.activity.id} />
@@ -554,7 +610,11 @@ export function MissionWorkspacePage() {
 
       {activeTab === "prompt" ? (
         <div className="mission-tab-content mission-tab-content--prompt">
-          <MissionObjectivePanel objective={session.activity.description ?? session.instance.learner.objective} context={session.instance.learner.context} />
+          {profile.renderPrompt ? (
+            profile.renderPrompt(session)
+          ) : (
+            <MissionObjectivePanel objective={session.activity.description ?? session.instance.learner.objective} context={session.instance.learner.context} />
+          )}
         </div>
       ) : null}
 

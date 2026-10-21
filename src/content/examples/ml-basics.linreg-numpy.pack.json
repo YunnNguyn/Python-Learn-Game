@@ -1,0 +1,297 @@
+{
+  "format": "python-learn-game.exercise-pack",
+  "schemaVersion": 1,
+  "pack": {
+    "id": "ml-basics.linreg-numpy",
+    "version": "1.0.0",
+    "title": "Hồi quy tuyến tính từ đầu với NumPy",
+    "description": "Ba bài ngắn xây dựng nền tảng cho hồi quy tuyến tính chỉ bằng NumPy: đo sai số (MSE), một bước gradient descent và chuẩn hóa đặc trưng.",
+    "language": "python",
+    "topic": "Machine Learning cơ bản",
+    "tags": [
+      "numpy",
+      "linear-regression",
+      "gradient-descent",
+      "machine-learning"
+    ],
+    "learningObjectives": [
+      "Tính mean squared error giữa giá trị thật và giá trị dự đoán bằng phép toán vector hóa.",
+      "Thực hiện đúng một bước cập nhật gradient descent cho mô hình y = w·x + b với hàm mất mát MSE.",
+      "Chuẩn hóa ma trận đặc trưng theo từng cột và nhận ra lỗi chọn sai axis."
+    ],
+    "prerequisites": [
+      "Mảng NumPy cơ bản (np.array, np.mean, phép toán theo phần tử)",
+      "Khái niệm đạo hàm riêng ở mức nhập môn"
+    ],
+    "authoring": {
+      "author": "Python Learn Game",
+      "createdAt": "2026-10-20T00:00:00+07:00",
+      "generator": "Viết tay; giá trị mong đợi được tính độc lập bằng NumPy (CPython) và tính tay.",
+      "license": "Dùng nội bộ cho việc học"
+    }
+  },
+  "exercises": [
+    {
+      "id": "mse-basic",
+      "revision": 1,
+      "kind": "code",
+      "title": "Tính MSE",
+      "difficulty": "easy",
+      "instructions": "Cho hai danh sách `y_true` (giá trị thật) và `y_pred` (giá trị mô hình dự đoán). Hai biến này đã được nạp sẵn.\n\nHãy tính mean squared error: trung bình của bình phương sai số, MSE = mean((y_true - y_pred)^2), rồi gán kết quả (một số thực) vào biến `mse`.\n\nGợi ý hướng làm: chuyển hai danh sách thành mảng NumPy để trừ theo từng phần tử.",
+      "starterCode": "import numpy as np\n\n# y_true và y_pred đã được nạp sẵn (list Python).\ny_true_arr = np.array(y_true)\ny_pred_arr = np.array(y_pred)\n\n# TODO: tính mean squared error và gán vào biến mse\nmse = None\n",
+      "setupVariables": {
+        "y_true": [
+          3.0,
+          -0.5,
+          2.0,
+          7.0
+        ],
+        "y_pred": [
+          2.5,
+          0.0,
+          2.0,
+          8.0
+        ]
+      },
+      "allowedPackages": [
+        "numpy"
+      ],
+      "grading": {
+        "checks": [
+          {
+            "type": "NO_EXCEPTION"
+          },
+          {
+            "type": "VARIABLE_EXISTS",
+            "variable": "mse"
+          },
+          {
+            "type": "APPROX_VALUES",
+            "variable": "mse",
+            "expected": 0.375,
+            "absoluteTolerance": 1e-09
+          }
+        ]
+      },
+      "hints": [
+        {
+          "level": "H1",
+          "text": "MSE đo độ lớn trung bình của sai số sau khi bình phương, nên sai số âm và dương không triệt tiêu nhau."
+        },
+        {
+          "level": "H2",
+          "text": "Tính sai số từng phần tử, bình phương từng sai số, rồi lấy trung bình cộng."
+        },
+        {
+          "level": "H3",
+          "text": "Với mảng NumPy: `np.mean((a - b) ** 2)`. Nhớ dùng `**` chứ không phải `^`."
+        },
+        {
+          "level": "H4",
+          "text": "errors = y_true_arr - y_pred_arr\nmse = np.mean(errors ** 2)"
+        }
+      ],
+      "feedback": {
+        "onPass": "Chính xác! MSE là hàm mất mát nền tảng của hồi quy tuyến tính.",
+        "onFail": "Giá trị `mse` chưa đúng. Kiểm tra: đã bình phương sai số chưa, và đã lấy trung bình (chia cho số mẫu) chưa?"
+      },
+      "explanation": "MSE = (1/n) · Σ (y_true − y_pred)². Với dữ liệu mẫu, sai số là [0.5, −0.5, 0, −1], bình phương là [0.25, 0.25, 0, 1], tổng 1.5, chia 4 mẫu được 0.375.",
+      "referenceSolution": "import numpy as np\n\ny_true_arr = np.array(y_true)\ny_pred_arr = np.array(y_pred)\n\nmse = float(np.mean((y_true_arr - y_pred_arr) ** 2))\n"
+    },
+    {
+      "id": "gd-step",
+      "revision": 1,
+      "kind": "code",
+      "title": "Một bước gradient descent",
+      "difficulty": "normal",
+      "instructions": "Mô hình dự đoán `y_hat = w * x + b`. Hàm mất mát là MSE = mean((y_hat - y)^2).\n\nCác biến đã nạp sẵn: `x`, `y` (danh sách số), tham số hiện tại `w`, `b` và learning rate `lr`.\n\nHãy thực hiện đúng MỘT bước gradient descent: tính gradient của MSE theo `w` và `b`, rồi cập nhật `w_new = w - lr * dw` và `b_new = b - lr * db`. Gán kết quả vào hai biến `w_new` và `b_new` (số thực).\n\nLưu ý: gradient của MSE theo w là 2 · mean((y_hat − y) · x), theo b là 2 · mean(y_hat − y).",
+      "starterCode": "import numpy as np\n\n# x, y, w, b, lr đã được nạp sẵn.\nx_arr = np.array(x)\ny_arr = np.array(y)\n\n# TODO: tính dự đoán, gradient dw và db, rồi cập nhật tham số\nw_new = w\nb_new = b\n",
+      "setupVariables": {
+        "x": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "y": [
+          3.0,
+          5.0,
+          7.0,
+          9.0
+        ],
+        "w": 1.0,
+        "b": 0.5,
+        "lr": 0.05
+      },
+      "allowedPackages": [
+        "numpy"
+      ],
+      "grading": {
+        "checks": [
+          {
+            "type": "NO_EXCEPTION"
+          },
+          {
+            "type": "APPROX_VALUES",
+            "variable": "w_new",
+            "expected": 1.875,
+            "absoluteTolerance": 1e-09
+          },
+          {
+            "type": "APPROX_VALUES",
+            "variable": "b_new",
+            "expected": 0.8,
+            "absoluteTolerance": 1e-09
+          }
+        ]
+      },
+      "hints": [
+        {
+          "level": "H1",
+          "text": "Gradient cho biết hướng làm MSE tăng nhanh nhất; ta đi ngược hướng đó một đoạn tỉ lệ với learning rate."
+        },
+        {
+          "level": "H2",
+          "text": "Tính y_hat, rồi sai số y_hat − y, rồi hai đạo hàm riêng, rồi cập nhật cả hai tham số bằng cùng một bước."
+        },
+        {
+          "level": "H3",
+          "text": "dw = 2 * np.mean(error * x_arr), db = 2 * np.mean(error). Đừng quên hệ số 2 từ đạo hàm của bình phương."
+        }
+      ],
+      "feedback": {
+        "onPass": "Đúng rồi! Lặp lại bước này nhiều lần chính là huấn luyện hồi quy tuyến tính bằng gradient descent.",
+        "onFail": "`w_new` hoặc `b_new` chưa khớp. Các lỗi hay gặp: quên hệ số 2, dùng tổng thay vì trung bình, hoặc cộng thay vì trừ gradient."
+      },
+      "explanation": "Với w = 1, b = 0.5: y_hat = [1.5, 2.5, 3.5, 4.5], sai số = [−1.5, −2.5, −3.5, −4.5]. dw = 2·mean(sai số·x) = −17.5, db = 2·mean(sai số) = −6. Cập nhật: w_new = 1 − 0.05·(−17.5) = 1.875, b_new = 0.5 − 0.05·(−6) = 0.8.",
+      "referenceSolution": "import numpy as np\n\nx_arr = np.array(x)\ny_arr = np.array(y)\n\ny_hat = w * x_arr + b\nerror = y_hat - y_arr\ndw = 2 * np.mean(error * x_arr)\ndb = 2 * np.mean(error)\n\nw_new = float(w - lr * dw)\nb_new = float(b - lr * db)\n"
+    },
+    {
+      "id": "fix-normalization",
+      "revision": 1,
+      "kind": "debug",
+      "title": "Sửa lỗi chuẩn hóa đặc trưng",
+      "difficulty": "normal",
+      "symptom": "Sau khi chuẩn hóa, mọi hàng đều thành [-1, 1] và hai cột trở nên giống hệt nhau, dù hai đặc trưng có thang đo rất khác nhau.",
+      "instructions": "`X` là ma trận đặc trưng 4 mẫu × 2 đặc trưng (đã nạp sẵn). Mục tiêu: chuẩn hóa TỪNG ĐẶC TRƯNG (từng cột) về trung bình 0 và độ lệch chuẩn 1.\n\nĐoạn mã khởi đầu chạy không báo lỗi nhưng cho kết quả sai. Hãy tìm và sửa lỗi để các biến sau đúng: `mean` và `std` (mỗi biến là vector độ dài 2, một giá trị cho mỗi đặc trưng) và `X_norm` (ma trận 4 × 2).\n\nDùng độ lệch chuẩn tổng thể (mặc định của `np.std`, ddof=0).",
+      "starterCode": "import numpy as np\n\nX_arr = np.array(X)\n\n# Chuẩn hóa từng đặc trưng (cột) về trung bình 0, độ lệch chuẩn 1.\nmean = X_arr.mean(axis=1, keepdims=True)\nstd = X_arr.std(axis=1, keepdims=True)\nX_norm = (X_arr - mean) / std\n",
+      "setupVariables": {
+        "X": [
+          [
+            1.0,
+            200.0
+          ],
+          [
+            2.0,
+            300.0
+          ],
+          [
+            3.0,
+            400.0
+          ],
+          [
+            4.0,
+            500.0
+          ]
+        ]
+      },
+      "allowedPackages": [
+        "numpy"
+      ],
+      "grading": {
+        "checks": [
+          {
+            "type": "NO_EXCEPTION"
+          },
+          {
+            "type": "NDARRAY_TYPE",
+            "variable": "X_norm"
+          },
+          {
+            "type": "SHAPE",
+            "variable": "X_norm",
+            "expected": [
+              4,
+              2
+            ]
+          },
+          {
+            "type": "SHAPE",
+            "variable": "mean",
+            "expected": [
+              2
+            ]
+          },
+          {
+            "type": "SHAPE",
+            "variable": "std",
+            "expected": [
+              2
+            ]
+          },
+          {
+            "type": "APPROX_VALUES",
+            "variable": "mean",
+            "expected": [
+              2.5,
+              350.0
+            ],
+            "absoluteTolerance": 1e-09
+          },
+          {
+            "type": "APPROX_VALUES",
+            "variable": "std",
+            "expected": [
+              1.118033988749895,
+              111.80339887498948
+            ],
+            "absoluteTolerance": 1e-09
+          },
+          {
+            "type": "APPROX_VALUES",
+            "variable": "X_norm",
+            "expected": [
+              [
+                -1.3416407864998738,
+                -1.3416407864998738
+              ],
+              [
+                -0.4472135954999579,
+                -0.4472135954999579
+              ],
+              [
+                0.4472135954999579,
+                0.4472135954999579
+              ],
+              [
+                1.3416407864998738,
+                1.3416407864998738
+              ]
+            ],
+            "absoluteTolerance": 1e-09
+          }
+        ]
+      },
+      "hints": [
+        {
+          "level": "H1",
+          "text": "Mỗi CỘT là một đặc trưng. Trung bình và độ lệch chuẩn phải được tính dọc theo các mẫu (các hàng) của từng cột."
+        },
+        {
+          "level": "H2",
+          "text": "In ra `mean.shape`: với 2 đặc trưng, nó phải là (2,) chứ không phải (4, 1). Trục (axis) nào chạy dọc theo các hàng?"
+        },
+        {
+          "level": "H3",
+          "text": "`axis=0` tính theo các hàng cho từng cột; `axis=1` tính theo các cột cho từng hàng. Khi đổi sang axis=0 bạn không còn cần `keepdims=True`."
+        }
+      ],
+      "feedback": {
+        "onPass": "Đã sửa đúng! Chọn sai axis là một trong những lỗi tiền xử lý phổ biến nhất.",
+        "onFail": "Kết quả vẫn chưa đúng. Hãy kiểm tra `mean.shape` và `std.shape` (phải là (2,)) và thử in `X_norm` để xem từng cột có trung bình 0 không."
+      },
+      "explanation": "Với axis=1 ta chuẩn hóa từng HÀNG (mỗi mẫu so với chính nó), làm mất thông tin giữa các mẫu và biến mọi hàng thành [-1, 1]. Chuẩn hóa đặc trưng cần axis=0: mean = [2.5, 350.0], std ≈ [1.118, 111.803].",
+      "referenceSolution": "import numpy as np\n\nX_arr = np.array(X)\n\nmean = X_arr.mean(axis=0)\nstd = X_arr.std(axis=0)\nX_norm = (X_arr - mean) / std\n"
+    }
+  ]
+}

@@ -39,12 +39,18 @@ import { OperationGate } from "./operation-gate";
  *  - Retirement cannot flush an unsaved tail (admission is already closed by
  *    contract). Production never retires its single set; this matters for
  *    account switching (later milestones).
- *  - A handle becomes the newest when it is OPENED, i.e. after the session's
- *    resume read and engine load. Two live sessions of one mission are therefore
- *    ordered by opening, not by creation request: a write the older one admits
- *    between the newer one's read and its opening is still legitimate (it was
- *    admitted while the older one was newest) and lands before anything the newer
- *    one writes.
+ *  - OPENING INTENT is ordered separately from DRAFT OWNERSHIP (M7-R2).
+ *    `beginOpening()` hands out a ticket synchronously when a session is
+ *    REQUESTED; the newest request is the only one still allowed to activate.
+ *    A handle becomes the activity's draft owner only when a session is
+ *    ACTIVATED (`open()`), after its resume read and engine load, and only if its
+ *    ticket is still current - the opening phase checks that, and a stale opening
+ *    (for example the StrictMode/route-change opening that was cancelled and
+ *    finished last) hands out no session and never reaches `open()`. A pending or
+ *    failed newer request does NOT take the draft away from the active session.
+ *    A write the previous owner admitted between the newer one's read and its
+ *    activation is still legitimate (it was admitted while that owner was newest)
+ *    and lands before anything the newer one writes.
  *  - `ApplicationServices.saveMissionDraft/deleteMissionDraft` are explicit
  *    direct operations without a session identity. They are ordered with every
  *    other write but not fenced; the UI does not use them.
@@ -293,12 +299,20 @@ interface DraftSink {
   isLatest(activityId: LearningActivityId, generation: number): boolean;
 }
 
+/** The ticket of one session request; see `MissionDraftScheduler.beginOpening`. */
+export interface MissionOpening {
+  /** True while no newer request of the same activity has begun. */
+  isCurrent(): boolean;
+}
+
 export class MissionDraftScheduler implements DraftSink {
   private readonly channels = new Map<LearningActivityId, DraftChannel>();
   /** Per activity: how many handles were ever opened (newest = highest). Tiny: one number per activity. */
   private readonly generations = new Map<LearningActivityId, number>();
   /** Per activity: the newest handle, told to step down (eagerly) when the next one opens. One entry per activity. */
   private readonly newest = new Map<LearningActivityId, DraftHandle>();
+  /** Per activity: the last opening ticket handed out (M7-R2). One number per activity. */
+  private readonly openings = new Map<LearningActivityId, number>();
 
   constructor(
     private readonly persistence: LearningPersistence,
@@ -338,6 +352,18 @@ export class MissionDraftScheduler implements DraftSink {
   /** Resolves once every write already accepted for `activityId` has finished (read-your-writes). Never rejects. */
   settled(activityId: LearningActivityId): Promise<void> {
     return this.channels.get(activityId)?.settled() ?? Promise.resolve();
+  }
+
+  /**
+   * Opening intent (M7-R2): allocates the ticket of one session REQUEST. Call it synchronously at the
+   * public request boundary, before any `await`. It does not touch the active draft owner; a request that
+   * later fails leaves the current owner exactly as it was. `isCurrent()` is false once a newer request
+   * of the same activity began.
+   */
+  beginOpening(activityId: LearningActivityId): MissionOpening {
+    const ticket = (this.openings.get(activityId) ?? 0) + 1;
+    this.openings.set(activityId, ticket);
+    return { isCurrent: () => this.openings.get(activityId) === ticket };
   }
 
   /** A new handle for one mission session; it becomes the newest for its activity. */

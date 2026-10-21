@@ -11,7 +11,7 @@ import { MissionEngine } from "../../core/missions";
 import type { MissionDraftRecord } from "../../core/persistence";
 import type { RuntimeManager, RuntimeSystemError, RuntimeWorkspaceInfo } from "../../core/runtime";
 import { APPLICATION_SERVICES_RETIRED, type ApplicationLifecycle } from "./application-lifecycle";
-import type { MissionDraftHandle, MissionDraftScheduler } from "./mission-draft-scheduler";
+import type { MissionDraftHandle, MissionDraftScheduler, MissionOpening } from "./mission-draft-scheduler";
 import type { OperationGate } from "./operation-gate";
 import { ServiceOwnedMissionSession, type MissionSessionRegistry } from "./service-owned-resources";
 
@@ -76,6 +76,16 @@ export function retiredFailure(): CreateMissionSessionResult {
   );
 }
 
+/** A newer request for the same activity began: this (older) opening hands out no session. */
+export const MISSION_OPEN_SUPERSEDED = "MISSION_OPEN_SUPERSEDED";
+
+export function staleOpeningFailure(): CreateMissionSessionResult {
+  return failure(
+    MISSION_OPEN_SUPERSEDED,
+    "Một yêu cầu mở bài mới hơn đã thay thế yêu cầu này nên phiên cũ không được mở.",
+  );
+}
+
 /** Everything the opening phase needs from the service set that owns the session. */
 export interface MissionSessionOpeningDependencies {
   readonly lifecycle: ApplicationLifecycle;
@@ -111,6 +121,12 @@ export interface ResolvedMissionSessionInput {
   /** The stored draft read for this activity (any seed), or null when none was read. */
   readonly storedDraft: MissionDraftRecord | null;
   readonly resetCode: boolean;
+  /**
+   * The ticket of THIS request, taken with `drafts.beginOpening(activity.id)` synchronously at the public
+   * request boundary (before the caller's first await). Only the newest request may activate a session:
+   * an older one is refused with `MISSION_OPEN_SUPERSEDED` and its engine and runtime are cleaned up.
+   */
+  readonly opening: MissionOpening;
 }
 
 /**
@@ -125,7 +141,7 @@ export function openResolvedMissionSession(
   input: ResolvedMissionSessionInput,
 ): Promise<CreateMissionSessionResult> {
   const { lifecycle, gate, drafts, sessions, graders, recordSubmittedAttempt } = dependencies;
-  const { activity, template, instance, seed, variantIndex, hintSet, runtime, resetCode } = input;
+  const { activity, template, instance, seed, variantIndex, hintSet, runtime, resetCode, opening } = input;
   const draft = input.storedDraft;
 
   // MissionEngine/MissionAttemptSession mark themselves disposed before they
@@ -137,6 +153,12 @@ export function openResolvedMissionSession(
   // registry. Retirement disposes the engine at once, but this continuation still
   // runs later; `dispose()` waits for it (bounded) before closing persistence or
   // reporting `disposed`, so a cleanup failure here decides the disposal outcome.
+  if (!opening.isCurrent()) {
+    // No load is needed, but disposal must use the registry: if it fails, M4 retains the
+    // failure for retry and reports an incomplete service disposal instead of losing it.
+    sessions.discardEngine(new MissionEngine(runtime, graders), retryRuntimeDispose);
+    return Promise.resolve(staleOpeningFailure());
+  }
   return lifecycle.trackLoad(async (): Promise<CreateMissionSessionResult> => {
     const engine = new MissionEngine(runtime, graders);
     // Owned while loading: retirement disposes it even before a session exists.
@@ -159,6 +181,13 @@ export function openResolvedMissionSession(
     if (!loaded.ok) {
       sessions.discardEngine(engine, retryRuntimeDispose);
       return { ok: false, error: loaded.error };
+    }
+
+    if (!opening.isCurrent()) {
+      // A newer request began while this one loaded (a cancelled StrictMode/route-change opening that
+      // finished last): it must not register, supersede the live draft owner or return a usable session.
+      sessions.discardEngine(engine, retryRuntimeDispose);
+      return staleOpeningFailure();
     }
 
     const resumedDraft = !resetCode && draft !== null && draft.seed === seed;
