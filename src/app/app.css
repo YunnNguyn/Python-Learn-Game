@@ -2301,3 +2301,24 @@ a {
   gap: 0.65rem;
   margin-top: 1rem;
 }
+
+/* PHASE-06 / M8 - course-scoped next step (course/activity pages and the mission workspace). */
+.activity-next-step,
+.mission-next-step {
+  margin-top: 1rem;
+  border: 1px solid var(--color-accent-border);
+  border-radius: 0.85rem;
+  background: var(--color-surface-1);
+  padding: 1rem;
+}
+
+.activity-next-step h2,
+.mission-next-step h2 {
+  margin-bottom: 0.35rem;
+  font-size: 1.05rem;
+}
+
+.activity-next-step p,
+.mission-next-step p {
+  margin: 0 0 0.75rem;
+}

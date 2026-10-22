@@ -1,7 +1,12 @@
 import { Link, useParams } from "react-router-dom";
 
 import { useApplicationServices, useLearningProgress } from "../../app/services";
-import { getActivityAccess } from "../../app/learning-path";
+import {
+  getActivityAccess,
+  getCourseOfActivity,
+  getLessonOfActivity,
+  getNextActivityInCourse,
+} from "../../app/learning-path";
 import {
   LearningActivityType,
   type LearningActivityId,
@@ -29,6 +34,11 @@ export function ActivityLaunchPage() {
   }
 
   const access = getActivityAccess(content, learning, activity.id);
+  const course = getCourseOfActivity(content, activity.id);
+  const lesson = getLessonOfActivity(content, activity.id);
+  const nextActivityId = getNextActivityInCourse(content, activity.id);
+  const nextActivity = nextActivityId ? content.getActivity(nextActivityId) : undefined;
+  const nextAccess = nextActivityId ? getActivityAccess(content, learning, nextActivityId) : undefined;
   const executable =
     activity.type === LearningActivityType.CODE_MISSION ||
     activity.type === LearningActivityType.DEBUG_MISSION ||
@@ -45,8 +55,11 @@ export function ActivityLaunchPage() {
           <strong>🔒 Hoạt động này chưa được mở.</strong>
           <p>{access.reason}</p>
         </section>
-        <Link className="primary-action primary-action--link" to="/learn">
-          Về lộ trình hôm nay
+        <Link
+          className="primary-action primary-action--link"
+          to={lesson ? `/lesson/${lesson.id}` : course ? `/course/${course.id}` : "/learn"}
+        >
+          {lesson ? "Về bài học" : course ? "Về khóa học" : "Về lộ trình hôm nay"}
         </Link>
       </section>
     );
@@ -55,6 +68,17 @@ export function ActivityLaunchPage() {
 
   return (
     <section className="page-card activity-page" aria-labelledby="activity-title">
+      {course ? (
+        <p className="learning-card__meta">
+          <Link to={`/course/${course.id}`}>{course.title}</Link>
+          {lesson ? (
+            <>
+              {" › "}
+              <Link to={`/lesson/${lesson.id}`}>{lesson.title}</Link>
+            </>
+          ) : null}
+        </p>
+      ) : null}
       <div className="learning-card__heading-row">
         <p className="eyebrow">Hoạt động học</p>
         <span className={`progress-pill ${progress.completed ? "progress-pill--complete" : ""}`}>
@@ -108,6 +132,16 @@ export function ActivityLaunchPage() {
           <p>Loại hoạt động này chưa được nối vào workspace ở phiên bản hiện tại.</p>
         )}
       </div>
+
+      {progress.completed && nextActivity && nextAccess?.unlocked ? (
+        <section className="activity-next-step" aria-labelledby="activity-next-title">
+          <h2 id="activity-next-title">Hoạt động tiếp theo trong khóa</h2>
+          <p>{nextActivity.title}</p>
+          <Link className="primary-action primary-action--link" to={`/activity/${nextActivity.id}`}>
+            Mở hoạt động tiếp theo
+          </Link>
+        </section>
+      ) : null}
 
       {attempts.length > 0 ? (
         <section className="attempt-history" aria-labelledby="attempt-history-title">

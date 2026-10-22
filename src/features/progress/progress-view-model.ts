@@ -1,5 +1,11 @@
 import type { ContentRegistry } from "../../core/content";
-import { MasteryState, type Course, type LearningActivityId, type World } from "../../core/domain";
+import {
+  MasteryState,
+  type Course,
+  type LearningActivityId,
+  type Lesson,
+  type World,
+} from "../../core/domain";
 import type { LearningEngine } from "../../core/learning";
 
 export interface CompletionProgress {
@@ -29,6 +35,13 @@ export function getWorldCompletion(
   const ids = new Set<LearningActivityId>();
   collectWorldActivityIds(content, world, ids);
   return completionForIds(learning, ids);
+}
+
+export function getLessonCompletion(
+  learning: LearningEngine,
+  lesson: Lesson,
+): CompletionProgress {
+  return completionForIds(learning, new Set(lesson.activityIds));
 }
 
 export function activityStatusLabel(

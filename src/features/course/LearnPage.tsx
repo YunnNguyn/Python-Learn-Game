@@ -6,12 +6,17 @@ import {
   useMetaProgression,
 } from "../../app/services";
 import { ReviewReason, type LearningActivityId } from "../../core/domain";
-import { getNextStudyActivity } from "../../app/learning-path";
+import {
+  getCourseOfActivity,
+  getNextStudyActivity,
+  resolveActiveCourse,
+} from "../../app/learning-path";
 import {
   InventoryItemId,
   inventoryItemLabel,
 } from "../../core/meta-progression";
 import { getCourseCompletion } from "../progress";
+import { getCourseContinue } from "./course-continue-model";
 
 export function LearnPage() {
   const { content } = useApplicationServices();
@@ -22,8 +27,19 @@ export function LearnPage() {
     ? learning.getReviewRecommendations(content.getConcepts(), content.getActivities())
     : [];
   const uniqueReviews = deduplicateActivityRecommendations(reviewRecommendations).slice(0, 3);
-  const nextStudy = snapshot.ready ? getNextStudyActivity(content, learning) : null;
-  const todayAction = resolveTodayAction(uniqueReviews, nextStudy);
+  // The Today card recommends ONE step, so it needs a course: the course of the latest
+  // submission (derived from stored attempts, nothing new is saved), else the first course.
+  const activeCourse = snapshot.ready ? resolveActiveCourse(content, learning) : undefined;
+  const nextStudy =
+    snapshot.ready && activeCourse ? getNextStudyActivity(content, learning, activeCourse.id) : null;
+  const courseTitleOf = (activityId: LearningActivityId): string | undefined =>
+    getCourseOfActivity(content, activityId)?.title;
+  const todayAction = resolveTodayAction(
+    uniqueReviews,
+    nextStudy,
+    courseTitleOf,
+    activeCourse?.title,
+  );
 
   return (
     <section className="page-card learning-page" aria-labelledby="learn-title">
@@ -37,7 +53,10 @@ export function LearnPage() {
       {todayAction ? (
         <section className="today-study-card" aria-labelledby="today-study-title">
           <div>
-            <p className="learning-card__meta">Hôm nay nên học gì?</p>
+            <p className="learning-card__meta">
+              Hôm nay nên học gì?
+              {todayAction.courseTitle ? ` · ${todayAction.courseTitle}` : ""}
+            </p>
             <h2 id="today-study-title">{todayAction.title}</h2>
             <p>{todayAction.description}</p>
           </div>
@@ -88,6 +107,9 @@ export function LearnPage() {
                   <div>
                     <strong>{concept?.title ?? recommendation.conceptId}</strong>
                     <p>{reviewReasonLabel(recommendation.reason)}</p>
+                    {courseTitleOf(activity.id) ? (
+                      <p className="learning-card__meta">Khóa: {courseTitleOf(activity.id)}</p>
+                    ) : null}
                   </div>
                   <Link className="secondary-action" to={`/activity/${activity.id}`}>
                     Ôn lại
@@ -102,8 +124,9 @@ export function LearnPage() {
       <div className="learning-list" aria-label="Khóa học hiện có">
         {courses.map((course) => {
           const progress = getCourseCompletion(content, learning, course);
+          const resume = snapshot.ready ? getCourseContinue(content, learning, course.id) : null;
           return (
-            <article className="learning-card" key={course.id}>
+            <article className="learning-card" key={course.id} data-course-id={course.id}>
               <div className="learning-card__heading-row">
                 <p className="learning-card__meta">Khóa học</p>
                 <span className="progress-pill">
@@ -114,9 +137,23 @@ export function LearnPage() {
               </div>
               <h2>{course.title}</h2>
               {course.description ? <p>{course.description}</p> : null}
-              <Link className="primary-action primary-action--link" to={`/course/${course.id}`}>
-                Mở khóa học
-              </Link>
+              <div className="learning-card__links">
+                {resume ? (
+                  <Link
+                    className="primary-action primary-action--link"
+                    to={`/activity/${resume.activityId}`}
+                    data-testid="course-continue"
+                  >
+                    {resume.label}
+                  </Link>
+                ) : null}
+                <Link
+                  className={resume ? "secondary-action" : "primary-action primary-action--link"}
+                  to={`/course/${course.id}`}
+                >
+                  Mở khóa học
+                </Link>
+              </div>
             </article>
           );
         })}
@@ -154,11 +191,15 @@ interface TodayAction {
   readonly title: string;
   readonly description: string;
   readonly cta: string;
+  /** The course the recommended activity belongs to, so the card never hides which course it means. */
+  readonly courseTitle?: string;
 }
 
 function resolveTodayAction(
   reviews: readonly { readonly activityId?: LearningActivityId; readonly reason: ReviewReason }[],
   nextStudy: ReturnType<typeof getNextStudyActivity>,
+  courseTitleOf: (activityId: LearningActivityId) => string | undefined,
+  activeCourseTitle: string | undefined,
 ): TodayAction | null {
   const urgentReview = reviews.find(
     (item) =>
@@ -172,6 +213,7 @@ function resolveTodayAction(
       title: "Ôn lại phần vừa vướng trước khi đi tiếp",
       description: reviewReasonLabel(urgentReview.reason),
       cta: "Ôn ngay",
+      courseTitle: courseTitleOf(urgentReview.activityId),
     };
   }
 
@@ -183,6 +225,7 @@ function resolveTodayAction(
         title: "Tiếp tục hoạt động đang làm",
         description: "Bạn đã có lần nộp ở hoạt động này. Tiếp tục từ tiến độ hiện tại để hoàn thành nó.",
         cta: "Tiếp tục",
+        courseTitle: activeCourseTitle,
       };
     case "NEXT":
       return {
@@ -190,13 +233,15 @@ function resolveTodayAction(
         title: "Hoạt động tiếp theo đã sẵn sàng",
         description: "Đi theo thứ tự lộ trình để kiến thức mới xuất hiện sau khi phần nền đã được luyện xong.",
         cta: "Học tiếp",
+        courseTitle: activeCourseTitle,
       };
     case "COMPLETE_REVIEW":
       return {
         activityId: nextStudy.activityId,
         title: "Lộ trình hiện tại đã hoàn thành",
-        description: "Bạn có thể dùng bài ôn tập cuối để củng cố lại toàn bộ lát cắt NumPy.",
+        description: "Bạn có thể dùng bài ôn tập cuối của khóa này để củng cố lại những gì đã học.",
         cta: "Ôn tập",
+        courseTitle: activeCourseTitle,
       };
   }
 }

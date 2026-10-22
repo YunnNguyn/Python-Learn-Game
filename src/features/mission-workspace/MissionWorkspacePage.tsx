@@ -2,13 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { Link, useParams } from "react-router-dom";
 
 import {
+  getCourseOfActivity,
+  getLessonOfActivity,
+  getNextActivityInCourse,
+} from "../../app/learning-path";
+import {
   useApplicationServices,
   type CreateMissionSessionOptions,
   type CreateMissionSessionResult,
   type MissionDraftStatus,
   type PlayableMissionSession,
 } from "../../app/services";
-import { LearningStage, type AttemptRecord } from "../../core/domain";
+import { LearningStage, type AttemptRecord, type LearningActivityId } from "../../core/domain";
 import type { GraderResult } from "../../core/grading";
 import type { RevealedHint } from "../../core/hints";
 import type { MissionAttemptSession } from "../../core/learning";
@@ -85,7 +90,12 @@ const COURSE_PROFILE: MissionWorkspaceProfile = Object.freeze({
   backLabel: "Về lộ trình",
 });
 
-/** The CS116 mission route. Behavior is unchanged: it only supplies its session opener. */
+/**
+ * The course mission route (CS116 and every other native course). It only supplies the session
+ * opener and a course-aware profile: back to the lesson that lists this activity and, after a
+ * passed Submit, the next activity of the SAME course. An unknown activity keeps the plain
+ * profile - the workspace then reports the failure itself.
+ */
 export function MissionWorkspacePage() {
   const { missionId } = useParams();
   const routeId = missionId?.trim();
@@ -94,7 +104,50 @@ export function MissionWorkspacePage() {
     (options: CreateMissionSessionOptions) => services.createMissionSession(routeId ?? "", options),
     [routeId, services],
   );
-  return <MissionWorkspace routeKey={routeId} openSession={openSession} profile={COURSE_PROFILE} />;
+  const profile = useMemo(
+    () => createCourseProfile(services.content, routeId as LearningActivityId | undefined),
+    [routeId, services.content],
+  );
+  return <MissionWorkspace routeKey={routeId} openSession={openSession} profile={profile} />;
+}
+
+function createCourseProfile(
+  content: ReturnType<typeof useApplicationServices>["content"],
+  activityId: LearningActivityId | undefined,
+): MissionWorkspaceProfile {
+  if (activityId === undefined) return COURSE_PROFILE;
+  const course = getCourseOfActivity(content, activityId);
+  const lesson = getLessonOfActivity(content, activityId);
+  if (course === undefined) return COURSE_PROFILE;
+
+  return {
+    kind: "course",
+    backTo: lesson ? `/lesson/${lesson.id}` : `/course/${course.id}`,
+    backLabel: lesson ? "Về bài học" : "Về khóa học",
+    renderOutcome: (attempt) => {
+      if (!attempt.passed) return null;
+      const nextId = getNextActivityInCourse(content, activityId);
+      const next = nextId ? content.getActivity(nextId) : undefined;
+      return (
+        <section className="mission-next-step" aria-labelledby="mission-next-step-title">
+          <h2 id="mission-next-step-title">
+            {next ? "Đã mở hoạt động tiếp theo" : "Bạn đã hoàn thành khóa học này"}
+          </h2>
+          {next ? <p>{next.title}</p> : <p>{course.title}</p>}
+          <div className="mission-retry-actions">
+            {next ? (
+              <Link className="primary-action primary-action--link" to={`/mission/${next.id}`}>
+                Làm tiếp
+              </Link>
+            ) : null}
+            <Link className="secondary-action" to={`/course/${course.id}`}>
+              Về khóa học
+            </Link>
+          </div>
+        </section>
+      );
+    },
+  };
 }
 
 export interface MissionWorkspaceProps {
@@ -411,7 +464,7 @@ export function MissionWorkspace({ routeKey: routeId, openSession, profile }: Mi
           </section>
         ) : null}
         <Link className="secondary-action mission-error-back-link" to={profile.backTo}>
-          {isPractice ? profile.backLabel : "Về không gian học"}
+          {isPractice || profile.backTo !== "/learn" ? profile.backLabel : "Về không gian học"}
         </Link>
       </section>
     );

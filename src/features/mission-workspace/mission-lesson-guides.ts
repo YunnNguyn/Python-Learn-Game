@@ -1,3 +1,8 @@
+import {
+  PYTHON_FOUNDATIONS_LESSON_GUIDES,
+  PYTHON_FOUNDATIONS_QUICK_CHECKS,
+} from "./python-foundations-lesson-guides";
+
 export interface MissionLessonTopic {
   readonly label: string;
   readonly explanation: string;
@@ -713,7 +718,7 @@ const GUIDES: Readonly<Record<string, MissionLessonGuide>> = {
 };
 
 export function getMissionLessonGuide(activityId: string): MissionLessonGuide | null {
-  return GUIDES[activityId] ?? null;
+  return GUIDES[activityId] ?? PYTHON_FOUNDATIONS_LESSON_GUIDES[activityId] ?? null;
 }
 
 export interface MissionQuickCheckDefinition {
@@ -959,5 +964,5 @@ const QUICK_CHECKS: Readonly<Record<string, MissionQuickCheckDefinition>> = {
 };
 
 export function getMissionQuickCheck(activityId: string): MissionQuickCheckDefinition | null {
-  return QUICK_CHECKS[activityId] ?? null;
+  return QUICK_CHECKS[activityId] ?? PYTHON_FOUNDATIONS_QUICK_CHECKS[activityId] ?? null;
 }

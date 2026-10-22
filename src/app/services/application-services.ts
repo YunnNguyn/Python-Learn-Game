@@ -5,7 +5,17 @@ import {
   registerCs116Hints,
   registerCs116ProductionContent,
 } from "../../content/cs116";
-import { ContentRegistry, validateContent } from "../../core/content";
+import {
+  PYTHON_FOUNDATIONS_CONTENT,
+  registerPythonFoundationsContent,
+  registerPythonFoundationsGenerators,
+  registerPythonFoundationsHints,
+} from "../../content/python-foundations";
+import {
+  ContentRegistry,
+  validateContent,
+  type ContentDefinitionSet,
+} from "../../core/content";
 import {
   Difficulty,
   LearningActivityType,
@@ -54,6 +64,24 @@ import {
   type CreateMissionSessionResult,
   type PlayableMissionSession,
 } from "./resolved-mission-session";
+
+/**
+ * Every course this application ships, as one definition set. Course order matters: it is
+ * the registration order, which is the default order of `/learn` and the course the Today
+ * card falls back to on a fresh profile.
+ */
+const BUILT_IN_CONTENT: ContentDefinitionSet = {
+  packs: [...CS116_PRODUCTION_CONTENT.packs, ...PYTHON_FOUNDATIONS_CONTENT.packs],
+  concepts: [...CS116_PRODUCTION_CONTENT.concepts, ...PYTHON_FOUNDATIONS_CONTENT.concepts],
+  courses: [...CS116_PRODUCTION_CONTENT.courses, ...PYTHON_FOUNDATIONS_CONTENT.courses],
+  worlds: [...CS116_PRODUCTION_CONTENT.worlds, ...PYTHON_FOUNDATIONS_CONTENT.worlds],
+  lessons: [...CS116_PRODUCTION_CONTENT.lessons, ...PYTHON_FOUNDATIONS_CONTENT.lessons],
+  activities: [...CS116_PRODUCTION_CONTENT.activities, ...PYTHON_FOUNDATIONS_CONTENT.activities],
+  missionTemplates: [
+    ...CS116_PRODUCTION_CONTENT.missionTemplates,
+    ...PYTHON_FOUNDATIONS_CONTENT.missionTemplates,
+  ],
+};
 
 const PENDING_INITIALIZATION: ApplicationInitializationState = Object.freeze({
   status: "pending",
@@ -264,10 +292,14 @@ export function createApplicationServices(
   let disposed: ApplicationServicesDisposalResult | null = null;
 
   registerCs116Generators(generators);
+  registerPythonFoundationsGenerators(generators);
   registerCoreGraders(graders);
   registerCs116Hints(hints);
+  registerPythonFoundationsHints(hints);
 
-  const validation = validateContent(CS116_PRODUCTION_CONTENT, {
+  // Both built-in courses are validated as ONE definition set, so an id that two packs
+  // both define (or a reference that crosses packs) is caught here, before anything runs.
+  const validation = validateContent(BUILT_IN_CONTENT, {
     extensionCapabilities: {
       generatorIds: generators.getGeneratorIds(),
       graderIds: graders.getGraderIds(),
@@ -286,6 +318,7 @@ export function createApplicationServices(
   }
 
   registerCs116ProductionContent(content);
+  registerPythonFoundationsContent(content);
 
   let initializationState: ApplicationInitializationState = PENDING_INITIALIZATION;
   const initializationListeners = new Set<() => void>();

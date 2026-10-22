@@ -1,6 +1,7 @@
 export {
   activityStatusLabel,
   getCourseCompletion,
+  getLessonCompletion,
   getWorldCompletion,
   masteryLabel,
 } from "./progress-view-model";

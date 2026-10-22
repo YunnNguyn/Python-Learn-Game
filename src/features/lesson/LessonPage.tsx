@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 
 import { useApplicationServices, useLearningProgress } from "../../app/services";
-import { getActivityAccess } from "../../app/learning-path";
+import { getActivityAccess, getCourseOfLesson } from "../../app/learning-path";
 import type { LessonId } from "../../core/domain";
 import { activityStatusLabel } from "../progress";
 
@@ -23,9 +23,18 @@ export function LessonPage() {
     );
   }
 
+  const course = getCourseOfLesson(content, lesson.id);
+
   return (
     <section className="page-card learning-page" aria-labelledby="lesson-title">
       <p className="eyebrow">Bài học</p>
+      {course ? (
+        <p className="learning-card__meta">
+          <Link to={`/course/${course.id}`} data-testid="lesson-course-link">
+            ← {course.title}
+          </Link>
+        </p>
+      ) : null}
       <h1 id="lesson-title">{lesson.title}</h1>
       {lesson.description ? <p className="page-lead">{lesson.description}</p> : null}
 

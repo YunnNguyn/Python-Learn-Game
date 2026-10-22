@@ -2,13 +2,17 @@ import { Link, useParams } from "react-router-dom";
 
 import { useApplicationServices, useLearningProgress } from "../../app/services";
 import type { CourseId } from "../../core/domain";
-import { getWorldCompletion } from "../progress";
+import { getLessonCompletion, getWorldCompletion } from "../progress";
+import { getCourseContinue } from "./course-continue-model";
 
 export function CoursePage() {
   const { courseId } = useParams();
   const { content } = useApplicationServices();
-  const { learning } = useLearningProgress();
+  const { learning, snapshot } = useLearningProgress();
   const course = courseId ? content.getCourse(courseId as CourseId) : undefined;
+
+  const resume =
+    course !== undefined && snapshot.ready ? getCourseContinue(content, learning, course.id) : null;
 
   if (course === undefined) {
     return (
@@ -29,6 +33,22 @@ export function CoursePage() {
       <h1 id="course-title">{course.title}</h1>
       {course.description ? <p className="page-lead">{course.description}</p> : null}
 
+      {resume ? (
+        <section className="today-study-card" aria-labelledby="course-continue-title">
+          <div>
+            <p className="learning-card__meta">Bước tiếp theo trong khóa này</p>
+            <h2 id="course-continue-title">{resume.activityTitle}</h2>
+          </div>
+          <Link
+            className="primary-action primary-action--link"
+            to={`/activity/${resume.activityId}`}
+            data-testid="course-continue"
+          >
+            {resume.label}
+          </Link>
+        </section>
+      ) : null}
+
       <div className="learning-list">
         {course.worldIds.map((worldId) => {
           const world = content.getWorld(worldId);
@@ -45,11 +65,13 @@ export function CoursePage() {
               <div className="learning-card__links">
                 {world.lessonIds.map((lessonId) => {
                   const lesson = content.getLesson(lessonId);
-                  return lesson ? (
+                  if (!lesson) return null;
+                  const lessonProgress = getLessonCompletion(learning, lesson);
+                  return (
                     <Link className="secondary-action" key={lesson.id} to={`/lesson/${lesson.id}`}>
-                      {lesson.title}
+                      {lesson.title} · {lessonProgress.completed}/{lessonProgress.total}
                     </Link>
-                  ) : null;
+                  );
                 })}
               </div>
             </article>

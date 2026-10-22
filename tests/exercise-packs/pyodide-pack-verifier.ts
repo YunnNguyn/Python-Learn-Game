@@ -48,7 +48,7 @@ export interface ExerciseVerification {
 
 const decoder = new TextDecoder();
 
-class NodePyodideRuntime implements RuntimeManager {
+export class NodePyodideRuntime implements RuntimeManager {
   private setupData: JsonObject = {};
 
   constructor(
