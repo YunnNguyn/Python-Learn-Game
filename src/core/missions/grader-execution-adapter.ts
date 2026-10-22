@@ -12,6 +12,9 @@ export function toGraderExecutionSnapshot(
   if (execution.status === RUNTIME_EXECUTION_STATUS.SUCCESS) {
     return {
       variables: observations?.variables ?? {},
+      ...(observations?.functionResults !== undefined
+        ? { functions: observations.functionResults }
+        : {}),
     };
   }
 

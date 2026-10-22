@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ActivityProgressReader } from "../../../src/app/learning-path";
 import { CS116_PRODUCTION_IDS, registerCs116ProductionContent } from "../../../src/content/cs116";
 import {
-  PYTHON_FOUNDATIONS_ACTIVITY_IDS,
+  PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_IDS,
   registerPythonFoundationsContent,
 } from "../../../src/content/python-foundations";
@@ -19,7 +19,8 @@ import { getCourseContinue } from "../../../src/features/course/course-continue-
 
 const PYTHON = PYTHON_FOUNDATIONS_IDS.course as CourseId;
 const CS116 = CS116_PRODUCTION_IDS.course as CourseId;
-const PF = PYTHON_FOUNDATIONS_ACTIVITY_IDS as readonly string[];
+// PHASE-07 / M9: the course lists the seven M8 activities followed by the eight M9 ones.
+const PF = PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS as readonly string[];
 
 function content(): ContentRegistry {
   const registry = new ContentRegistry();
@@ -73,7 +74,8 @@ describe("getCourseContinue", () => {
     const all = Object.fromEntries(PF.map((id) => [id, done]));
     const next = getCourseContinue(content(), progress(all), PYTHON);
 
-    expect(next).toMatchObject({ activityId: PF[6], reason: "COMPLETE_REVIEW" });
+    // The closing REVIEW-stage mission is the PF-13 mini-project (PF-07 is no longer the end of the course).
+    expect(next).toMatchObject({ activityId: PF[12], reason: "COMPLETE_REVIEW" });
     expect(next?.label.startsWith("Ôn tập:")).toBe(true);
   });
 

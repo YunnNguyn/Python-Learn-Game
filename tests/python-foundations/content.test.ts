@@ -7,6 +7,7 @@ import {
   PYTHON_FOUNDATIONS_CONTENT,
   PYTHON_FOUNDATIONS_HINT_SETS,
   PYTHON_FOUNDATIONS_IDS,
+  PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_STARTER_CODE,
   registerPythonFoundationsContent,
   registerPythonFoundationsGenerators,
@@ -173,10 +174,15 @@ describe("registration next to CS116", () => {
 describe("structure the brief asks for", () => {
   const content = builtIn();
 
-  it("is one course with one world, two lessons and seven missions in order", () => {
+  it("is one course whose FIRST world holds the seven M8 missions in two lessons (M9 continues after it)", () => {
     const course = content.getCourse(PYTHON_FOUNDATIONS_IDS.course as never)!;
     expect(course.title).toContain("Python Foundations");
-    expect(course.worldIds).toEqual([PYTHON_FOUNDATIONS_IDS.world]);
+    // PHASE-07 / M9 appends two worlds; the M8 world stays first and unchanged.
+    expect(course.worldIds).toEqual([
+      PYTHON_FOUNDATIONS_IDS.world,
+      PYTHON_FOUNDATIONS_IDS.worldCollections,
+      PYTHON_FOUNDATIONS_IDS.worldNumpy,
+    ]);
 
     const world = content.getWorld(PYTHON_FOUNDATIONS_IDS.world as never)!;
     expect(world.title).toBe("Python Foundations");
@@ -191,7 +197,7 @@ describe("structure the brief asks for", () => {
     expect(lesson2.title).toContain("Collections & Functions");
     expect(lesson1.activityIds).toEqual(ACTIVITY_IDS.slice(0, 3));
     expect(lesson2.activityIds).toEqual(ACTIVITY_IDS.slice(3));
-    expect(getCourseActivityIds(content, course.id)).toEqual(ACTIVITY_IDS);
+    expect(getCourseActivityIds(content, course.id)).toEqual([...ACTIVITY_IDS, ...PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS]);
   });
 
   it("has the kind and learning stage of each mission", () => {

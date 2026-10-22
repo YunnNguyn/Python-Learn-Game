@@ -1,4 +1,5 @@
 import type { JsonObject } from "../../domain";
+import type { FunctionProbeSpec } from "../function-probes";
 import type {
   RuntimeExecutionResult,
   RuntimeSystemError,
@@ -23,6 +24,7 @@ export interface RuntimeSubmitCodeWorkerRequest {
   readonly requestId: string;
   readonly code: string;
   readonly observeVariables?: readonly string[];
+  readonly functionProbes?: readonly FunctionProbeSpec[];
   readonly runtimeConfig?: JsonObject;
   readonly setupData?: JsonObject;
 }
@@ -118,6 +120,7 @@ export function isRuntimeSubmitCodeWorkerRequest(
     typeof value.requestId === "string" &&
     typeof value.code === "string" &&
     isOptionalStringArray(value.observeVariables) &&
+    isOptionalFunctionProbes(value.functionProbes) &&
     isOptionalJsonObject(value.runtimeConfig) &&
     isOptionalJsonObject(value.setupData)
   );
@@ -220,6 +223,24 @@ function isOptionalJsonObject(value: unknown): value is JsonObject | undefined {
   return (
     value === undefined ||
     (isRecord(value) && !Array.isArray(value))
+  );
+}
+
+// Structural check only: the Mission Engine validated the specs with the full schema
+// before they were sent, and the Python helper treats every argument as plain data.
+function isOptionalFunctionProbes(
+  value: unknown,
+): value is readonly FunctionProbeSpec[] | undefined {
+  return (
+    value === undefined ||
+    (Array.isArray(value) &&
+      value.every(
+        (probe) =>
+          isRecord(probe) &&
+          typeof probe.function === "string" &&
+          Array.isArray(probe.cases) &&
+          probe.cases.every((entry) => isRecord(entry) && Array.isArray(entry.args)),
+      ))
   );
 }
 

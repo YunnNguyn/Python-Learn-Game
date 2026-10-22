@@ -4,6 +4,11 @@ import {
   JsonValueSchema,
   type JsonValue,
 } from "../domain";
+import {
+  FUNCTION_CASE_LIMITS,
+  FunctionCasesCheckSchema,
+  type FunctionCasesCheck,
+} from "./function-cases";
 
 export const DeclarativeGraderCheckType = {
   NO_EXCEPTION: "NO_EXCEPTION",
@@ -13,6 +18,8 @@ export const DeclarativeGraderCheckType = {
   SHAPE: "SHAPE",
   EXACT_VALUES: "EXACT_VALUES",
   APPROX_VALUES: "APPROX_VALUES",
+  /** M9: call a learner-defined function with controlled argument sets. */
+  FUNCTION_CASES: "FUNCTION_CASES",
 } as const;
 
 export type DeclarativeGraderCheckType =
@@ -52,7 +59,8 @@ export type DeclarativeGraderCheck =
       readonly variable: string;
       readonly expected: ApproxNumericValue;
       readonly absoluteTolerance: number;
-    };
+    }
+  | FunctionCasesCheck;
 
 export interface DeclarativeGraderConfig {
   readonly checks: readonly DeclarativeGraderCheck[];
@@ -136,10 +144,30 @@ export const DeclarativeGraderCheckSchema: z.ZodType<DeclarativeGraderCheck> =
     shapeCheckSchema,
     exactValuesCheckSchema,
     approxValuesCheckSchema,
+    FunctionCasesCheckSchema,
   ]);
 
 export const DeclarativeGraderConfigSchema: z.ZodType<DeclarativeGraderConfig> = z
   .object({
     checks: z.array(DeclarativeGraderCheckSchema).min(1),
   })
-  .strict();
+  .strict()
+  .superRefine((config, context) => {
+    const functionNames = new Set<string>();
+    let functionChecks = 0;
+    for (const [index, check] of config.checks.entries()) {
+      if (check.type !== DeclarativeGraderCheckType.FUNCTION_CASES) continue;
+      functionChecks += 1;
+      if (functionNames.has(check.function)) {
+        context.addIssue({
+          code: "custom",
+          path: ["checks", index, "function"],
+          message: `Function "${check.function}" has more than one FUNCTION_CASES check`,
+        });
+      }
+      functionNames.add(check.function);
+    }
+    if (functionChecks > FUNCTION_CASE_LIMITS.maxChecksPerConfig) {
+      context.addIssue({ code: "custom", message: "Too many FUNCTION_CASES checks" });
+    }
+  });

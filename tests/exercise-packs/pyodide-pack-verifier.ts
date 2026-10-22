@@ -9,6 +9,7 @@ import {
   type RuntimeExecutionResult,
   type RuntimeManager,
 } from "../../src/core/runtime";
+import { runFunctionProbes } from "../../src/core/runtime/pyodide/function-probe-helper";
 import { buildObservationExpression } from "../../src/core/runtime/pyodide/observation-helper";
 import { createPythonSetupNamespace } from "../../src/core/runtime/pyodide/setup-conversion";
 import type { JsonObject } from "../../src/core/domain";
@@ -118,11 +119,30 @@ export class NodePyodideRuntime implements RuntimeManager {
           };
         }
       }
-      if (request.observeVariables === undefined) return base;
-      const serialized = await pyodide.runPythonAsync(buildObservationExpression(request.observeVariables), {
-        globals: namespace,
-      });
-      return { ...base, serialized: JSON.parse(String(serialized)) as JsonObject } as RuntimeExecutionResult;
+      // M9: like the Worker, functions are exercised only after a SUCCESSFUL run.
+      const probes =
+        request.functionProbes !== undefined &&
+        request.functionProbes.length > 0 &&
+        base.status === RUNTIME_EXECUTION_STATUS.SUCCESS
+          ? request.functionProbes
+          : undefined;
+      if (request.observeVariables === undefined && probes === undefined) return base;
+      const observed =
+        request.observeVariables === undefined
+          ? { variables: {} }
+          : (JSON.parse(
+              String(
+                await pyodide.runPythonAsync(buildObservationExpression(request.observeVariables), {
+                  globals: namespace,
+                }),
+              ),
+            ) as JsonObject);
+      const functionResults =
+        probes === undefined ? undefined : await runFunctionProbes(pyodide, namespace, probes);
+      return {
+        ...base,
+        serialized: functionResults === undefined ? observed : { ...observed, functionResults },
+      } as RuntimeExecutionResult;
     } finally {
       pyodide.setStdout();
       pyodide.setStderr();

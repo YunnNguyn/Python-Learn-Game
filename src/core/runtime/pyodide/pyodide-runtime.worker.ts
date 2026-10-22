@@ -21,6 +21,8 @@ import {
   type RuntimeSubmitResultWorkerResponse,
 } from "./worker-protocol";
 import { buildObservationExpression } from "./observation-helper";
+import { runFunctionProbes } from "./function-probe-helper";
+import type { FunctionProbeSpec } from "../function-probes";
 import {
   isAllowedRuntimeConfigKey,
   isAllowedRuntimePackage,
@@ -82,6 +84,7 @@ workerScope.onmessage = (event) => {
       event.data.runtimeConfig,
       event.data.setupData,
       event.data.observeVariables,
+      event.data.functionProbes,
     );
   }
 };
@@ -447,6 +450,7 @@ async function submitCode(
   runtimeConfig: JsonObject | undefined,
   setupData: JsonObject | undefined,
   observeVariables: readonly string[] | undefined,
+  functionProbes?: readonly FunctionProbeSpec[],
 ): Promise<void> {
   if (runtime === null) {
     postSubmitResult(
@@ -516,7 +520,7 @@ async function submitCode(
     submitNamespace = namespaceResult.namespace;
     postSubmitResult(
       requestId,
-      await executePython(runtime, submitNamespace, code, observeVariables),
+      await executePython(runtime, submitNamespace, code, observeVariables, functionProbes),
     );
   } catch (error) {
     postSubmitResult(
@@ -612,6 +616,7 @@ async function executePython(
   globals: PyProxy,
   code: string,
   observeVariables: readonly string[] | undefined,
+  functionProbes?: readonly FunctionProbeSpec[],
 ): Promise<RuntimeExecutionResult> {
   const stdoutCapture = createOutputCapture();
   const stderrCapture = createOutputCapture();
@@ -660,20 +665,36 @@ async function executePython(
     result.status === RUNTIME_EXECUTION_STATUS.PYTHON_EXCEPTION;
   const workspace = producedOutput ? scanWorkspace(pyodide) : undefined;
 
+  // M9: functions are exercised ONLY after the learner program ran to completion
+  // (once, never re-executed). A program that raised is reported as a runtime error.
+  const probes =
+    functionProbes !== undefined &&
+    functionProbes.length > 0 &&
+    result.status === RUNTIME_EXECUTION_STATUS.SUCCESS
+      ? functionProbes
+      : undefined;
+
   if (
-    observeVariables !== undefined &&
+    (observeVariables !== undefined || probes !== undefined) &&
     (result.status === RUNTIME_EXECUTION_STATUS.SUCCESS ||
       result.status === RUNTIME_EXECUTION_STATUS.PYTHON_EXCEPTION)
   ) {
     try {
+      const observations: JsonObject =
+        observeVariables !== undefined
+          ? await collectRuntimeObservations(pyodide, globals, observeVariables)
+          : { variables: {} };
+      const functionResults =
+        probes !== undefined
+          ? await runFunctionProbes(pyodide, globals, probes)
+          : undefined;
       return withWorkspace(
         {
           ...result,
-          serialized: await collectRuntimeObservations(
-            pyodide,
-            globals,
-            observeVariables,
-          ),
+          serialized:
+            functionResults === undefined
+              ? observations
+              : { ...observations, functionResults: functionResults as unknown as JsonObject[] },
         },
         workspace,
       );

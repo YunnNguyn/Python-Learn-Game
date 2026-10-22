@@ -630,6 +630,9 @@ export class PyodideRuntimeManager implements RuntimeManager {
           ...(request.observeVariables === undefined
             ? {}
             : { observeVariables: [...request.observeVariables] }),
+          ...(request.functionProbes === undefined || request.functionProbes.length === 0
+            ? {}
+            : { functionProbes: request.functionProbes }),
           runtimeConfig: preparation?.runtimeConfig,
           setupData: preparation?.setupData,
         });

@@ -1,0 +1,729 @@
+{
+  "python-foundations.pf01": {
+    "starter": "# width, height, channels là các số nguyên đã được nạp sẵn (xem tab Dữ liệu).\n# TODO: thay mỗi `None` bằng biểu thức tính đúng.\n\n# 1) Số pixel của ảnh.\npixel_count = None  # TODO\n\n# 2) Tỉ lệ khung hình = rộng / cao. Kết quả là số thực.\naspect_ratio = None  # TODO\n\n# 3) Tổng số giá trị số của ảnh: mỗi pixel có `channels` giá trị.\ntotal_values = None  # TODO\n\n# 4) Một nửa chiều rộng, làm tròn xuống, vẫn là số nguyên.\nhalf_width = None  # TODO\n\nprint(pixel_count, aspect_ratio, total_values, half_width)\n",
+    "reference": "pixel_count = width * height\naspect_ratio = width / height\ntotal_values = pixel_count * channels\nhalf_width = width // 2\nprint(pixel_count, aspect_ratio, total_values, half_width)\n",
+    "wrong": [
+      {
+        "name": "aspect ratio with floor division",
+        "code": "pixel_count = width * height\naspect_ratio = width // height\ntotal_values = pixel_count * channels\nhalf_width = width // 2\n",
+        "fails": [
+          "aspect_ratio"
+        ]
+      },
+      {
+        "name": "half width with true division (float instead of int)",
+        "code": "pixel_count = width * height\naspect_ratio = width / height\ntotal_values = pixel_count * channels\nhalf_width = width / 2\n",
+        "fails": [
+          "half_width"
+        ]
+      },
+      {
+        "name": "pixel count by addition",
+        "code": "pixel_count = width + height\naspect_ratio = width / height\ntotal_values = pixel_count * channels\nhalf_width = width // 2\n",
+        "fails": [
+          "pixel_count",
+          "total_values"
+        ]
+      },
+      {
+        "name": "total values forgets the channels",
+        "code": "pixel_count = width * height\naspect_ratio = width / height\ntotal_values = pixel_count\nhalf_width = width // 2\n",
+        "fails": [
+          "total_values"
+        ]
+      },
+      {
+        "name": "aspect ratio inverted",
+        "code": "pixel_count = width * height\naspect_ratio = height / width\ntotal_values = pixel_count * channels\nhalf_width = width // 2\n",
+        "fails": [
+          "aspect_ratio"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf02": {
+    "starter": "# confidence, high_threshold, low_threshold, edge_confidence đã được nạp sẵn.\n# Quy tắc gắn nhãn:\n#   confidence >= high_threshold                -> \"accept\"\n#   chưa đạt, nhưng confidence >= low_threshold -> \"review\"\n#   còn lại                                     -> \"reject\"\n\n# 1) Biểu thức Boolean: độ tin cậy có đạt ngưỡng cao không?\nis_confident = None\n\n# 2) Gắn nhãn cho `confidence` bằng if / elif / else.\nlabel = None\n# TODO: viết if / elif / else ở đây và gán label trong từng nhánh.\n\n# 3) Áp dụng đúng quy tắc đó cho `edge_confidence` (giá trị đúng bằng ngưỡng cao).\nedge_label = None\n# TODO: lặp lại quy tắc cho edge_confidence.\n\nprint(is_confident, label, edge_label)\n",
+    "reference": "is_confident = confidence >= high_threshold\n\nif confidence >= high_threshold:\n    label = \"accept\"\nelif confidence >= low_threshold:\n    label = \"review\"\nelse:\n    label = \"reject\"\n\nif edge_confidence >= high_threshold:\n    edge_label = \"accept\"\nelif edge_confidence >= low_threshold:\n    edge_label = \"review\"\nelse:\n    edge_label = \"reject\"\n\nprint(is_confident, label, edge_label)\n",
+    "wrong": [
+      {
+        "name": "strict comparison on the high threshold misses the boundary",
+        "code": "is_confident = confidence > high_threshold\n\nif confidence > high_threshold:\n    label = \"accept\"\nelif confidence >= low_threshold:\n    label = \"review\"\nelse:\n    label = \"reject\"\n\nif edge_confidence > high_threshold:\n    edge_label = \"accept\"\nelif edge_confidence >= low_threshold:\n    edge_label = \"review\"\nelse:\n    edge_label = \"reject\"\n",
+        "fails": [
+          "edge_label"
+        ]
+      },
+      {
+        "name": "branches checked in the wrong order",
+        "code": "is_confident = confidence >= high_threshold\n\nif confidence >= low_threshold:\n    label = \"review\"\nelif confidence >= high_threshold:\n    label = \"accept\"\nelse:\n    label = \"reject\"\n\nif edge_confidence >= low_threshold:\n    edge_label = \"review\"\nelif edge_confidence >= high_threshold:\n    edge_label = \"accept\"\nelse:\n    edge_label = \"reject\"\n",
+        "fails": [
+          "edge_label"
+        ]
+      },
+      {
+        "name": "is_confident stored as text",
+        "code": "is_confident = \"True\" if confidence >= high_threshold else \"False\"\n\nif confidence >= high_threshold:\n    label = \"accept\"\nelif confidence >= low_threshold:\n    label = \"review\"\nelse:\n    label = \"reject\"\n\nif edge_confidence >= high_threshold:\n    edge_label = \"accept\"\nelif edge_confidence >= low_threshold:\n    edge_label = \"review\"\nelse:\n    edge_label = \"reject\"\n",
+        "fails": [
+          "is_confident"
+        ]
+      },
+      {
+        "name": "edge label forgotten (left as None)",
+        "code": "is_confident = confidence >= high_threshold\n\nif confidence >= high_threshold:\n    label = \"accept\"\nelif confidence >= low_threshold:\n    label = \"review\"\nelse:\n    label = \"reject\"\n\nedge_label = None\n",
+        "fails": [
+          "edge_label"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf03": {
+    "starter": "# Metadata của ảnh được đọc từ file, nên width_text và height_text là chuỗi (str).\n# max_pixels là số nguyên: số pixel tối đa mà mô hình nhận.\n# Đoạn mã dưới đây có lỗi. Hãy chạy thử, đọc thông báo, rồi sửa — không cần viết lại từ đầu.\n# TODO: tìm và sửa lỗi (có hơn một lỗi) cho đến khi kết quả in ra đúng.\n\nwidth = width_text\nheight = height_text\npixel_count = width * height\n\nif pixel_count < max_pixels:\n    size_label = \"too_large\"\nelse:\n    size_label = \"ok\"\n\nprint(pixel_count, size_label)\n",
+    "reference": "width = int(width_text)\nheight = int(height_text)\npixel_count = width * height\n\nif pixel_count > max_pixels:\n    size_label = \"too_large\"\nelse:\n    size_label = \"ok\"\n\nprint(pixel_count, size_label)\n",
+    "wrong": [
+      {
+        "name": "the untouched buggy code (TypeError)",
+        "code": "width = width_text\nheight = height_text\npixel_count = width * height\n\nif pixel_count < max_pixels:\n    size_label = \"too_large\"\nelse:\n    size_label = \"ok\"\n",
+        "fails": [],
+        "raises": "TypeError"
+      },
+      {
+        "name": "conversion fixed but the branch is still inverted",
+        "code": "width = int(width_text)\nheight = int(height_text)\npixel_count = width * height\n\nif pixel_count < max_pixels:\n    size_label = \"too_large\"\nelse:\n    size_label = \"ok\"\n",
+        "fails": [
+          "size_label"
+        ]
+      },
+      {
+        "name": "branch fixed but the strings are still multiplied (TypeError)",
+        "code": "width = width_text\nheight = height_text\npixel_count = width * height\n\nif pixel_count > max_pixels:\n    size_label = \"too_large\"\nelse:\n    size_label = \"ok\"\n",
+        "fails": [],
+        "raises": "TypeError"
+      },
+      {
+        "name": "float() instead of int()",
+        "code": "width = float(width_text)\nheight = float(height_text)\npixel_count = width * height\n\nif pixel_count > max_pixels:\n    size_label = \"too_large\"\nelse:\n    size_label = \"ok\"\n",
+        "fails": [
+          "width",
+          "height",
+          "pixel_count"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf04": {
+    "starter": "# readings là list các số đo; số đo hợp lệ nằm trong đoạn [min_valid, max_valid].\n# Duyệt từng số đo bằng vòng lặp for.\n\nvalid_readings = []   # các số đo hợp lệ, giữ nguyên thứ tự\ninvalid_count = 0     # số số đo không hợp lệ\nvalid_total = 0       # tổng các số đo hợp lệ\n\nfor value in readings:\n    # TODO: nếu value hợp lệ thì thêm vào valid_readings và cộng vào valid_total,\n    # ngược lại tăng invalid_count.\n    pass\n\nprint(valid_readings, invalid_count, valid_total)\n",
+    "reference": "valid_readings = []\ninvalid_count = 0\nvalid_total = 0\n\nfor value in readings:\n    if min_valid <= value <= max_valid:\n        valid_readings.append(value)\n        valid_total += value\n    else:\n        invalid_count += 1\n\nprint(valid_readings, invalid_count, valid_total)\n",
+    "wrong": [
+      {
+        "name": "upper bound excluded (drops max_valid)",
+        "code": "valid_readings = []\ninvalid_count = 0\nvalid_total = 0\n\nfor value in readings:\n    if min_valid <= value < max_valid:\n        valid_readings.append(value)\n        valid_total += value\n    else:\n        invalid_count += 1\n",
+        "fails": [
+          "valid_readings",
+          "invalid_count",
+          "valid_total"
+        ]
+      },
+      {
+        "name": "lower bound excluded (drops min_valid)",
+        "code": "valid_readings = []\ninvalid_count = 0\nvalid_total = 0\n\nfor value in readings:\n    if min_valid < value <= max_valid:\n        valid_readings.append(value)\n        valid_total += value\n    else:\n        invalid_count += 1\n",
+        "fails": [
+          "valid_readings",
+          "invalid_count"
+        ]
+      },
+      {
+        "name": "invalid readings are never counted",
+        "code": "valid_readings = []\ninvalid_count = 0\nvalid_total = 0\n\nfor value in readings:\n    if min_valid <= value <= max_valid:\n        valid_readings.append(value)\n        valid_total += value\n",
+        "fails": [
+          "invalid_count"
+        ]
+      },
+      {
+        "name": "total forgotten",
+        "code": "valid_readings = []\ninvalid_count = 0\nvalid_total = 0\n\nfor value in readings:\n    if min_valid <= value <= max_valid:\n        valid_readings.append(value)\n    else:\n        invalid_count += 1\n",
+        "fails": [
+          "valid_total"
+        ]
+      },
+      {
+        "name": "readings sorted instead of kept in order",
+        "code": "valid_readings = []\ninvalid_count = 0\nvalid_total = 0\n\nfor value in sorted(readings):\n    if min_valid <= value <= max_valid:\n        valid_readings.append(value)\n        valid_total += value\n    else:\n        invalid_count += 1\n",
+        "fails": [
+          "valid_readings"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf05": {
+    "starter": "# Viết hàm mean_of(values): trả về trung bình cộng của list values (một số thực).\n# Quy ước: nếu values rỗng thì trả về 0.0. Không dùng NumPy.\n\ndef mean_of(values):\n    # TODO: tính trung bình cộng rồi return.\n    return None\n\n\nmean_a = mean_of(samples_a)\nmean_b = mean_of(samples_b)\nmean_empty = mean_of([])\n\nprint(mean_a, mean_b, mean_empty)\n",
+    "reference": "def mean_of(values):\n    if len(values) == 0:\n        return 0.0\n    return sum(values) / len(values)\n\n\nmean_a = mean_of(samples_a)\nmean_b = mean_of(samples_b)\nmean_empty = mean_of([])\n\nprint(mean_a, mean_b, mean_empty)\n",
+    "wrong": [
+      {
+        "name": "floor division returns int / wrong values",
+        "code": "def mean_of(values):\n    if len(values) == 0:\n        return 0.0\n    return sum(values) // len(values)\n\n\nmean_a = mean_of(samples_a)\nmean_b = mean_of(samples_b)\nmean_empty = mean_of([])\n",
+        "fails": [
+          "mean_b"
+        ]
+      },
+      {
+        "name": "empty list not handled (ZeroDivisionError)",
+        "code": "def mean_of(values):\n    return sum(values) / len(values)\n\n\nmean_a = mean_of(samples_a)\nmean_b = mean_of(samples_b)\nmean_empty = mean_of([])\n",
+        "fails": [],
+        "raises": "ZeroDivisionError"
+      },
+      {
+        "name": "print instead of return",
+        "code": "def mean_of(values):\n    if len(values) == 0:\n        print(0.0)\n    else:\n        print(sum(values) / len(values))\n\n\nmean_a = mean_of(samples_a)\nmean_b = mean_of(samples_b)\nmean_empty = mean_of([])\n",
+        "fails": [
+          "mean_a",
+          "mean_b",
+          "mean_empty"
+        ]
+      },
+      {
+        "name": "no function: the mean is computed inline",
+        "code": "mean_a = sum(samples_a) / len(samples_a)\nmean_b = sum(samples_b) / len(samples_b)\nmean_empty = 0.0\n",
+        "fails": [
+          "mean_of"
+        ]
+      },
+      {
+        "name": "empty list returns int 0",
+        "code": "def mean_of(values):\n    if len(values) == 0:\n        return 0\n    return sum(values) / len(values)\n\n\nmean_a = mean_of(samples_a)\nmean_b = mean_of(samples_b)\nmean_empty = mean_of([])\n",
+        "fails": [
+          "mean_empty"
+        ]
+      },
+      {
+        "name": "divides by a fixed count instead of len(values)",
+        "code": "def mean_of(values):\n    if len(values) == 0:\n        return 0.0\n    return sum(values) / 5\n\n\nmean_a = mean_of(samples_a)\nmean_b = mean_of(samples_b)\nmean_empty = mean_of([])\n",
+        "fails": [
+          "mean_b"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf06": {
+    "starter": "# Viết hàm normalize_valid(values, max_value):\n#   - bỏ qua giá trị không hợp lệ (ngoài đoạn từ 0 đến max_value, tính cả hai đầu mút);\n#   - với giá trị hợp lệ, tính value / max_value;\n#   - trả về list kết quả, giữ nguyên thứ tự.\n# Không dùng NumPy.\n\ndef normalize_valid(values, max_value):\n    # TODO: dùng vòng lặp, điều kiện và một list kết quả.\n    return None\n\n\nnormalized_8bit = normalize_valid(row_8bit, 255)\nnormalized_10bit = normalize_valid(row_10bit, 1023)\nnormalized_none = normalize_valid([-3, 999], 255)\n\nprint(normalized_8bit)\nprint(normalized_10bit)\nprint(normalized_none)\n",
+    "reference": "def normalize_valid(values, max_value):\n    result = []\n    for value in values:\n        if 0 <= value <= max_value:\n            result.append(value / max_value)\n    return result\n\n\nnormalized_8bit = normalize_valid(row_8bit, 255)\nnormalized_10bit = normalize_valid(row_10bit, 1023)\nnormalized_none = normalize_valid([-3, 999], 255)\n\nprint(normalized_8bit)\nprint(normalized_10bit)\nprint(normalized_none)\n",
+    "wrong": [
+      {
+        "name": "upper bound excluded (drops max_value)",
+        "code": "def normalize_valid(values, max_value):\n    result = []\n    for value in values:\n        if 0 <= value < max_value:\n            result.append(value / max_value)\n    return result\n\n\nnormalized_8bit = normalize_valid(row_8bit, 255)\nnormalized_10bit = normalize_valid(row_10bit, 1023)\nnormalized_none = normalize_valid([-3, 999], 255)\n",
+        "fails": [
+          "normalized_8bit",
+          "normalized_10bit"
+        ]
+      },
+      {
+        "name": "no filtering of invalid values",
+        "code": "def normalize_valid(values, max_value):\n    result = []\n    for value in values:\n        result.append(value / max_value)\n    return result\n\n\nnormalized_8bit = normalize_valid(row_8bit, 255)\nnormalized_10bit = normalize_valid(row_10bit, 1023)\nnormalized_none = normalize_valid([-3, 999], 255)\n",
+        "fails": [
+          "normalized_none"
+        ]
+      },
+      {
+        "name": "max_value ignored (255 hard-coded)",
+        "code": "def normalize_valid(values, max_value):\n    result = []\n    for value in values:\n        if 0 <= value <= max_value:\n            result.append(value / 255)\n    return result\n\n\nnormalized_8bit = normalize_valid(row_8bit, 255)\nnormalized_10bit = normalize_valid(row_10bit, 1023)\nnormalized_none = normalize_valid([-3, 999], 255)\n",
+        "fails": [
+          "normalized_10bit"
+        ]
+      },
+      {
+        "name": "returns None (forgot return)",
+        "code": "def normalize_valid(values, max_value):\n    result = []\n    for value in values:\n        if 0 <= value <= max_value:\n            result.append(value / max_value)\n\n\nnormalized_8bit = normalize_valid(row_8bit, 255)\nnormalized_10bit = normalize_valid(row_10bit, 1023)\nnormalized_none = normalize_valid([-3, 999], 255)\n",
+        "fails": [
+          "normalized_8bit",
+          "normalized_10bit",
+          "normalized_none"
+        ]
+      },
+      {
+        "name": "floor division",
+        "code": "def normalize_valid(values, max_value):\n    result = []\n    for value in values:\n        if 0 <= value <= max_value:\n            result.append(value // max_value)\n    return result\n\n\nnormalized_8bit = normalize_valid(row_8bit, 255)\nnormalized_10bit = normalize_valid(row_10bit, 1023)\nnormalized_none = normalize_valid([-3, 999], 255)\n",
+        "fails": [
+          "normalized_8bit",
+          "normalized_10bit"
+        ]
+      },
+      {
+        "name": "result sorted instead of kept in order",
+        "code": "def normalize_valid(values, max_value):\n    result = []\n    for value in values:\n        if 0 <= value <= max_value:\n            result.append(value / max_value)\n    return sorted(result)\n\n\nnormalized_8bit = normalize_valid(row_8bit, 255)\nnormalized_10bit = normalize_valid(row_10bit, 1023)\nnormalized_none = normalize_valid([-3, 999], 255)\n",
+        "fails": [
+          "normalized_8bit",
+          "normalized_10bit"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf07": {
+    "starter": "# Pipeline tiền xử lý cho một bộ dự đoán.\n# Dữ liệu đã nạp sẵn: confidences (có thể chứa giá trị lỗi ngoài đoạn [0, 1]),\n# high_threshold và low_threshold.\n\n\ndef label_for(confidence, high, low):\n    # TODO: trả về \"accept\", \"review\" hoặc \"reject\" theo quy tắc ngưỡng.\n    return None\n\n\nclean_confidences = []   # độ tin cậy hợp lệ (0 <= c <= 1), giữ nguyên thứ tự\nlabels = []              # nhãn tương ứng từng phần tử của clean_confidences\naccept_count = 0\nreview_count = 0\nreject_count = 0\nmean_confidence = 0.0    # trung bình của clean_confidences; 0.0 nếu rỗng\n\n# TODO: duyệt confidences, lọc giá trị hợp lệ, gắn nhãn bằng label_for và đếm.\n# TODO: tính mean_confidence sau vòng lặp.\n\nprint(clean_confidences)\nprint(labels)\nprint(accept_count, review_count, reject_count, mean_confidence)\n",
+    "reference": "def label_for(confidence, high, low):\n    if confidence >= high:\n        return \"accept\"\n    elif confidence >= low:\n        return \"review\"\n    return \"reject\"\n\n\nclean_confidences = []\nlabels = []\naccept_count = 0\nreview_count = 0\nreject_count = 0\nmean_confidence = 0.0\n\nfor c in confidences:\n    if 0 <= c <= 1:\n        name = label_for(c, high_threshold, low_threshold)\n        clean_confidences.append(c)\n        labels.append(name)\n        if name == \"accept\":\n            accept_count += 1\n        elif name == \"review\":\n            review_count += 1\n        else:\n            reject_count += 1\n\nif len(clean_confidences) > 0:\n    mean_confidence = sum(clean_confidences) / len(clean_confidences)\n\nprint(clean_confidences)\nprint(labels)\nprint(accept_count, review_count, reject_count, mean_confidence)\n",
+    "wrong": [
+      {
+        "name": "strict comparison in label_for mislabels the thresholds themselves",
+        "code": "def label_for(confidence, high, low):\n    if confidence > high:\n        return \"accept\"\n    elif confidence > low:\n        return \"review\"\n    return \"reject\"\n\n\nclean_confidences = []\nlabels = []\naccept_count = 0\nreview_count = 0\nreject_count = 0\nmean_confidence = 0.0\n\nfor c in confidences:\n    if 0 <= c <= 1:\n        name = label_for(c, high_threshold, low_threshold)\n        clean_confidences.append(c)\n        labels.append(name)\n        if name == \"accept\":\n            accept_count += 1\n        elif name == \"review\":\n            review_count += 1\n        else:\n            reject_count += 1\n\nif len(clean_confidences) > 0:\n    mean_confidence = sum(clean_confidences) / len(clean_confidences)\n",
+        "fails": [
+          "labels",
+          "accept_count",
+          "reject_count"
+        ]
+      },
+      {
+        "name": "mean taken over the raw list, invalid values included",
+        "code": "def label_for(confidence, high, low):\n    if confidence >= high:\n        return \"accept\"\n    elif confidence >= low:\n        return \"review\"\n    return \"reject\"\n\n\nclean_confidences = []\nlabels = []\naccept_count = 0\nreview_count = 0\nreject_count = 0\nmean_confidence = 0.0\n\nfor c in confidences:\n    if 0 <= c <= 1:\n        name = label_for(c, high_threshold, low_threshold)\n        clean_confidences.append(c)\n        labels.append(name)\n        if name == \"accept\":\n            accept_count += 1\n        elif name == \"review\":\n            review_count += 1\n        else:\n            reject_count += 1\n\nmean_confidence = sum(confidences) / len(confidences)\n",
+        "fails": [
+          "mean_confidence"
+        ]
+      },
+      {
+        "name": "valid range excludes 0 and 1",
+        "code": "def label_for(confidence, high, low):\n    if confidence >= high:\n        return \"accept\"\n    elif confidence >= low:\n        return \"review\"\n    return \"reject\"\n\n\nclean_confidences = []\nlabels = []\naccept_count = 0\nreview_count = 0\nreject_count = 0\nmean_confidence = 0.0\n\nfor c in confidences:\n    if 0 < c < 1:\n        name = label_for(c, high_threshold, low_threshold)\n        clean_confidences.append(c)\n        labels.append(name)\n        if name == \"accept\":\n            accept_count += 1\n        elif name == \"review\":\n            review_count += 1\n        else:\n            reject_count += 1\n\nif len(clean_confidences) > 0:\n    mean_confidence = sum(clean_confidences) / len(clean_confidences)\n",
+        "fails": [
+          "clean_confidences",
+          "labels"
+        ]
+      },
+      {
+        "name": "invalid values are labelled and counted too",
+        "code": "def label_for(confidence, high, low):\n    if confidence >= high:\n        return \"accept\"\n    elif confidence >= low:\n        return \"review\"\n    return \"reject\"\n\n\nclean_confidences = []\nlabels = []\naccept_count = 0\nreview_count = 0\nreject_count = 0\nmean_confidence = 0.0\n\nfor c in confidences:\n    name = label_for(c, high_threshold, low_threshold)\n    if 0 <= c <= 1:\n        clean_confidences.append(c)\n        labels.append(name)\n    if name == \"accept\":\n        accept_count += 1\n    elif name == \"review\":\n        review_count += 1\n    else:\n        reject_count += 1\n\nif len(clean_confidences) > 0:\n    mean_confidence = sum(clean_confidences) / len(clean_confidences)\n",
+        "fails": [
+          "reject_count"
+        ]
+      },
+      {
+        "name": "label_for never filled in (returns None)",
+        "code": "def label_for(confidence, high, low):\n    return None\n\n\nclean_confidences = []\nlabels = []\naccept_count = 0\nreview_count = 0\nreject_count = 0\nmean_confidence = 0.0\n\nfor c in confidences:\n    if 0 <= c <= 1:\n        clean_confidences.append(c)\n        labels.append(label_for(c, high_threshold, low_threshold))\n\nif len(clean_confidences) > 0:\n    mean_confidence = sum(clean_confidences) / len(clean_confidences)\n",
+        "fails": [
+          "labels",
+          "accept_count",
+          "review_count",
+          "reject_count"
+        ]
+      },
+      {
+        "name": "mean never computed (stays 0.0)",
+        "code": "def label_for(confidence, high, low):\n    if confidence >= high:\n        return \"accept\"\n    elif confidence >= low:\n        return \"review\"\n    return \"reject\"\n\n\nclean_confidences = []\nlabels = []\naccept_count = 0\nreview_count = 0\nreject_count = 0\nmean_confidence = 0.0\n\nfor c in confidences:\n    if 0 <= c <= 1:\n        name = label_for(c, high_threshold, low_threshold)\n        clean_confidences.append(c)\n        labels.append(name)\n        if name == \"accept\":\n            accept_count += 1\n        elif name == \"review\":\n            review_count += 1\n        else:\n            reject_count += 1\n",
+        "fails": [
+          "mean_confidence"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf08": {
+    "starter": "# samples là list các số đo theo thứ tự thời gian (cũ nhất ở đầu, mới nhất ở cuối).\n# n, start, stop đã được nạp sẵn (xem tab Dữ liệu).\n#\n# Nhắc nhanh:\n#   - chỉ số bắt đầu từ 0; chỉ số âm đếm từ cuối: samples[-1] là phần tử cuối;\n#   - samples[a:b] lấy từ chỉ số a đến b-1 (b KHÔNG được lấy);\n#   - samples[a:b:c] thêm bước nhảy c; bước âm đi ngược.\n\nfirst_sample = samples[0]   # ví dụ đã làm sẵn\nlast_sample = None          # TODO: số đo cuối cùng\nhead = None                 # TODO: n số đo đầu tiên\ntail = None                 # TODO: n số đo cuối cùng\nwindow = None               # TODO: các số đo từ chỉ số start đến chỉ số stop - 1\nevery_second = None         # TODO: cách một phần tử, bắt đầu từ phần tử đầu\nnewest_first = None         # TODO: toàn bộ list theo thứ tự đảo ngược (không sửa samples)\n\nprint(first_sample, last_sample, head, tail, window, every_second, newest_first)\n",
+    "reference": "first_sample = samples[0]\nlast_sample = samples[-1]\nhead = samples[:n]\ntail = samples[-n:]\nwindow = samples[start:stop]\nevery_second = samples[::2]\nnewest_first = samples[::-1]\nprint(first_sample, last_sample, head, tail, window, every_second, newest_first)\n",
+    "wrong": [
+      {
+        "name": "tail off by one (-n-1)",
+        "code": "first_sample = samples[0]\nlast_sample = samples[-1]\nhead = samples[:n]\ntail = samples[-n - 1:]\nwindow = samples[start:stop]\nevery_second = samples[::2]\nnewest_first = samples[::-1]\n",
+        "fails": [
+          "tail"
+        ]
+      },
+      {
+        "name": "window includes the stop index",
+        "code": "first_sample = samples[0]\nlast_sample = samples[-1]\nhead = samples[:n]\ntail = samples[-n:]\nwindow = samples[start:stop + 1]\nevery_second = samples[::2]\nnewest_first = samples[::-1]\n",
+        "fails": [
+          "window"
+        ]
+      },
+      {
+        "name": "reverses samples in place (the source list changes)",
+        "code": "first_sample = samples[0]\nlast_sample = samples[-1]\nhead = samples[:n]\ntail = samples[-n:]\nwindow = samples[start:stop]\nevery_second = samples[::2]\nsamples.reverse()\nnewest_first = samples\n",
+        "fails": [
+          "samples"
+        ]
+      },
+      {
+        "name": "every_second starts from the second element",
+        "code": "first_sample = samples[0]\nlast_sample = samples[-1]\nhead = samples[:n]\ntail = samples[-n:]\nwindow = samples[start:stop]\nevery_second = samples[1::2]\nnewest_first = samples[::-1]\n",
+        "fails": [
+          "every_second"
+        ]
+      },
+      {
+        "name": "head takes n-1 elements",
+        "code": "first_sample = samples[0]\nlast_sample = samples[-1]\nhead = samples[:n - 1]\ntail = samples[-n:]\nwindow = samples[start:stop]\nevery_second = samples[::2]\nnewest_first = samples[::-1]\n",
+        "fails": [
+          "head"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf09": {
+    "starter": "# labels là nhãn của từng ảnh (có lặp); width, height là kích thước ảnh. Đã nạp sẵn.\n\n# 1) Đếm số lần xuất hiện của mỗi nhãn bằng một dictionary.\nlabel_counts = {}\nfor label in labels:\n    # TODO: tăng bộ đếm của label (lần đầu gặp nhãn này thì bắt đầu từ 0).\n    pass\n\n# 2) Một set các nhãn khác nhau, và list của chúng theo thứ tự bảng chữ cái.\nunique_labels = None  # TODO\nunique_sorted = None  # TODO\n\n# 3) Tuple (nhãn, số lần) của nhãn xuất hiện nhiều nhất.\ntop_label = None  # TODO\n\n# 4) Dictionary nhãn -> chỉ số 0, 1, 2, ... theo thứ tự bảng chữ cái.\nclass_index = None  # TODO\n\n# 5) Hai tuple kích thước.\nimage_size = None    # TODO: (width, height)\nswapped_size = None  # TODO: (height, width)\n\nprint(label_counts, unique_sorted, top_label, class_index, image_size, swapped_size)\n",
+    "reference": "label_counts = {}\nfor label in labels:\n    label_counts[label] = label_counts.get(label, 0) + 1\nunique_labels = set(labels)\nunique_sorted = sorted(unique_labels)\nbest = max(label_counts, key=label_counts.get)\ntop_label = (best, label_counts[best])\nclass_index = {name: index for index, name in enumerate(unique_sorted)}\nimage_size = (width, height)\nswapped_size = (height, width)\nprint(label_counts, unique_sorted, top_label, class_index, image_size, swapped_size)\n",
+    "wrong": [
+      {
+        "name": "unique_labels is a list, not a set",
+        "code": "label_counts = {}\nfor label in labels:\n    label_counts[label] = label_counts.get(label, 0) + 1\nunique_labels = sorted(set(labels))\nunique_sorted = sorted(unique_labels)\nbest = max(label_counts, key=label_counts.get)\ntop_label = (best, label_counts[best])\nclass_index = {name: index for index, name in enumerate(unique_sorted)}\nimage_size = (width, height)\nswapped_size = (height, width)\n",
+        "fails": [
+          "unique_labels"
+        ]
+      },
+      {
+        "name": "image_size is a list, not a tuple",
+        "code": "label_counts = {}\nfor label in labels:\n    label_counts[label] = label_counts.get(label, 0) + 1\nunique_labels = set(labels)\nunique_sorted = sorted(unique_labels)\nbest = max(label_counts, key=label_counts.get)\ntop_label = (best, label_counts[best])\nclass_index = {name: index for index, name in enumerate(unique_sorted)}\nimage_size = [width, height]\nswapped_size = (height, width)\n",
+        "fails": [
+          "image_size"
+        ]
+      },
+      {
+        "name": "class_index in reverse alphabetical order",
+        "code": "label_counts = {}\nfor label in labels:\n    label_counts[label] = label_counts.get(label, 0) + 1\nunique_labels = set(labels)\nunique_sorted = sorted(unique_labels)\nbest = max(label_counts, key=label_counts.get)\ntop_label = (best, label_counts[best])\nclass_index = {name: index for index, name in enumerate(sorted(unique_labels, reverse=True))}\nimage_size = (width, height)\nswapped_size = (height, width)\n",
+        "fails": [
+          "class_index"
+        ]
+      },
+      {
+        "name": "top_label is only the label, not the (label, count) tuple",
+        "code": "label_counts = {}\nfor label in labels:\n    label_counts[label] = label_counts.get(label, 0) + 1\nunique_labels = set(labels)\nunique_sorted = sorted(unique_labels)\ntop_label = max(label_counts, key=label_counts.get)\nclass_index = {name: index for index, name in enumerate(unique_sorted)}\nimage_size = (width, height)\nswapped_size = (height, width)\n",
+        "fails": [
+          "top_label"
+        ]
+      },
+      {
+        "name": "label_counts counts distinct labels once",
+        "code": "label_counts = {}\nfor label in labels:\n    label_counts[label] = 1\nunique_labels = set(labels)\nunique_sorted = sorted(unique_labels)\nbest = max(label_counts, key=label_counts.get)\ntop_label = (best, label_counts[best])\nclass_index = {name: index for index, name in enumerate(unique_sorted)}\nimage_size = (width, height)\nswapped_size = (height, width)\n",
+        "fails": [
+          "label_counts",
+          "top_label"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf10": {
+    "starter": "# pixels, bright_from, words, scores, pass_mark đã được nạp sẵn (xem tab Dữ liệu).\n# Mỗi biến chỉ cần MỘT comprehension.\n\n# 1) Đây là phiên bản dùng vòng lặp. Hãy viết lại thành một list comprehension cho cùng kết quả.\nvalid_scaled = []\nfor p in pixels:\n    if 0 <= p <= 255:\n        valid_scaled.append(p / 255)\n# TODO: thay đoạn vòng lặp trên bằng một list comprehension.\n\n# 2) Chỉ số (trong list pixels gốc) của các pixel HỢP LỆ có giá trị từ bright_from trở lên.\nbright_indices = []  # TODO\n\n# 3) Dictionary: từ -> độ dài của từ, với mọi từ trong words.\nword_lengths = {}  # TODO\n\n# 4) Dictionary chỉ giữ học viên có điểm từ pass_mark trở lên.\npassed_scores = {}  # TODO\n\nprint(valid_scaled)\nprint(bright_indices)\nprint(word_lengths, passed_scores)\n",
+    "reference": "valid_scaled = [p / 255 for p in pixels if 0 <= p <= 255]\nbright_indices = [i for i, p in enumerate(pixels) if 0 <= p <= 255 and p >= bright_from]\nword_lengths = {w: len(w) for w in words}\npassed_scores = {name: score for name, score in scores.items() if score >= pass_mark}\nprint(valid_scaled)\nprint(bright_indices)\nprint(word_lengths, passed_scores)\n",
+    "wrong": [
+      {
+        "name": "bright_indices forgets the validity test",
+        "code": "valid_scaled = [p / 255 for p in pixels if 0 <= p <= 255]\nbright_indices = [i for i, p in enumerate(pixels) if p >= bright_from]\nword_lengths = {w: len(w) for w in words}\npassed_scores = {name: score for name, score in scores.items() if score >= pass_mark}\n",
+        "fails": [
+          "bright_indices"
+        ]
+      },
+      {
+        "name": "passed_scores uses > (drops the score on the pass mark)",
+        "code": "valid_scaled = [p / 255 for p in pixels if 0 <= p <= 255]\nbright_indices = [i for i, p in enumerate(pixels) if 0 <= p <= 255 and p >= bright_from]\nword_lengths = {w: len(w) for w in words}\npassed_scores = {name: score for name, score in scores.items() if score > pass_mark}\n",
+        "fails": [
+          "passed_scores"
+        ]
+      },
+      {
+        "name": "word_lengths is a list, not a dict",
+        "code": "valid_scaled = [p / 255 for p in pixels if 0 <= p <= 255]\nbright_indices = [i for i, p in enumerate(pixels) if 0 <= p <= 255 and p >= bright_from]\nword_lengths = [len(w) for w in words]\npassed_scores = {name: score for name, score in scores.items() if score >= pass_mark}\n",
+        "fails": [
+          "word_lengths"
+        ]
+      },
+      {
+        "name": "valid_scaled uses floor division",
+        "code": "valid_scaled = [p // 255 for p in pixels if 0 <= p <= 255]\nbright_indices = [i for i, p in enumerate(pixels) if 0 <= p <= 255 and p >= bright_from]\nword_lengths = {w: len(w) for w in words}\npassed_scores = {name: score for name, score in scores.items() if score >= pass_mark}\n",
+        "fails": [
+          "valid_scaled"
+        ]
+      },
+      {
+        "name": "valid_scaled keeps the invalid pixels",
+        "code": "valid_scaled = [p / 255 for p in pixels]\nbright_indices = [i for i, p in enumerate(pixels) if 0 <= p <= 255 and p >= bright_from]\nword_lengths = {w: len(w) for w in words}\npassed_scores = {name: score for name, score in scores.items() if score >= pass_mark}\n",
+        "fails": [
+          "valid_scaled"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf11": {
+    "starter": "# Hai hàm dưới đây sẽ được gọi với NHIỀU đầu vào khác nhau khi nộp bài\n# (kể cả list rỗng và các giá trị đúng bằng cận). Hãy viết quy tắc, đừng viết cứng kết quả.\n\ndef moving_average(values, window):\n    \"\"\"Trung bình của mọi đoạn liên tiếp dài `window` phần tử, từ trái sang phải.\"\"\"\n    # TODO\n    return None\n\n\ndef clip_values(values, low, high):\n    \"\"\"List MỚI: giá trị < low thành low, giá trị > high thành high. Không sửa `values`.\"\"\"\n    # TODO\n    return None\n\n\n# Chạy thử với ví dụ trong đề (example_* đã được nạp sẵn).\nprint(moving_average(example_values, example_window))\nprint(clip_values(example_values, example_low, example_high))\n",
+    "reference": "def moving_average(values, window):\n    if window < 1:\n        raise ValueError(\"window must be at least 1\")\n    return [sum(values[i:i + window]) / window for i in range(len(values) - window + 1)]\n\n\ndef clip_values(values, low, high):\n    if low > high:\n        raise ValueError(\"low must not exceed high\")\n    return [max(low, min(v, high)) for v in values]\n\n\nprint(moving_average(example_values, example_window))\nprint(clip_values(example_values, example_low, example_high))\n",
+    "wrong": [
+      {
+        "name": "clip_values changes the input list in place",
+        "code": "def moving_average(values, window):\n    if window < 1:\n        raise ValueError(\"window must be at least 1\")\n    return [sum(values[i:i + window]) / window for i in range(len(values) - window + 1)]\n\n\ndef clip_values(values, low, high):\n    if low > high:\n        raise ValueError(\"low must not exceed high\")\n    for index, value in enumerate(values):\n        if value < low:\n            values[index] = low\n        elif value > high:\n            values[index] = high\n    return values\n",
+        "fails": [],
+        "failsFunctions": [
+          "clip_values"
+        ]
+      },
+      {
+        "name": "moving_average never validates the window",
+        "code": "def moving_average(values, window):\n    return [sum(values[i:i + window]) / window for i in range(len(values) - window + 1)]\n\n\ndef clip_values(values, low, high):\n    if low > high:\n        raise ValueError(\"low must not exceed high\")\n    return [max(low, min(v, high)) for v in values]\n",
+        "fails": [],
+        "failsFunctions": [
+          "moving_average"
+        ]
+      },
+      {
+        "name": "moving_average with floor division",
+        "code": "def moving_average(values, window):\n    if window < 1:\n        raise ValueError(\"window must be at least 1\")\n    return [sum(values[i:i + window]) // window for i in range(len(values) - window + 1)]\n\n\ndef clip_values(values, low, high):\n    if low > high:\n        raise ValueError(\"low must not exceed high\")\n    return [max(low, min(v, high)) for v in values]\n",
+        "fails": [],
+        "failsFunctions": [
+          "moving_average"
+        ]
+      },
+      {
+        "name": "moving_average returns a tuple",
+        "code": "def moving_average(values, window):\n    if window < 1:\n        raise ValueError(\"window must be at least 1\")\n    return tuple(sum(values[i:i + window]) / window for i in range(len(values) - window + 1))\n\n\ndef clip_values(values, low, high):\n    if low > high:\n        raise ValueError(\"low must not exceed high\")\n    return [max(low, min(v, high)) for v in values]\n",
+        "fails": [],
+        "failsFunctions": [
+          "moving_average"
+        ]
+      },
+      {
+        "name": "clip_values never checks the range (low > high)",
+        "code": "def moving_average(values, window):\n    if window < 1:\n        raise ValueError(\"window must be at least 1\")\n    return [sum(values[i:i + window]) / window for i in range(len(values) - window + 1)]\n\n\ndef clip_values(values, low, high):\n    return [max(low, min(v, high)) for v in values]\n",
+        "fails": [],
+        "failsFunctions": [
+          "clip_values"
+        ]
+      },
+      {
+        "name": "clip_values clamps in the wrong order (low wins over high)",
+        "code": "def moving_average(values, window):\n    if window < 1:\n        raise ValueError(\"window must be at least 1\")\n    return [sum(values[i:i + window]) / window for i in range(len(values) - window + 1)]\n\n\ndef clip_values(values, low, high):\n    if low > high:\n        raise ValueError(\"low must not exceed high\")\n    return [min(high, max(v, low)) if v != high else low for v in values]\n",
+        "fails": [],
+        "failsFunctions": [
+          "clip_values"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf12": {
+    "starter": "# Hàm xử lý dữ liệu nhập từ form: mỗi phần tử của raw_values là chuỗi người dùng gõ.\n# Hàm dưới đây CÓ LỖI. Hãy chạy thử, đọc thông báo lỗi, rồi sửa từng chỗ — không cần viết lại từ đầu.\n# TODO: sửa cho đến khi `result` đúng và hàm đúng với mọi đầu vào được mô tả trong phần Mô tả.\n\ndef parse_measurements(raw_values, low, high):\n    values = []\n    rejected = 0\n    for text in raw_values:\n        try:\n            number = int(text)\n        except ValueError:\n            rejected += 1\n            continue\n        if low < number < high:\n            values.append(number)\n        else:\n            rejected += 1\n    return values, rejected\n\n\nresult = parse_measurements(form_inputs, low, high)\nprint(result)\n",
+    "reference": "def parse_measurements(raw_values, low, high):\n    if not isinstance(raw_values, list):\n        raise TypeError(\"raw_values must be a list\")\n    if low > high:\n        raise ValueError(\"low must not exceed high\")\n    values = []\n    rejected = 0\n    for text in raw_values:\n        if not isinstance(text, str):\n            rejected += 1\n            continue\n        try:\n            number = float(text)\n        except ValueError:\n            rejected += 1\n            continue\n        if low <= number <= high:\n            values.append(number)\n        else:\n            rejected += 1\n    return {\"values\": values, \"rejected\": rejected}\n\n\nresult = parse_measurements(form_inputs, low, high)\nprint(result)\n",
+    "wrong": [
+      {
+        "name": "everything fixed except the return type (still a tuple)",
+        "code": "def parse_measurements(raw_values, low, high):\n    if not isinstance(raw_values, list):\n        raise TypeError(\"raw_values must be a list\")\n    if low > high:\n        raise ValueError(\"low must not exceed high\")\n    values = []\n    rejected = 0\n    for text in raw_values:\n        if not isinstance(text, str):\n            rejected += 1\n            continue\n        try:\n            number = float(text)\n        except ValueError:\n            rejected += 1\n            continue\n        if low <= number <= high:\n            values.append(number)\n        else:\n            rejected += 1\n    return values, rejected\n\n\nresult = parse_measurements(form_inputs, low, high)\n",
+        "fails": [
+          "result"
+        ],
+        "failsFunctions": [
+          "parse_measurements"
+        ]
+      },
+      {
+        "name": "no validation of raw_values / low / high",
+        "code": "def parse_measurements(raw_values, low, high):\n    values = []\n    rejected = 0\n    for text in raw_values:\n        if not isinstance(text, str):\n            rejected += 1\n            continue\n        try:\n            number = float(text)\n        except ValueError:\n            rejected += 1\n            continue\n        if low <= number <= high:\n            values.append(number)\n        else:\n            rejected += 1\n    return {\"values\": values, \"rejected\": rejected}\n\n\nresult = parse_measurements(form_inputs, low, high)\n",
+        "fails": [],
+        "failsFunctions": [
+          "parse_measurements"
+        ]
+      },
+      {
+        "name": "accepts non-string items (float(5) works) and swallows every error",
+        "code": "def parse_measurements(raw_values, low, high):\n    if not isinstance(raw_values, list):\n        raise TypeError(\"raw_values must be a list\")\n    if low > high:\n        raise ValueError(\"low must not exceed high\")\n    values = []\n    rejected = 0\n    for text in raw_values:\n        try:\n            number = float(text)\n        except (ValueError, TypeError):\n            rejected += 1\n            continue\n        if low <= number <= high:\n            values.append(number)\n        else:\n            rejected += 1\n    return {\"values\": values, \"rejected\": rejected}\n\n\nresult = parse_measurements(form_inputs, low, high)\n",
+        "fails": [],
+        "failsFunctions": [
+          "parse_measurements"
+        ]
+      },
+      {
+        "name": "exclusive range ends",
+        "code": "def parse_measurements(raw_values, low, high):\n    if not isinstance(raw_values, list):\n        raise TypeError(\"raw_values must be a list\")\n    if low > high:\n        raise ValueError(\"low must not exceed high\")\n    values = []\n    rejected = 0\n    for text in raw_values:\n        if not isinstance(text, str):\n            rejected += 1\n            continue\n        try:\n            number = float(text)\n        except ValueError:\n            rejected += 1\n            continue\n        if low < number < high:\n            values.append(number)\n        else:\n            rejected += 1\n    return {\"values\": values, \"rejected\": rejected}\n\n\nresult = parse_measurements(form_inputs, low, high)\n",
+        "fails": [
+          "result"
+        ],
+        "failsFunctions": [
+          "parse_measurements"
+        ]
+      },
+      {
+        "name": "reads integers only (int instead of float)",
+        "code": "def parse_measurements(raw_values, low, high):\n    if not isinstance(raw_values, list):\n        raise TypeError(\"raw_values must be a list\")\n    if low > high:\n        raise ValueError(\"low must not exceed high\")\n    values = []\n    rejected = 0\n    for text in raw_values:\n        if not isinstance(text, str):\n            rejected += 1\n            continue\n        try:\n            number = int(text)\n        except ValueError:\n            rejected += 1\n            continue\n        if low <= number <= high:\n            values.append(number)\n        else:\n            rejected += 1\n    return {\"values\": values, \"rejected\": rejected}\n\n\nresult = parse_measurements(form_inputs, low, high)\n",
+        "fails": [
+          "result"
+        ],
+        "failsFunctions": [
+          "parse_measurements"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf13": {
+    "starter": "import json\n\n# raw_json là chuỗi JSON thô (xem tab Dữ liệu). Viết hàm summarize_records theo phần Mô tả.\n# Gợi ý: tách một hàm phụ kiểm tra MỘT bản ghi, rồi dùng nó trong vòng lặp chính.\n\n\ndef summarize_records(text):\n    # TODO: đọc JSON, lọc bản ghi hợp lệ, tổng hợp và trả về dictionary.\n    return {}\n\n\nsummary = summarize_records(raw_json)\nprint(summary)\n",
+    "reference": "import json\n\n\ndef _number(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, (int, float)):\n        return float(value)\n    if isinstance(value, str):\n        try:\n            return float(value)\n        except ValueError:\n            return None\n    return None\n\n\ndef _positive_int(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, int):\n        return value if value > 0 else None\n    if isinstance(value, str) and value.isdigit():\n        return int(value) if int(value) > 0 else None\n    return None\n\n\ndef summarize_records(text):\n    data = json.loads(text)\n    if not isinstance(data, list):\n        raise ValueError(\"expected a JSON list of records\")\n    seen = set()\n    accepted = []\n    for record in data:\n        if not isinstance(record, dict):\n            continue\n        record_id = record.get(\"id\")\n        label = record.get(\"label\")\n        if not isinstance(record_id, str) or record_id.strip() == \"\" or record_id.strip() in seen:\n            continue\n        if not isinstance(label, str) or label.strip() == \"\":\n            continue\n        confidence = _number(record.get(\"confidence\"))\n        if confidence is None or not 0 <= confidence <= 1:\n            continue\n        width = _positive_int(record.get(\"width\"))\n        height = _positive_int(record.get(\"height\"))\n        if width is None or height is None:\n            continue\n        seen.add(record_id.strip())\n        accepted.append((width * height, confidence, label.strip().lower()))\n    labels = sorted({item[2] for item in accepted})\n    label_counts = {}\n    for _, _, name in accepted:\n        label_counts[name] = label_counts.get(name, 0) + 1\n    mean = sum(item[1] for item in accepted) / len(accepted) if accepted else 0.0\n    return {\n        \"valid_count\": len(accepted),\n        \"invalid_count\": len(data) - len(accepted),\n        \"labels\": labels,\n        \"label_counts\": label_counts,\n        \"mean_confidence\": mean,\n        \"rows\": [[pixels, conf, labels.index(name)] for pixels, conf, name in accepted],\n    }\n\n\nsummary = summarize_records(raw_json)\nprint(summary)\n",
+    "wrong": [
+      {
+        "name": "does not drop duplicate ids",
+        "code": "import json\n\n\ndef _number(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, (int, float)):\n        return float(value)\n    if isinstance(value, str):\n        try:\n            return float(value)\n        except ValueError:\n            return None\n    return None\n\n\ndef _positive_int(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, int):\n        return value if value > 0 else None\n    if isinstance(value, str) and value.isdigit():\n        return int(value) if int(value) > 0 else None\n    return None\n\n\ndef summarize_records(text):\n    data = json.loads(text)\n    if not isinstance(data, list):\n        raise ValueError(\"expected a JSON list of records\")\n    seen = set()\n    accepted = []\n    for record in data:\n        if not isinstance(record, dict):\n            continue\n        record_id = record.get(\"id\")\n        label = record.get(\"label\")\n        if not isinstance(record_id, str) or record_id.strip() == \"\":\n            continue\n        if not isinstance(label, str) or label.strip() == \"\":\n            continue\n        confidence = _number(record.get(\"confidence\"))\n        if confidence is None or not 0 <= confidence <= 1:\n            continue\n        width = _positive_int(record.get(\"width\"))\n        height = _positive_int(record.get(\"height\"))\n        if width is None or height is None:\n            continue\n        seen.add(record_id.strip())\n        accepted.append((width * height, confidence, label.strip().lower()))\n    labels = sorted({item[2] for item in accepted})\n    label_counts = {}\n    for _, _, name in accepted:\n        label_counts[name] = label_counts.get(name, 0) + 1\n    mean = sum(item[1] for item in accepted) / len(accepted) if accepted else 0.0\n    return {\n        \"valid_count\": len(accepted),\n        \"invalid_count\": len(data) - len(accepted),\n        \"labels\": labels,\n        \"label_counts\": label_counts,\n        \"mean_confidence\": mean,\n        \"rows\": [[pixels, conf, labels.index(name)] for pixels, conf, name in accepted],\n    }\n\n\nsummary = summarize_records(raw_json)\nprint(summary)\n",
+        "fails": [],
+        "failsFunctions": [
+          "summarize_records"
+        ]
+      },
+      {
+        "name": "does not normalise the label case",
+        "code": "import json\n\n\ndef _number(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, (int, float)):\n        return float(value)\n    if isinstance(value, str):\n        try:\n            return float(value)\n        except ValueError:\n            return None\n    return None\n\n\ndef _positive_int(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, int):\n        return value if value > 0 else None\n    if isinstance(value, str) and value.isdigit():\n        return int(value) if int(value) > 0 else None\n    return None\n\n\ndef summarize_records(text):\n    data = json.loads(text)\n    if not isinstance(data, list):\n        raise ValueError(\"expected a JSON list of records\")\n    seen = set()\n    accepted = []\n    for record in data:\n        if not isinstance(record, dict):\n            continue\n        record_id = record.get(\"id\")\n        label = record.get(\"label\")\n        if not isinstance(record_id, str) or record_id.strip() == \"\" or record_id.strip() in seen:\n            continue\n        if not isinstance(label, str) or label.strip() == \"\":\n            continue\n        confidence = _number(record.get(\"confidence\"))\n        if confidence is None or not 0 <= confidence <= 1:\n            continue\n        width = _positive_int(record.get(\"width\"))\n        height = _positive_int(record.get(\"height\"))\n        if width is None or height is None:\n            continue\n        seen.add(record_id.strip())\n        accepted.append((width * height, confidence, label.strip()))\n    labels = sorted({item[2] for item in accepted})\n    label_counts = {}\n    for _, _, name in accepted:\n        label_counts[name] = label_counts.get(name, 0) + 1\n    mean = sum(item[1] for item in accepted) / len(accepted) if accepted else 0.0\n    return {\n        \"valid_count\": len(accepted),\n        \"invalid_count\": len(data) - len(accepted),\n        \"labels\": labels,\n        \"label_counts\": label_counts,\n        \"mean_confidence\": mean,\n        \"rows\": [[pixels, conf, labels.index(name)] for pixels, conf, name in accepted],\n    }\n\n\nsummary = summarize_records(raw_json)\nprint(summary)\n",
+        "fails": [],
+        "failsFunctions": [
+          "summarize_records"
+        ]
+      },
+      {
+        "name": "accepts a confidence above 1",
+        "code": "import json\n\n\ndef _number(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, (int, float)):\n        return float(value)\n    if isinstance(value, str):\n        try:\n            return float(value)\n        except ValueError:\n            return None\n    return None\n\n\ndef _positive_int(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, int):\n        return value if value > 0 else None\n    if isinstance(value, str) and value.isdigit():\n        return int(value) if int(value) > 0 else None\n    return None\n\n\ndef summarize_records(text):\n    data = json.loads(text)\n    if not isinstance(data, list):\n        raise ValueError(\"expected a JSON list of records\")\n    seen = set()\n    accepted = []\n    for record in data:\n        if not isinstance(record, dict):\n            continue\n        record_id = record.get(\"id\")\n        label = record.get(\"label\")\n        if not isinstance(record_id, str) or record_id.strip() == \"\" or record_id.strip() in seen:\n            continue\n        if not isinstance(label, str) or label.strip() == \"\":\n            continue\n        confidence = _number(record.get(\"confidence\"))\n        if confidence is None or confidence < 0:\n            continue\n        width = _positive_int(record.get(\"width\"))\n        height = _positive_int(record.get(\"height\"))\n        if width is None or height is None:\n            continue\n        seen.add(record_id.strip())\n        accepted.append((width * height, confidence, label.strip().lower()))\n    labels = sorted({item[2] for item in accepted})\n    label_counts = {}\n    for _, _, name in accepted:\n        label_counts[name] = label_counts.get(name, 0) + 1\n    mean = sum(item[1] for item in accepted) / len(accepted) if accepted else 0.0\n    return {\n        \"valid_count\": len(accepted),\n        \"invalid_count\": len(data) - len(accepted),\n        \"labels\": labels,\n        \"label_counts\": label_counts,\n        \"mean_confidence\": mean,\n        \"rows\": [[pixels, conf, labels.index(name)] for pixels, conf, name in accepted],\n    }\n\n\nsummary = summarize_records(raw_json)\nprint(summary)\n",
+        "fails": [],
+        "failsFunctions": [
+          "summarize_records"
+        ]
+      },
+      {
+        "name": "mean taken over all records, not the valid ones",
+        "code": "import json\n\n\ndef _number(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, (int, float)):\n        return float(value)\n    if isinstance(value, str):\n        try:\n            return float(value)\n        except ValueError:\n            return None\n    return None\n\n\ndef _positive_int(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, int):\n        return value if value > 0 else None\n    if isinstance(value, str) and value.isdigit():\n        return int(value) if int(value) > 0 else None\n    return None\n\n\ndef summarize_records(text):\n    data = json.loads(text)\n    if not isinstance(data, list):\n        raise ValueError(\"expected a JSON list of records\")\n    seen = set()\n    accepted = []\n    for record in data:\n        if not isinstance(record, dict):\n            continue\n        record_id = record.get(\"id\")\n        label = record.get(\"label\")\n        if not isinstance(record_id, str) or record_id.strip() == \"\" or record_id.strip() in seen:\n            continue\n        if not isinstance(label, str) or label.strip() == \"\":\n            continue\n        confidence = _number(record.get(\"confidence\"))\n        if confidence is None or not 0 <= confidence <= 1:\n            continue\n        width = _positive_int(record.get(\"width\"))\n        height = _positive_int(record.get(\"height\"))\n        if width is None or height is None:\n            continue\n        seen.add(record_id.strip())\n        accepted.append((width * height, confidence, label.strip().lower()))\n    labels = sorted({item[2] for item in accepted})\n    label_counts = {}\n    for _, _, name in accepted:\n        label_counts[name] = label_counts.get(name, 0) + 1\n    mean = sum(item[1] for item in accepted) / len(data) if data else 0.0\n    return {\n        \"valid_count\": len(accepted),\n        \"invalid_count\": len(data) - len(accepted),\n        \"labels\": labels,\n        \"label_counts\": label_counts,\n        \"mean_confidence\": mean,\n        \"rows\": [[pixels, conf, labels.index(name)] for pixels, conf, name in accepted],\n    }\n\n\nsummary = summarize_records(raw_json)\nprint(summary)\n",
+        "fails": [],
+        "failsFunctions": [
+          "summarize_records"
+        ]
+      },
+      {
+        "name": "swallows invalid JSON instead of raising ValueError",
+        "code": "import json\n\n\ndef _number(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, (int, float)):\n        return float(value)\n    if isinstance(value, str):\n        try:\n            return float(value)\n        except ValueError:\n            return None\n    return None\n\n\ndef _positive_int(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, int):\n        return value if value > 0 else None\n    if isinstance(value, str) and value.isdigit():\n        return int(value) if int(value) > 0 else None\n    return None\n\n\ndef summarize_records(text):\n    try:\n        data = json.loads(text)\n    except ValueError:\n        data = []\n    if not isinstance(data, list):\n        data = []\n    seen = set()\n    accepted = []\n    for record in data:\n        if not isinstance(record, dict):\n            continue\n        record_id = record.get(\"id\")\n        label = record.get(\"label\")\n        if not isinstance(record_id, str) or record_id.strip() == \"\" or record_id.strip() in seen:\n            continue\n        if not isinstance(label, str) or label.strip() == \"\":\n            continue\n        confidence = _number(record.get(\"confidence\"))\n        if confidence is None or not 0 <= confidence <= 1:\n            continue\n        width = _positive_int(record.get(\"width\"))\n        height = _positive_int(record.get(\"height\"))\n        if width is None or height is None:\n            continue\n        seen.add(record_id.strip())\n        accepted.append((width * height, confidence, label.strip().lower()))\n    labels = sorted({item[2] for item in accepted})\n    label_counts = {}\n    for _, _, name in accepted:\n        label_counts[name] = label_counts.get(name, 0) + 1\n    mean = sum(item[1] for item in accepted) / len(accepted) if accepted else 0.0\n    return {\n        \"valid_count\": len(accepted),\n        \"invalid_count\": len(data) - len(accepted),\n        \"labels\": labels,\n        \"label_counts\": label_counts,\n        \"mean_confidence\": mean,\n        \"rows\": [[pixels, conf, labels.index(name)] for pixels, conf, name in accepted],\n    }\n\n\nsummary = summarize_records(raw_json)\nprint(summary)\n",
+        "fails": [],
+        "failsFunctions": [
+          "summarize_records"
+        ]
+      },
+      {
+        "name": "accepts a record whose width is not a number",
+        "code": "import json\n\n\ndef _number(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, (int, float)):\n        return float(value)\n    if isinstance(value, str):\n        try:\n            return float(value)\n        except ValueError:\n            return None\n    return None\n\n\ndef _positive_int(value):\n    if isinstance(value, bool):\n        return None\n    if isinstance(value, int):\n        return value if value > 0 else None\n    if isinstance(value, str) and value.isdigit():\n        return int(value) if int(value) > 0 else None\n    return None\n\n\ndef summarize_records(text):\n    data = json.loads(text)\n    if not isinstance(data, list):\n        raise ValueError(\"expected a JSON list of records\")\n    seen = set()\n    accepted = []\n    for record in data:\n        if not isinstance(record, dict):\n            continue\n        record_id = record.get(\"id\")\n        label = record.get(\"label\")\n        if not isinstance(record_id, str) or record_id.strip() == \"\" or record_id.strip() in seen:\n            continue\n        if not isinstance(label, str) or label.strip() == \"\":\n            continue\n        confidence = _number(record.get(\"confidence\"))\n        if confidence is None or not 0 <= confidence <= 1:\n            continue\n        width = _positive_int(record.get(\"width\")) or 1\n        height = _positive_int(record.get(\"height\"))\n        if height is None:\n            continue\n        seen.add(record_id.strip())\n        accepted.append((width * height, confidence, label.strip().lower()))\n    labels = sorted({item[2] for item in accepted})\n    label_counts = {}\n    for _, _, name in accepted:\n        label_counts[name] = label_counts.get(name, 0) + 1\n    mean = sum(item[1] for item in accepted) / len(accepted) if accepted else 0.0\n    return {\n        \"valid_count\": len(accepted),\n        \"invalid_count\": len(data) - len(accepted),\n        \"labels\": labels,\n        \"label_counts\": label_counts,\n        \"mean_confidence\": mean,\n        \"rows\": [[pixels, conf, labels.index(name)] for pixels, conf, name in accepted],\n    }\n\n\nsummary = summarize_records(raw_json)\nprint(summary)\n",
+        "fails": [],
+        "failsFunctions": [
+          "summarize_records"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf14": {
+    "starter": "import numpy as np\n\n# table (list lồng nhau), row_i và col_j đã được nạp sẵn.\n\n# 1) Tạo ndarray số thực 64-bit từ table (đã làm sẵn làm ví dụ).\narr = np.array(table, dtype=np.float64)\n\n# 2) Đọc cấu trúc của arr.\nn_dims = None         # TODO: số chiều\nshape_of_arr = None   # TODO: shape (một tuple)\nelement_count = None  # TODO: tổng số phần tử\ndtype_name = None     # TODO: TÊN dtype dạng chuỗi\n\n# 3) Lấy phần tử bằng chỉ số.\nlast_row = None       # TODO: hàng cuối của arr\nsecond_column = None  # TODO: cột thứ hai (chỉ số 1) của arr\npicked = None         # TODO: phần tử ở hàng row_i, cột col_j\n\n\ndef describe_array(a):\n    \"\"\"Mô tả một mảng BẤT KỲ (số chiều, dtype nào cũng được).\"\"\"\n    # TODO: thay mỗi None bằng thuộc tính tương ứng của a.\n    return {\"ndim\": None, \"shape\": None, \"size\": None, \"dtype\": None}\n\n\nprint(describe_array(arr))\nprint(n_dims, shape_of_arr, element_count, dtype_name, picked)\n",
+    "reference": "import numpy as np\n\narr = np.array(table, dtype=np.float64)\nn_dims = arr.ndim\nshape_of_arr = arr.shape\nelement_count = arr.size\ndtype_name = str(arr.dtype)\nlast_row = arr[-1]\nsecond_column = arr[:, 1]\npicked = arr[row_i, col_j]\n\n\ndef describe_array(a):\n    return {\"ndim\": a.ndim, \"shape\": a.shape, \"size\": a.size, \"dtype\": str(a.dtype)}\n\n\nprint(describe_array(arr))\nprint(n_dims, shape_of_arr, element_count, dtype_name, picked)\n",
+    "wrong": [
+      {
+        "name": "dtype_name is the dtype object, not its name",
+        "code": "import numpy as np\n\narr = np.array(table, dtype=np.float64)\nn_dims = arr.ndim\nshape_of_arr = arr.shape\nelement_count = arr.size\ndtype_name = arr.dtype\nlast_row = arr[-1]\nsecond_column = arr[:, 1]\npicked = arr[row_i, col_j]\n\n\ndef describe_array(a):\n    return {\"ndim\": a.ndim, \"shape\": a.shape, \"size\": a.size, \"dtype\": str(a.dtype)}\n\n\nprint(describe_array(arr))\nprint(n_dims, shape_of_arr, element_count, dtype_name, picked)\n",
+        "fails": [
+          "dtype_name"
+        ]
+      },
+      {
+        "name": "shape_of_arr is a list, not a tuple",
+        "code": "import numpy as np\n\narr = np.array(table, dtype=np.float64)\nn_dims = arr.ndim\nshape_of_arr = list(arr.shape)\nelement_count = arr.size\ndtype_name = str(arr.dtype)\nlast_row = arr[-1]\nsecond_column = arr[:, 1]\npicked = arr[row_i, col_j]\n\n\ndef describe_array(a):\n    return {\"ndim\": a.ndim, \"shape\": a.shape, \"size\": a.size, \"dtype\": str(a.dtype)}\n\n\nprint(describe_array(arr))\nprint(n_dims, shape_of_arr, element_count, dtype_name, picked)\n",
+        "fails": [
+          "shape_of_arr"
+        ]
+      },
+      {
+        "name": "last_row takes the last column",
+        "code": "import numpy as np\n\narr = np.array(table, dtype=np.float64)\nn_dims = arr.ndim\nshape_of_arr = arr.shape\nelement_count = arr.size\ndtype_name = str(arr.dtype)\nlast_row = arr[:, -1]\nsecond_column = arr[:, 1]\npicked = arr[row_i, col_j]\n\n\ndef describe_array(a):\n    return {\"ndim\": a.ndim, \"shape\": a.shape, \"size\": a.size, \"dtype\": str(a.dtype)}\n\n\nprint(describe_array(arr))\nprint(n_dims, shape_of_arr, element_count, dtype_name, picked)\n",
+        "fails": [
+          "last_row"
+        ]
+      },
+      {
+        "name": "second_column takes the second row",
+        "code": "import numpy as np\n\narr = np.array(table, dtype=np.float64)\nn_dims = arr.ndim\nshape_of_arr = arr.shape\nelement_count = arr.size\ndtype_name = str(arr.dtype)\nlast_row = arr[-1]\nsecond_column = arr[1]\npicked = arr[row_i, col_j]\n\n\ndef describe_array(a):\n    return {\"ndim\": a.ndim, \"shape\": a.shape, \"size\": a.size, \"dtype\": str(a.dtype)}\n\n\nprint(describe_array(arr))\nprint(n_dims, shape_of_arr, element_count, dtype_name, picked)\n",
+        "fails": [
+          "second_column"
+        ]
+      },
+      {
+        "name": "array built without dtype (integers)",
+        "code": "import numpy as np\n\narr = np.array(table)\nn_dims = arr.ndim\nshape_of_arr = arr.shape\nelement_count = arr.size\ndtype_name = str(arr.dtype)\nlast_row = arr[-1]\nsecond_column = arr[:, 1]\npicked = arr[row_i, col_j]\n\n\ndef describe_array(a):\n    return {\"ndim\": a.ndim, \"shape\": a.shape, \"size\": a.size, \"dtype\": str(a.dtype)}\n\n\nprint(describe_array(arr))\nprint(n_dims, shape_of_arr, element_count, dtype_name, picked)\n",
+        "fails": [
+          "dtype_name"
+        ]
+      },
+      {
+        "name": "describe_array reports the shape as a list",
+        "code": "import numpy as np\n\narr = np.array(table, dtype=np.float64)\nn_dims = arr.ndim\nshape_of_arr = arr.shape\nelement_count = arr.size\ndtype_name = str(arr.dtype)\nlast_row = arr[-1]\nsecond_column = arr[:, 1]\npicked = arr[row_i, col_j]\n\n\ndef describe_array(a):\n    return {\"ndim\": a.ndim, \"shape\": list(a.shape), \"size\": a.size, \"dtype\": str(a.dtype)}\n\n\nprint(describe_array(arr))\nprint(n_dims, shape_of_arr, element_count, dtype_name, picked)\n",
+        "fails": [],
+        "failsFunctions": [
+          "describe_array"
+        ]
+      },
+      {
+        "name": "describe_array uses len() for the size",
+        "code": "import numpy as np\n\narr = np.array(table, dtype=np.float64)\nn_dims = arr.ndim\nshape_of_arr = arr.shape\nelement_count = arr.size\ndtype_name = str(arr.dtype)\nlast_row = arr[-1]\nsecond_column = arr[:, 1]\npicked = arr[row_i, col_j]\n\n\ndef describe_array(a):\n    return {\"ndim\": a.ndim, \"shape\": a.shape, \"size\": len(a), \"dtype\": str(a.dtype)}\n\n\nprint(describe_array(arr))\nprint(n_dims, shape_of_arr, element_count, dtype_name, picked)\n",
+        "fails": [],
+        "failsFunctions": [
+          "describe_array"
+        ]
+      },
+      {
+        "name": "describe_array returns the dtype object",
+        "code": "import numpy as np\n\narr = np.array(table, dtype=np.float64)\nn_dims = arr.ndim\nshape_of_arr = arr.shape\nelement_count = arr.size\ndtype_name = str(arr.dtype)\nlast_row = arr[-1]\nsecond_column = arr[:, 1]\npicked = arr[row_i, col_j]\n\n\ndef describe_array(a):\n    return {\"ndim\": a.ndim, \"shape\": a.shape, \"size\": a.size, \"dtype\": a.dtype}\n\n\nprint(describe_array(arr))\nprint(n_dims, shape_of_arr, element_count, dtype_name, picked)\n",
+        "fails": [],
+        "failsFunctions": [
+          "describe_array"
+        ]
+      }
+    ]
+  },
+  "python-foundations.pf15": {
+    "starter": "import numpy as np\n\n# grid (list lồng nhau: mỗi hàng là một cảm biến) và max_value đã được nạp sẵn.\ndata = np.array(grid, dtype=np.float64)\n\n\ndef valid_mask(data, max_value):\n    \"\"\"Mảng Boolean cùng shape: True nếu 0 <= giá trị <= max_value.\"\"\"\n    # TODO\n    return None\n\n\ndef scale_valid(data, max_value):\n    \"\"\"Mảng float64 cùng shape: hợp lệ -> giá trị / max_value, không hợp lệ -> 0.0.\"\"\"\n    # TODO\n    return None\n\n\ndef sensor_means(data, max_value):\n    \"\"\"Mảng 1 chiều: trung bình các số đo HỢP LỆ của từng hàng (0.0 nếu hàng không có số đo hợp lệ).\"\"\"\n    # TODO\n    return None\n\n\n# Ghép các hàm lại. Cả hai kết quả phải là số nguyên Python thường (dùng int(...)).\nvalid_total = None  # TODO: tổng số đo hợp lệ trong data\nbest_sensor = None  # TODO: chỉ số hàng có trung bình hợp lệ cao nhất\n\nprint(valid_total, best_sensor)\n",
+    "reference": "import numpy as np\n\ndata = np.array(grid, dtype=np.float64)\n\n\ndef valid_mask(data, max_value):\n    return (data >= 0) & (data <= max_value)\n\n\ndef scale_valid(data, max_value):\n    mask = valid_mask(data, max_value)\n    return np.where(mask, data / max_value, 0.0)\n\n\ndef sensor_means(data, max_value):\n    mask = valid_mask(data, max_value)\n    totals = np.where(mask, data, 0.0).sum(axis=1)\n    counts = mask.sum(axis=1)\n    return totals / np.maximum(counts, 1)\n\n\nvalid_total = int(valid_mask(data, max_value).sum())\nbest_sensor = int(np.argmax(sensor_means(data, max_value)))\nprint(valid_total, best_sensor)\n",
+    "wrong": [
+      {
+        "name": "valid_mask excludes the upper bound",
+        "code": "import numpy as np\n\ndata = np.array(grid, dtype=np.float64)\n\n\ndef valid_mask(data, max_value):\n    return (data >= 0) & (data < max_value)\n\n\ndef scale_valid(data, max_value):\n    mask = valid_mask(data, max_value)\n    return np.where(mask, data / max_value, 0.0)\n\n\ndef sensor_means(data, max_value):\n    mask = valid_mask(data, max_value)\n    totals = np.where(mask, data, 0.0).sum(axis=1)\n    counts = mask.sum(axis=1)\n    return totals / np.maximum(counts, 1)\n\n\nvalid_total = int(valid_mask(data, max_value).sum())\nbest_sensor = int(np.argmax(sensor_means(data, max_value)))\nprint(valid_total, best_sensor)\n",
+        "fails": [],
+        "failsFunctions": [
+          "valid_mask"
+        ]
+      },
+      {
+        "name": "scale_valid overwrites the input array in place",
+        "code": "import numpy as np\n\ndata = np.array(grid, dtype=np.float64)\n\n\ndef valid_mask(data, max_value):\n    return (data >= 0) & (data <= max_value)\n\n\ndef scale_valid(data, max_value):\n    mask = valid_mask(data, max_value)\n    data[~mask] = 0.0\n    return data / max_value\n\n\ndef sensor_means(data, max_value):\n    mask = valid_mask(data, max_value)\n    totals = np.where(mask, data, 0.0).sum(axis=1)\n    counts = mask.sum(axis=1)\n    return totals / np.maximum(counts, 1)\n\n\nvalid_total = int(valid_mask(data, max_value).sum())\nbest_sensor = int(np.argmax(sensor_means(data, max_value)))\nprint(valid_total, best_sensor)\n",
+        "fails": [],
+        "failsFunctions": [
+          "scale_valid"
+        ]
+      },
+      {
+        "name": "scale_valid does not zero the invalid readings",
+        "code": "import numpy as np\n\ndata = np.array(grid, dtype=np.float64)\n\n\ndef valid_mask(data, max_value):\n    return (data >= 0) & (data <= max_value)\n\n\ndef scale_valid(data, max_value):\n    mask = valid_mask(data, max_value)\n    return data / max_value\n\n\ndef sensor_means(data, max_value):\n    mask = valid_mask(data, max_value)\n    totals = np.where(mask, data, 0.0).sum(axis=1)\n    counts = mask.sum(axis=1)\n    return totals / np.maximum(counts, 1)\n\n\nvalid_total = int(valid_mask(data, max_value).sum())\nbest_sensor = int(np.argmax(sensor_means(data, max_value)))\nprint(valid_total, best_sensor)\n",
+        "fails": [],
+        "failsFunctions": [
+          "scale_valid"
+        ]
+      },
+      {
+        "name": "sensor_means divides by zero for a row without valid readings",
+        "code": "import numpy as np\n\ndata = np.array(grid, dtype=np.float64)\n\n\ndef valid_mask(data, max_value):\n    return (data >= 0) & (data <= max_value)\n\n\ndef scale_valid(data, max_value):\n    mask = valid_mask(data, max_value)\n    return np.where(mask, data / max_value, 0.0)\n\n\ndef sensor_means(data, max_value):\n    mask = valid_mask(data, max_value)\n    totals = np.where(mask, data, 0.0).sum(axis=1)\n    counts = mask.sum(axis=1)\n    return totals / counts\n\n\nvalid_total = int(valid_mask(data, max_value).sum())\nbest_sensor = int(np.argmax(sensor_means(data, max_value)))\nprint(valid_total, best_sensor)\n",
+        "fails": [],
+        "failsFunctions": [
+          "sensor_means"
+        ]
+      },
+      {
+        "name": "sensor_means averages over the wrong axis",
+        "code": "import numpy as np\n\ndata = np.array(grid, dtype=np.float64)\n\n\ndef valid_mask(data, max_value):\n    return (data >= 0) & (data <= max_value)\n\n\ndef scale_valid(data, max_value):\n    mask = valid_mask(data, max_value)\n    return np.where(mask, data / max_value, 0.0)\n\n\ndef sensor_means(data, max_value):\n    mask = valid_mask(data, max_value)\n    totals = np.where(mask, data, 0.0).sum(axis=0)\n    counts = mask.sum(axis=0)\n    return totals / np.maximum(counts, 1)\n\n\nvalid_total = int(valid_mask(data, max_value).sum())\nbest_sensor = int(np.argmax(sensor_means(data, max_value)))\nprint(valid_total, best_sensor)\n",
+        "fails": [],
+        "failsFunctions": [
+          "sensor_means"
+        ]
+      },
+      {
+        "name": "sensor_means returns one overall mean instead of one per sensor",
+        "code": "import numpy as np\n\ndata = np.array(grid, dtype=np.float64)\n\n\ndef valid_mask(data, max_value):\n    return (data >= 0) & (data <= max_value)\n\n\ndef scale_valid(data, max_value):\n    mask = valid_mask(data, max_value)\n    return np.where(mask, data / max_value, 0.0)\n\n\ndef sensor_means(data, max_value):\n    mask = valid_mask(data, max_value)\n    return np.where(mask, data, 0.0).sum() / max(int(mask.sum()), 1)\n\n\nvalid_total = int(valid_mask(data, max_value).sum())\nbest_sensor = int(np.argmax(sensor_means(data, max_value)))\nprint(valid_total, best_sensor)\n",
+        "fails": [],
+        "failsFunctions": [
+          "sensor_means"
+        ]
+      },
+      {
+        "name": "valid_total stays a NumPy integer",
+        "code": "import numpy as np\n\ndata = np.array(grid, dtype=np.float64)\n\n\ndef valid_mask(data, max_value):\n    return (data >= 0) & (data <= max_value)\n\n\ndef scale_valid(data, max_value):\n    mask = valid_mask(data, max_value)\n    return np.where(mask, data / max_value, 0.0)\n\n\ndef sensor_means(data, max_value):\n    mask = valid_mask(data, max_value)\n    totals = np.where(mask, data, 0.0).sum(axis=1)\n    counts = mask.sum(axis=1)\n    return totals / np.maximum(counts, 1)\n\n\nvalid_total = valid_mask(data, max_value).sum()\nbest_sensor = int(np.argmax(sensor_means(data, max_value)))\nprint(valid_total, best_sensor)\n",
+        "fails": [
+          "valid_total"
+        ]
+      },
+      {
+        "name": "best_sensor picks the lowest mean",
+        "code": "import numpy as np\n\ndata = np.array(grid, dtype=np.float64)\n\n\ndef valid_mask(data, max_value):\n    return (data >= 0) & (data <= max_value)\n\n\ndef scale_valid(data, max_value):\n    mask = valid_mask(data, max_value)\n    return np.where(mask, data / max_value, 0.0)\n\n\ndef sensor_means(data, max_value):\n    mask = valid_mask(data, max_value)\n    totals = np.where(mask, data, 0.0).sum(axis=1)\n    counts = mask.sum(axis=1)\n    return totals / np.maximum(counts, 1)\n\n\nvalid_total = int(valid_mask(data, max_value).sum())\nbest_sensor = int(np.argmin(sensor_means(data, max_value)))\nprint(valid_total, best_sensor)\n",
+        "fails": [
+          "best_sensor"
+        ]
+      }
+    ]
+  }
+}

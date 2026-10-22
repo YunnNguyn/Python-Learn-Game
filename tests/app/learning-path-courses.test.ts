@@ -19,7 +19,7 @@ import {
   registerCs116ProductionContent,
 } from "../../src/content/cs116";
 import {
-  PYTHON_FOUNDATIONS_ACTIVITY_IDS,
+  PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_IDS,
   registerPythonFoundationsContent,
 } from "../../src/content/python-foundations";
@@ -45,10 +45,14 @@ import type { ActivityProgress } from "../../src/core/learning";
 const CS116 = CS116_PRODUCTION_IDS.course as CourseId;
 const PYTHON = PYTHON_FOUNDATIONS_IDS.course as CourseId;
 const activity = (id: string) => id as LearningActivityId;
-const PF = PYTHON_FOUNDATIONS_ACTIVITY_IDS.map(activity);
+// PHASE-07 / M9: the Python Foundations course now lists the 7 M8 activities followed by the 8 M9 ones.
+const PF = PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS.map(activity);
 const PF1 = PF[0]!;
 const PF2 = PF[1]!;
 const PF7 = PF[6]!;
+const PF_LAST = PF[PF.length - 1]!;
+// The closing REVIEW-stage mission (the PF-13 mini-project) - what a finished course recommends.
+const PF_CLOSING_REVIEW = PF[12]!;
 const VS01 = activity(CS116_PRODUCTION_IDS.activityVs01);
 const VS02 = activity(CS116_PRODUCTION_IDS.activityVs02);
 const VS06 = activity(CS116_PRODUCTION_IDS.activityVs06);
@@ -251,7 +255,7 @@ describe("the next step is always inside one course", () => {
     const content = builtIn();
     const progress = reader(completedAll(PF));
 
-    expect(getNextStudyActivity(content, progress, PYTHON)).toEqual({ activityId: PF7, reason: "COMPLETE_REVIEW" });
+    expect(getNextStudyActivity(content, progress, PYTHON)).toEqual({ activityId: PF_CLOSING_REVIEW, reason: "COMPLETE_REVIEW" });
   });
 
   it("without a course: the first course with work left, else the first course's review", () => {
@@ -272,7 +276,9 @@ describe("the next step is always inside one course", () => {
     const lastOfCs116 = getCourseActivityIds(content, CS116).at(-1)!;
 
     expect(getNextActivityInCourse(content, PF1)).toBe(PF2);
-    expect(getNextActivityInCourse(content, PF7)).toBeUndefined();
+    // PF-07 is no longer the end of the course (M9 continues it); only the last M9 activity is.
+    expect(getNextActivityInCourse(content, PF7)).toBe(PF[7]);
+    expect(getNextActivityInCourse(content, PF_LAST)).toBeUndefined();
     expect(getNextActivityInCourse(content, lastOfCs116)).toBeUndefined();
     expect(getNextActivityInCourse(content, activity("nope"))).toBeUndefined();
 

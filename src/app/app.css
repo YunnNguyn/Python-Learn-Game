@@ -606,6 +606,32 @@ a {
   word-break: break-word;
 }
 
+.grading-feedback__cases {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grading-feedback__case {
+  display: flex;
+  gap: 0.5rem;
+  min-width: 0;
+  align-items: baseline;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+}
+
+.grading-feedback__case--passed {
+  color: var(--color-success-text);
+}
+
+.grading-feedback__case--failed {
+  color: var(--color-danger-text);
+  font-weight: 700;
+}
+
 .primary-action {
   display: inline-flex;
   min-height: 2.75rem;

@@ -4,6 +4,7 @@ import { deriveActivityVariantSeed } from "../../src/app/services/application-se
 import {
   PYTHON_FOUNDATIONS_CONTENT,
   PYTHON_FOUNDATIONS_ACTIVITY_IDS,
+  PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS,
   registerPythonFoundationsGenerators,
 } from "../../src/content/python-foundations";
 import { ContentRegistry } from "../../src/core/content";
@@ -34,6 +35,8 @@ export interface MissionOutcome {
   readonly failedChecks: readonly string[];
   /** Variable names that have at least one failed check. */
   readonly failedVariables: readonly string[];
+  /** M9: names of the functions whose FUNCTION_CASES check failed. */
+  readonly failedFunctions: readonly string[];
   readonly exceptionType?: string;
   readonly stdout: string;
   readonly grading?: GraderResult;
@@ -75,6 +78,13 @@ export function instanceOf(activityId: LearningActivityId, variantIndex: number)
   }).instance;
 }
 
+/** Packages are only fetched for the missions that declare them (the M9 NumPy missions). */
+const fetchPackages =
+  (pyodide: PyodideInterface) =>
+  async (names: readonly string[]): Promise<void> => {
+    await pyodide.loadPackage([...names]);
+  };
+
 export async function submitOnPyodide(
   pyodide: PyodideInterface,
   activityId: LearningActivityId,
@@ -83,7 +93,7 @@ export async function submitOnPyodide(
 ): Promise<MissionOutcome> {
   const template = templateOf(activityId);
   const instance = instanceOf(activityId, variantIndex);
-  const runtime = new NodePyodideRuntime(pyodide, async () => undefined);
+  const runtime = new NodePyodideRuntime(pyodide, fetchPackages(pyodide));
   const engine = new MissionEngine(runtime, graders);
   const loaded = await engine.loadMission(template, instance);
   if (!loaded.ok) throw new Error(`${activityId}: ${loaded.error.message}`);
@@ -101,7 +111,7 @@ export async function runOnPyodide(
   variantIndex: number,
   code: string,
 ): Promise<RuntimeExecutionResult> {
-  const engine = new MissionEngine(new NodePyodideRuntime(pyodide, async () => undefined), graders);
+  const engine = new MissionEngine(new NodePyodideRuntime(pyodide, fetchPackages(pyodide)), graders);
   const loaded = await engine.loadMission(templateOf(activityId), instanceOf(activityId, variantIndex));
   if (!loaded.ok) throw new Error(`${activityId}: ${loaded.error.message}`);
   try {
@@ -120,6 +130,7 @@ function summarize(execution: RuntimeExecutionResult, grading: GraderResult | un
       (check) => `${check.type}${check.variable !== undefined ? `(${check.variable})` : ""}`,
     ),
     failedVariables: [...new Set(failed.flatMap((check) => (check.variable === undefined ? [] : [check.variable])))],
+    failedFunctions: [...new Set(failed.flatMap((check) => (check.function === undefined ? [] : [check.function])))],
     ...(execution.status === RUNTIME_EXECUTION_STATUS.PYTHON_EXCEPTION
       ? { exceptionType: execution.exception.type ?? "Exception" }
       : {}),
@@ -129,3 +140,5 @@ function summarize(execution: RuntimeExecutionResult, grading: GraderResult | un
 }
 
 export const ACTIVITY_IDS: readonly LearningActivityId[] = PYTHON_FOUNDATIONS_ACTIVITY_IDS as unknown as readonly LearningActivityId[];
+/** PF-08..PF-15 (M9-01..M9-08). */
+export const M9_ACTIVITY_IDS: readonly LearningActivityId[] = PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS as unknown as readonly LearningActivityId[];

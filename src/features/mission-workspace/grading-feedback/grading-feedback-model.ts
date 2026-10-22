@@ -1,7 +1,9 @@
 import {
   DeclarativeGraderCheckType,
   GraderFailureCategory,
+  FunctionCaseOutcome,
   type GraderCheckResult,
+  type GraderFunctionCaseResult,
   type GraderResult,
 } from "../../../core/grading";
 
@@ -11,6 +13,7 @@ export type GradingFeedbackItemKind =
   | "type"
   | "shape"
   | "value"
+  | "function"
   | "general";
 
 export interface GradingFeedbackItem {
@@ -19,6 +22,8 @@ export interface GradingFeedbackItem {
   readonly detail?: string;
   readonly expected?: string;
   readonly actual?: string;
+  /** Function checks: one row per case (label + whether it passed), never the expectations. */
+  readonly cases?: readonly { readonly label: string; readonly passed: boolean }[];
 }
 
 export interface GradingFeedbackModel {
@@ -45,7 +50,9 @@ export function toGradingFeedbackModel(
 
   const failedChecks = result.checks.filter((check) => !check.passed);
   const runtimeFailure = failedChecks.find(
-    (check) => check.category === GraderFailureCategory.RUNTIME_ERROR,
+    (check) =>
+      check.category === GraderFailureCategory.RUNTIME_ERROR &&
+      check.type === DeclarativeGraderCheckType.NO_EXCEPTION,
   );
 
   // A runtime exception prevents downstream learner variables from being
@@ -72,6 +79,10 @@ function toFeedbackItem(
   check: GraderCheckResult,
   result: GraderResult,
 ): GradingFeedbackItem {
+  if (check.type === DeclarativeGraderCheckType.FUNCTION_CASES) {
+    return functionFeedback(check, result);
+  }
+
   switch (check.category as string | undefined) {
     case GraderFailureCategory.RUNTIME_ERROR:
       return runtimeFeedback(result);
@@ -98,6 +109,75 @@ function toFeedbackItem(
         kind: "general",
         title: GENERIC_FAILURE,
       };
+  }
+}
+
+const MAX_CASE_ROWS = 12;
+
+function functionFeedback(
+  check: GraderCheckResult,
+  result: GraderResult,
+): GradingFeedbackItem {
+  const name = check.function ?? "";
+  const quoted = name ? `“${name}”` : "cần kiểm tra";
+
+  if (check.cases === undefined) {
+    // The function could not be exercised at all.
+    if (check.category === GraderFailureCategory.MISSING_VARIABLE) {
+      return { kind: "missing-variable", title: `Chưa định nghĩa hàm ${quoted}.` };
+    }
+    if (check.category === GraderFailureCategory.TYPE_ERROR) {
+      return { kind: "type", title: `${quoted} cần là một hàm (def).` };
+    }
+    return runtimeFeedback(result);
+  }
+
+  const total = check.cases.length;
+  const passedCount = check.cases.filter((item) => item.passed).length;
+  const first = check.cases.find((item) => !item.passed);
+  const rows = check.cases
+    .slice(0, MAX_CASE_ROWS)
+    .map((item) => ({ label: item.label, passed: item.passed }));
+  const hidden = total - rows.length;
+
+  return {
+    kind: "function",
+    title: `Hàm ${quoted} đạt ${passedCount}/${total} ca kiểm tra.`,
+    ...(first !== undefined ? { detail: functionCaseDetail(first) } : {}),
+    ...(first?.expectedText !== undefined ? { expected: first.expectedText } : {}),
+    ...(first?.actualText !== undefined ? { actual: first.actualText } : {}),
+    cases:
+      hidden > 0
+        ? [...rows, { label: `… và ${hidden} ca khác`, passed: true }]
+        : rows,
+  };
+}
+
+function functionCaseDetail(item: GraderFunctionCaseResult): string {
+  const where = `Ca “${item.label}”${item.call ? ` — ${item.call}` : ""}. `;
+  switch (item.outcome) {
+    case FunctionCaseOutcome.RAISED: {
+      const message = item.message ? `: ${item.message}` : "";
+      return `${where}Hàm gặp lỗi ${item.exceptionType ?? "Exception"}${message}.`;
+    }
+    case FunctionCaseOutcome.WRONG_VALUE:
+      return `${where}Hàm trả về kết quả chưa khớp yêu cầu.`;
+    case FunctionCaseOutcome.WRONG_TYPE:
+      return `${where}Kiểu dữ liệu trả về chưa đúng${
+        item.actualType ? ` (nhận được ${item.actualType}${item.message ? `, ${item.message}` : ""})` : ""
+      }.`;
+    case FunctionCaseOutcome.WRONG_SHAPE:
+      return `${where}Kích thước của mảng trả về chưa đúng.`;
+    case FunctionCaseOutcome.NO_EXCEPTION_RAISED:
+      return `${where}Hàm cần báo lỗi nhưng đã trả về một giá trị.`;
+    case FunctionCaseOutcome.WRONG_EXCEPTION:
+      return `${where}Hàm báo lỗi sai loại${item.exceptionType ? ` (${item.exceptionType})` : ""}.`;
+    case FunctionCaseOutcome.UNSUPPORTED_RESULT:
+      return `${where}Kết quả trả về không kiểm tra được${item.message ? `: ${item.message}` : ""}.`;
+    case FunctionCaseOutcome.ARGS_MUTATED:
+      return `${where}Hàm đã sửa đổi dữ liệu đầu vào; hãy tạo bản sao thay vì sửa trực tiếp.`;
+    default:
+      return where.trim();
   }
 }
 

@@ -20,6 +20,18 @@ export type {
   RuntimeWorkspaceFile,
   RuntimeWorkspaceInfo,
 } from "./runtime-contracts";
+export {
+  FUNCTION_PROBE_OUTCOME,
+  FUNCTION_PROBE_STATUS,
+  FunctionProbeObservationSchema,
+  FunctionProbeSpecSchema,
+} from "./function-probes";
+export type {
+  FunctionProbeCase,
+  FunctionProbeCaseObservation,
+  FunctionProbeObservation,
+  FunctionProbeSpec,
+} from "./function-probes";
 export type {
   RuntimeObservedValue,
   RuntimeVariableObservations,

@@ -17,11 +17,21 @@ import {
   type World,
 } from "../../core/domain";
 import type { ContentDefinitionSet } from "../../core/content";
-import { CORE_GRADER_ID, DeclarativeGraderCheckType } from "../../core/grading";
-import { CORE_RUNTIME_ID } from "../../core/runtime";
 import { PYTHON_FOUNDATIONS_CONCEPT_IDS as C, PYTHON_FOUNDATIONS_CONCEPTS } from "./concepts";
 import { PYTHON_FOUNDATIONS_GENERATOR_ID as G } from "./generators";
 import { PYTHON_FOUNDATIONS_HINT_SET_ID as H } from "./hints";
+import {
+  approxListVariable,
+  boolVariable,
+  exactListVariable,
+  floatVariable,
+  functionVariable,
+  grader,
+  intVariable,
+  pyodideStdlib,
+  strVariable,
+} from "./content-helpers";
+import { PYTHON_FOUNDATIONS_M9_CONTENT as M9 } from "./content-m9";
 import { PYTHON_FOUNDATIONS_IDS as ID } from "./ids";
 
 /**
@@ -36,11 +46,11 @@ import { PYTHON_FOUNDATIONS_IDS as ID } from "./ids";
 
 export const PYTHON_FOUNDATIONS_PACK: ContentPackManifest = ContentPackManifestSchema.parse({
   id: ID.pack,
-  version: "0.1.0",
+  version: "0.2.0",
   schemaVersion: 1,
   title: "Python Foundations",
   description:
-    "Khóa Python nền tảng cho ML: biến và kiểu số, rẽ nhánh, list và vòng lặp, hàm — luyện bằng mã Python thật chạy trong trình duyệt.",
+    "Khóa Python nền tảng cho ML: biến và kiểu số, rẽ nhánh, list và vòng lặp, hàm, collections, xử lý lỗi và dữ liệu JSON, rồi NumPy cơ bản — luyện bằng mã Python thật chạy trong trình duyệt.",
   courseIds: [ID.course],
   dependencies: [],
 });
@@ -49,8 +59,8 @@ export const PYTHON_FOUNDATIONS_COURSE: Course = CourseSchema.parse({
   id: ID.course,
   title: "Python Foundations — Lập trình Python cho ML",
   description:
-    "Khóa độc lập, không cần học NumPy trước. Bắt đầu từ biến, số và rẽ nhánh, rồi đến list, vòng lặp và hàm qua các bài toán dữ liệu nhỏ (ảnh, độ tin cậy, số đo cảm biến).",
-  worldIds: [ID.world],
+    "Khóa độc lập, không cần học NumPy trước. Bắt đầu từ biến, số và rẽ nhánh, rồi đến list, vòng lặp và hàm; tiếp theo là cắt lát, dictionary, comprehension, hàm chấm nhiều trường hợp, sửa lỗi và một mini-project JSON; cuối cùng là NumPy thật chạy trong trình duyệt.",
+  worldIds: [ID.world, ID.worldCollections, ID.worldNumpy],
 });
 
 export const PYTHON_FOUNDATIONS_WORLD: World = WorldSchema.parse({
@@ -82,70 +92,6 @@ export const PYTHON_FOUNDATIONS_LESSON_COLLECTIONS_FUNCTIONS: Lesson = LessonSch
     ID.activityPf06,
     ID.activityPf07,
   ],
-});
-
-const gradingDataRef = (path: string) => ({ $gradingData: path });
-const pyodideStdlib = { id: CORE_RUNTIME_ID.PYODIDE } as const;
-
-const exists = (variable: string) => ({
-  type: DeclarativeGraderCheckType.VARIABLE_EXISTS,
-  variable,
-});
-const typeIs = (variable: string, expected: string) => ({
-  type: DeclarativeGraderCheckType.PYTHON_TYPE,
-  variable,
-  expected,
-});
-const exactly = (variable: string, ref: string) => ({
-  type: DeclarativeGraderCheckType.EXACT_VALUES,
-  variable,
-  expected: gradingDataRef(ref),
-});
-const approx = (variable: string, ref: string) => ({
-  type: DeclarativeGraderCheckType.APPROX_VALUES,
-  variable,
-  expected: gradingDataRef(ref),
-  absoluteTolerance: 1e-9,
-});
-
-/** Existence, Python type, then value - so feedback can name which of the three is wrong. */
-const intVariable = (variable: string, ref: string) => [
-  exists(variable),
-  typeIs(variable, "int"),
-  exactly(variable, ref),
-];
-const floatVariable = (variable: string, ref: string) => [
-  exists(variable),
-  typeIs(variable, "float"),
-  approx(variable, ref),
-];
-const strVariable = (variable: string, ref: string) => [
-  exists(variable),
-  typeIs(variable, "str"),
-  exactly(variable, ref),
-];
-const boolVariable = (variable: string, ref: string) => [
-  exists(variable),
-  typeIs(variable, "bool"),
-  exactly(variable, ref),
-];
-const exactListVariable = (variable: string, ref: string) => [
-  exists(variable),
-  typeIs(variable, "list"),
-  exactly(variable, ref),
-];
-const approxListVariable = (variable: string, ref: string) => [
-  exists(variable),
-  typeIs(variable, "list"),
-  approx(variable, ref),
-];
-const functionVariable = (variable: string) => [exists(variable), typeIs(variable, "function")];
-
-const grader = (...groups: readonly (readonly object[])[]) => ({
-  id: CORE_GRADER_ID.DECLARATIVE,
-  config: {
-    checks: [{ type: DeclarativeGraderCheckType.NO_EXCEPTION }, ...groups.flat()],
-  },
 });
 
 // ---------------------------------------------------------------------------------------
@@ -502,10 +448,11 @@ export const PYTHON_FOUNDATIONS_CONTENT = {
   packs: [PYTHON_FOUNDATIONS_PACK],
   concepts: PYTHON_FOUNDATIONS_CONCEPTS,
   courses: [PYTHON_FOUNDATIONS_COURSE],
-  worlds: [PYTHON_FOUNDATIONS_WORLD],
+  worlds: [PYTHON_FOUNDATIONS_WORLD, ...M9.worlds],
   lessons: [
     PYTHON_FOUNDATIONS_LESSON_VALUES_DECISIONS,
     PYTHON_FOUNDATIONS_LESSON_COLLECTIONS_FUNCTIONS,
+    ...M9.lessons,
   ],
   activities: [
     PYTHON_FOUNDATIONS_ACTIVITY_PF01,
@@ -515,6 +462,7 @@ export const PYTHON_FOUNDATIONS_CONTENT = {
     PYTHON_FOUNDATIONS_ACTIVITY_PF05,
     PYTHON_FOUNDATIONS_ACTIVITY_PF06,
     PYTHON_FOUNDATIONS_ACTIVITY_PF07,
+    ...M9.activities,
   ],
   missionTemplates: [
     PYTHON_FOUNDATIONS_TEMPLATE_PF01,
@@ -524,5 +472,6 @@ export const PYTHON_FOUNDATIONS_CONTENT = {
     PYTHON_FOUNDATIONS_TEMPLATE_PF05,
     PYTHON_FOUNDATIONS_TEMPLATE_PF06,
     PYTHON_FOUNDATIONS_TEMPLATE_PF07,
+    ...M9.missionTemplates,
   ],
 } satisfies ContentDefinitionSet;

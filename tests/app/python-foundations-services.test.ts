@@ -10,6 +10,7 @@ import {
 import { CS116_PRODUCTION_IDS, registerCs116ProductionContent } from "../../src/content/cs116";
 import {
   PYTHON_FOUNDATIONS_ACTIVITY_IDS,
+  PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_IDS,
 } from "../../src/content/python-foundations";
 import {
@@ -59,7 +60,10 @@ const fake = vi.hoisted(() => {
 vi.mock("../../src/core/runtime/pyodide", () => ({ createPyodideRuntimeManager: fake.create }));
 vi.mock("../../src/core/runtime/local-python", () => ({ createLocalPythonRuntimeManager: fake.create }));
 
+// The seven M8 activities. PHASE-07 / M9 appended eight more to the same course (see
+// python-foundations-m9-services.test.ts); the M8 contracts below are pinned on the original seven.
 const PF = PYTHON_FOUNDATIONS_ACTIVITY_IDS as readonly string[];
+const PF_ALL = PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS as readonly string[];
 const [PF1, PF2, PF3, PF4] = PF as [string, string, string, string, ...string[]];
 const VS01 = CS116_PRODUCTION_IDS.activityVs01;
 const VS02 = CS116_PRODUCTION_IDS.activityVs02;
@@ -176,13 +180,13 @@ afterEach(() => {
 });
 
 describe("Part A - the first activity of each course is open, nothing else is", () => {
-  it("a fresh profile can open PF-01 and VS-01, and is refused PF-02..PF-07 and VS-02 by createMissionSession itself", async () => {
+  it("a fresh profile can open PF-01 and VS-01, and is refused PF-02 onwards and VS-02 by createMissionSession itself", async () => {
     useFactory();
     const services = await start();
 
     expect(await lockedCode(services, PF1)).toBeNull();
     expect(await lockedCode(services, VS01)).toBeNull();
-    for (const locked of [...PF.slice(1), VS02]) {
+    for (const locked of [...PF_ALL.slice(1), VS02]) {
       expect(await lockedCode(services, locked), locked).toBe("ACTIVITY_LOCKED");
     }
     await services.dispose();
@@ -262,23 +266,23 @@ describe("Part C - Run versus Submit", () => {
     await services.dispose();
   });
 
-  it("walks the whole course in order: every pass opens the next mission, PF-07 ends it", async () => {
+  it("walks the whole course in order: every pass opens the next mission, the last one ends it", async () => {
     useFactory();
     const services = await start();
 
-    for (const [index, activityId] of PF.entries()) {
+    for (const [index, activityId] of PF_ALL.entries()) {
       expect(await lockedCode(services, activityId), activityId).toBeNull();
-      const next = PF[index + 1];
+      const next = PF_ALL[index + 1];
       if (next !== undefined) expect(await lockedCode(services, next), next).toBe("ACTIVITY_LOCKED");
       const playable = await openPlayable(services, activityId);
       await submit(playable, true);
       playable.session.dispose();
     }
 
-    for (const activityId of PF) {
+    for (const activityId of PF_ALL) {
       expect(services.learning.getActivityProgress(activityId as LearningActivityId).completed, activityId).toBe(true);
     }
-    expect(getCourseActivityIds(services.content, PYTHON)).toEqual(PF);
+    expect(getCourseActivityIds(services.content, PYTHON)).toEqual(PF_ALL);
     await services.dispose();
   });
 });
@@ -429,7 +433,7 @@ describe("Part A/D - the two courses never touch each other", () => {
     const services = await start();
 
     expect(await lockedCode(services, PF1)).toBeNull();
-    for (const locked of PF.slice(1)) expect(await lockedCode(services, locked), locked).toBe("ACTIVITY_LOCKED");
+    for (const locked of PF_ALL.slice(1)) expect(await lockedCode(services, locked), locked).toBe("ACTIVITY_LOCKED");
     await services.dispose();
   });
 

@@ -1,5 +1,7 @@
 import type { JsonObject } from "../domain";
 
+import type { FunctionProbeSpec } from "./function-probes";
+
 export interface RuntimeMissionPreparationRequest {
   readonly runtimeConfig?: JsonObject;
   readonly setupData?: JsonObject;
@@ -8,6 +10,11 @@ export interface RuntimeMissionPreparationRequest {
 export interface RuntimeExecutionRequest {
   readonly code: string;
   readonly observeVariables?: readonly string[];
+  /**
+   * M9: calls to make on learner-defined functions after the program ran once
+   * (Submit only; a runtime that cannot honor it must say so, never ignore it).
+   */
+  readonly functionProbes?: readonly FunctionProbeSpec[];
 }
 
 export interface RuntimeSystemError {
