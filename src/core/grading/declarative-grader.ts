@@ -5,8 +5,9 @@ import {
   DeclarativeGraderConfigSchema,
   type ApproxNumericValue,
   type DeclarativeGraderCheck,
+  type TypedValueCheck,
 } from "./grader-config";
-import { evaluateFunctionCases } from "./function-case-evaluation";
+import { evaluateFunctionCases, evaluateTypedValue } from "./function-case-evaluation";
 import type { FunctionCasesCheck } from "./function-cases";
 import type {
   GraderExecutionSnapshot,
@@ -52,6 +53,7 @@ type VariableCheck = Exclude<
   DeclarativeGraderCheck,
   | { readonly type: typeof DeclarativeGraderCheckType.NO_EXCEPTION }
   | FunctionCasesCheck
+  | TypedValueCheck
 >;
 
 function missingVariableResult(
@@ -130,7 +132,7 @@ function approxEquals(
 }
 
 function evaluateCheck(
-  check: Exclude<DeclarativeGraderCheck, FunctionCasesCheck>,
+  check: Exclude<DeclarativeGraderCheck, FunctionCasesCheck | TypedValueCheck>,
   execution: GraderExecutionSnapshot,
 ): GraderCheckResult {
   if (check.type === DeclarativeGraderCheckType.NO_EXCEPTION) {
@@ -295,12 +297,17 @@ export function gradeDeclaratively(
   execution: GraderExecutionSnapshot,
 ): GraderResult {
   const parsed = DeclarativeGraderConfigSchema.parse(config);
-  let functionIndex = 0;
-  const checks = parsed.checks.map((check) =>
-    check.type === DeclarativeGraderCheckType.FUNCTION_CASES
-      ? evaluateFunctionCases(check, execution, functionIndex++)
-      : evaluateCheck(check, execution),
-  );
+  // Function probes and value probes share one ordered list in the execution snapshot.
+  let probeIndex = 0;
+  const checks = parsed.checks.map((check) => {
+    if (check.type === DeclarativeGraderCheckType.FUNCTION_CASES) {
+      return evaluateFunctionCases(check, execution, probeIndex++);
+    }
+    if (check.type === DeclarativeGraderCheckType.TYPED_VALUE) {
+      return evaluateTypedValue(check, execution, probeIndex++);
+    }
+    return evaluateCheck(check, execution);
+  });
 
   return {
     passed: checks.every((check) => check.passed),

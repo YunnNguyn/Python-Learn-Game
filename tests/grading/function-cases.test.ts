@@ -249,7 +249,7 @@ describe("grading FUNCTION_CASES results", () => {
     const flat = { ...ok, value: { $ndarray: [2, 4, 6, 8], dtype: "float64", shape: [4] } };
     expect(caseOf(gradeDeclaratively(arrays, snapshot([observation([flat], "OK", "double")])), "a")).toMatchObject({ outcome: FunctionCaseOutcome.WRONG_SHAPE, category: GraderFailureCategory.SHAPE_ERROR });
     const ints = { ...ok, value: { $ndarray: [[2, 4], [6, 8]], dtype: "int64", shape: [2, 2] } };
-    expect(caseOf(gradeDeclaratively(arrays, snapshot([observation([ints], "OK", "double")])), "a").outcome).toBe(FunctionCaseOutcome.WRONG_TYPE);
+    expect(caseOf(gradeDeclaratively(arrays, snapshot([observation([ints], "OK", "double")])), "a")).toMatchObject({ outcome: FunctionCaseOutcome.WRONG_DTYPE, category: GraderFailureCategory.TYPE_ERROR });
     const wrongValue = { ...ok, value: { $ndarray: [[2, 4], [6, 9]], dtype: "float64", shape: [2, 2] } };
     expect(caseOf(gradeDeclaratively(arrays, snapshot([observation([wrongValue], "OK", "double")])), "a").outcome).toBe(FunctionCaseOutcome.WRONG_VALUE);
   });
@@ -389,9 +389,9 @@ describe("feedback for FUNCTION_CASES", () => {
 });
 
 describe("DeclarativeGraderCheckType", () => {
-  it("adds FUNCTION_CASES without removing or renaming the M8 types", () => {
+  it("adds FUNCTION_CASES (M9) and TYPED_VALUE (M10) without removing or renaming the M8 types", () => {
     expect(Object.keys(DeclarativeGraderCheckType).sort()).toEqual(
-      ["APPROX_VALUES", "EXACT_VALUES", "FUNCTION_CASES", "NDARRAY_TYPE", "NO_EXCEPTION", "PYTHON_TYPE", "SHAPE", "VARIABLE_EXISTS"],
+      ["APPROX_VALUES", "EXACT_VALUES", "FUNCTION_CASES", "NDARRAY_TYPE", "NO_EXCEPTION", "PYTHON_TYPE", "SHAPE", "TYPED_VALUE", "VARIABLE_EXISTS"],
     );
   });
 

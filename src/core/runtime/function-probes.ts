@@ -25,7 +25,13 @@ export interface FunctionProbeCase {
 }
 
 export interface FunctionProbeSpec {
+  /** The function to call - or, with `mode: "value"`, the name of the variable to read. */
   readonly function: string;
+  /**
+   * M10: "call" (default) exercises a function; "value" does not call anything - it
+   * reports the typed value of the named variable (one case with no arguments).
+   */
+  readonly mode?: "call" | "value";
   readonly cases: readonly FunctionProbeCase[];
 }
 
@@ -75,6 +81,7 @@ const identifier = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/);
 
 export const FunctionProbeSpecSchema: z.ZodType<FunctionProbeSpec> = z.strictObject({
   function: identifier,
+  mode: z.enum(["call", "value"]).optional(),
   cases: z.array(
     z.strictObject({
       args: z.array(JsonValueSchema).max(16),

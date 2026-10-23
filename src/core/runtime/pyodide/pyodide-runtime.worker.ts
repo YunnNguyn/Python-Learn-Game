@@ -22,6 +22,11 @@ import {
 } from "./worker-protocol";
 import { buildObservationExpression } from "./observation-helper";
 import { runFunctionProbes } from "./function-probe-helper";
+import {
+  capturePreviewsAndScan,
+  clearStalePreviews,
+  configureMatplotlib,
+} from "./workspace-preview";
 import type { FunctionProbeSpec } from "../function-probes";
 import {
   isAllowedRuntimeConfigKey,
@@ -261,6 +266,11 @@ async function ensureRuntimePackages(
   }
 
   try {
+    // M10: Matplotlib's default backend needs a display; select the headless one before
+    // anything imports it.
+    if (requestedPackages.some((packageName) => packageName.toLowerCase() === "matplotlib")) {
+      configureMatplotlib(pyodide);
+    }
     await pyodide.loadPackage(requestedPackages);
     return null;
   } catch (error) {
@@ -345,6 +355,7 @@ function stageMissionWorkspace(
         'os.makedirs("data", exist_ok=True)\n' +
         'shutil.rmtree("artifacts", ignore_errors=True)\n' +
         'os.makedirs("artifacts", exist_ok=True)\n' +
+        '__entry = None\n' +
         'for __entry in json.loads(__mission_datasets_json):\n' +
         '    (pathlib.Path("data") / __entry["filename"]).write_text(__entry["content"], encoding="utf-8")\n' +
         'del __entry\n',
@@ -536,72 +547,13 @@ async function submitCode(
   }
 }
 
-// Scan the data/ and artifacts/ directories in the Pyodide virtual filesystem
-// after execution and return a RuntimeWorkspaceInfo. Small image artifacts are
-// inlined as base64 data URLs so the mission workspace can display the figure
-// or image the learner just produced (the browser can't read the virtual FS
-// directly). This is workspace/presentation metadata, kept separate from the
-// grader's variable observations.
-const WORKSPACE_SCAN_SOURCE = `
-import os, json, base64, pathlib
-
-def __plg_scan(dirname, want_image_data):
-    items = []
-    base = pathlib.Path(dirname)
-    if base.is_dir():
-        for p in sorted(base.iterdir()):
-            if not p.is_file():
-                continue
-            ext = p.suffix.lower().lstrip(".")
-            size = p.stat().st_size
-            category = {
-                "png": "image", "jpg": "image", "jpeg": "image",
-                "gif": "image", "webp": "image", "bmp": "image",
-                "csv": "csv", "json": "json", "txt": "text",
-            }.get(ext, "file")
-            item = {
-                "filename": p.name,
-                "relativePath": dirname + "/" + p.name,
-                "bytes": size,
-                "extension": ext,
-                "category": category,
-            }
-            if want_image_data and category == "image" and 0 < size <= 2_000_000:
-                mime = {
-                    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
-                    "gif": "image/gif", "webp": "image/webp", "bmp": "image/bmp",
-                }.get(ext, "application/octet-stream")
-                encoded = base64.b64encode(p.read_bytes()).decode("ascii")
-                item["dataUrl"] = "data:" + mime + ";base64," + encoded
-            items.append(item)
-    return items
-
-__plg_ws = json.dumps({
-    "datasets": __plg_scan("data", False),
-    "artifacts": __plg_scan("artifacts", True),
-})
-`;
-
+// After every execution the data/ and artifacts/ directories are listed and the figures
+// the learner left open are rendered (M10). Images are inlined as data URLs only when they
+// are validated, bounded PNGs - see workspace-preview.ts for the guarantees.
 function scanWorkspace(
   pyodide: PyodideInterface,
 ): RuntimeWorkspaceInfo | undefined {
-  try {
-    pyodide.runPython(WORKSPACE_SCAN_SOURCE);
-    const raw = pyodide.globals.get("__plg_ws") as unknown;
-    const parsed = typeof raw === "string" ? JSON.parse(raw) : undefined;
-    return parsed as RuntimeWorkspaceInfo | undefined;
-  } catch {
-    return undefined;
-  } finally {
-    try {
-      pyodide.runPython(
-        'for __n in ("__plg_ws", "__plg_scan"):\n'
-          + '    globals().pop(__n, None)\n',
-      );
-    } catch {
-      // best-effort cleanup only
-    }
-  }
+  return capturePreviewsAndScan(pyodide);
 }
 
 function withWorkspace(
@@ -625,6 +577,8 @@ async function executePython(
 
   pyodide.setStdout(stdoutCapture.writer);
   pyodide.setStderr(stderrCapture.writer);
+  // M10: a plot preview always belongs to the run being shown.
+  clearStalePreviews(pyodide);
 
   try {
     executionValue = await pyodide.runPythonAsync(code, { globals });

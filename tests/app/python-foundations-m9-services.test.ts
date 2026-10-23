@@ -13,6 +13,7 @@ import {
   PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_IDS,
   PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS,
+  PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS,
 } from "../../src/content/python-foundations";
 import {
   AttemptRecordSchema,
@@ -53,9 +54,10 @@ vi.mock("../../src/core/runtime/local-python", () => ({ createLocalPythonRuntime
 
 const M8 = PYTHON_FOUNDATIONS_ACTIVITY_IDS as readonly string[];
 const M9 = PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS as readonly string[];
+const M10 = PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS as readonly string[];
 const ALL = PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS as readonly string[];
+const PF_1_TO_15 = [...M8, ...M9];
 const [PF08, PF09, PF10, PF11, PF12] = M9 as [string, string, string, string, string, ...string[]];
-const PF13 = M9[5]!;
 const PF15 = M9[M9.length - 1]!;
 const VS01 = CS116_PRODUCTION_IDS.activityVs01;
 const VS02 = CS116_PRODUCTION_IDS.activityVs02;
@@ -161,21 +163,23 @@ afterEach(() => {
 });
 
 describe("M9 course structure", () => {
-  it("is ONE course: the seven M8 activities first, in their old order, then the eight M9 ones", async () => {
+  it("is ONE course: the seven M8 activities first, in their old order, then the eight M9 ones (M10 appends after them)", async () => {
     useFactory();
     const services = await start();
 
     expect(M8).toHaveLength(7);
     expect(M9).toHaveLength(8);
-    expect(getCourseActivityIds(services.content, PYTHON)).toEqual([...M8, ...M9]);
-    expect(ALL).toEqual([...M8, ...M9]);
+    expect(getCourseActivityIds(services.content, PYTHON)).toEqual([...M8, ...M9, ...M10]);
+    expect(getCourseActivityIds(services.content, PYTHON).slice(0, 15)).toEqual(PF_1_TO_15);
+    expect(ALL).toEqual([...M8, ...M9, ...M10]);
     expect(services.content.getCourses().map((course) => course.id)).toEqual([
       CS116_PRODUCTION_IDS.course,
       PYTHON_FOUNDATIONS_IDS.course,
     ]);
-    // PF-07 is not the end of the course any more; PF-15 is.
+    // Neither PF-07 nor PF-15 is the end of the course any more; PF-26 is.
     expect(getNextActivityInCourse(services.content, M8[6] as LearningActivityId)).toBe(PF08);
-    expect(getNextActivityInCourse(services.content, PF15 as LearningActivityId)).toBeUndefined();
+    expect(getNextActivityInCourse(services.content, PF15 as LearningActivityId)).toBe(M10[0]);
+    expect(getNextActivityInCourse(services.content, M10[M10.length - 1] as LearningActivityId)).toBeUndefined();
     await services.dispose();
   });
 });
@@ -200,7 +204,7 @@ describe("M9 continuation - a learner who finished M8 continues, nothing is rese
     await services.dispose();
   });
 
-  it("each pass opens exactly the next M9 mission; the whole course ends only after PF-15", async () => {
+  it("each pass opens exactly the next M9 mission; PF-15 hands over to PF-16 (M10), not to a finished course", async () => {
     const factory = useFactory();
     await seedAttempts(factory, M8.map((id) => [id] as const));
     const services = await start();
@@ -216,15 +220,16 @@ describe("M9 continuation - a learner who finished M8 continues, nothing is rese
       playable.session.dispose();
     }
 
-    for (const activityId of ALL) {
+    for (const activityId of PF_1_TO_15) {
       expect(services.learning.getActivityProgress(activityId as LearningActivityId).completed, activityId).toBe(true);
     }
-    // A finished course recommends its closing REVIEW-stage mission (existing contract, unchanged for every
-    // course): the PF-13 mini-project. It is never PF-07, which is no longer the end of the course.
+    // M10 continues the same course: after PF-15 the learner finds PF-16 open, not "course complete".
     expect(getNextStudyActivity(services.content, services.learning, PYTHON)).toEqual({
-      activityId: PF13,
-      reason: "COMPLETE_REVIEW",
+      activityId: M10[0],
+      reason: "NEXT",
     });
+    expect(await lockedCode(services, M10[0]!)).toBeNull();
+    expect(await lockedCode(services, M10[1]!)).toBe("ACTIVITY_LOCKED");
     await services.dispose();
   });
 
@@ -377,7 +382,7 @@ describe("M9 Run versus Submit, rewards and persistence", () => {
 });
 
 describe("M9 isolation - CS116 and M7 practice are untouched", () => {
-  it("finishing all of Python Foundations (M8 + M9) opens only the first CS116 mission", async () => {
+  it("finishing all of Python Foundations (M8 + M9 + M10) opens only the first CS116 mission", async () => {
     const factory = useFactory();
     await seedAttempts(factory, ALL.map((id) => [id] as const));
     const services = await start();
@@ -387,7 +392,7 @@ describe("M9 isolation - CS116 and M7 practice are untouched", () => {
     await services.dispose();
   });
 
-  it("finishing all of CS116 opens only PF-01, never an M9 mission", async () => {
+  it("finishing all of CS116 opens only PF-01, never an M9 or M10 mission", async () => {
     const factory = useFactory();
     await seedAttempts(factory, CS116_ACTIVITIES.map((id) => [id] as const));
     const services = await start();

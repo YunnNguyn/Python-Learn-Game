@@ -572,11 +572,12 @@ export function MissionWorkspace({ routeKey: routeId, openSession, profile }: Mi
                           {file.category ? ` · ${file.category}` : ""}
                           {file.extension ? ` · .${file.extension}` : ""}
                         </span>
+                        {file.description ? <p>{file.description}</p> : null}
                         {file.dataUrl ? (
                           <img
                             className="mission-workspace-files__image"
                             src={file.dataUrl}
-                            alt={`Kết quả ${file.filename}`}
+                            alt={figurePreviewAlt(file.filename)}
                             loading="lazy"
                           />
                         ) : null}
@@ -699,6 +700,12 @@ function stageLabel(stage: LearningStage): string {
     case LearningStage.RETENTION:
       return "Ghi nhớ";
   }
+}
+
+/** M10: the plots the runtime renders from open Matplotlib figures are named figure-N.png. */
+function figurePreviewAlt(filename: string): string {
+  const match = /^figure-(\d+)\.png$/.exec(filename);
+  return match !== null ? `Biểu đồ ${match[1]} do mã của bạn vẽ` : `Kết quả ${filename}`;
 }
 
 function formatWorkspaceBytes(bytes: number): string {

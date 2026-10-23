@@ -51,8 +51,8 @@ const PF1 = PF[0]!;
 const PF2 = PF[1]!;
 const PF7 = PF[6]!;
 const PF_LAST = PF[PF.length - 1]!;
-// The closing REVIEW-stage mission (the PF-13 mini-project) - what a finished course recommends.
-const PF_CLOSING_REVIEW = PF[12]!;
+// The closing REVIEW-stage mission (the PF-26 data-prep mini-project) - what a finished course recommends.
+const PF_CLOSING_REVIEW = PF[25]!;
 const VS01 = activity(CS116_PRODUCTION_IDS.activityVs01);
 const VS02 = activity(CS116_PRODUCTION_IDS.activityVs02);
 const VS06 = activity(CS116_PRODUCTION_IDS.activityVs06);

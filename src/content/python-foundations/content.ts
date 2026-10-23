@@ -32,6 +32,7 @@ import {
   strVariable,
 } from "./content-helpers";
 import { PYTHON_FOUNDATIONS_M9_CONTENT as M9 } from "./content-m9";
+import { PYTHON_FOUNDATIONS_M10_CONTENT as M10 } from "./content-m10";
 import { PYTHON_FOUNDATIONS_IDS as ID } from "./ids";
 
 /**
@@ -46,21 +47,29 @@ import { PYTHON_FOUNDATIONS_IDS as ID } from "./ids";
 
 export const PYTHON_FOUNDATIONS_PACK: ContentPackManifest = ContentPackManifestSchema.parse({
   id: ID.pack,
-  version: "0.2.0",
+  version: "0.3.0",
   schemaVersion: 1,
   title: "Python Foundations",
   description:
-    "Khóa Python nền tảng cho ML: biến và kiểu số, rẽ nhánh, list và vòng lặp, hàm, collections, xử lý lỗi và dữ liệu JSON, rồi NumPy cơ bản — luyện bằng mã Python thật chạy trong trình duyệt.",
+    "Khóa Python nền tảng cho ML: biến và kiểu số, rẽ nhánh, list và vòng lặp, hàm, collections, xử lý lỗi và dữ liệu JSON, NumPy, pandas, Matplotlib và quy trình chuẩn bị dữ liệu — luyện bằng mã Python thật chạy trong trình duyệt.",
   courseIds: [ID.course],
   dependencies: [],
 });
 
 export const PYTHON_FOUNDATIONS_COURSE: Course = CourseSchema.parse({
   id: ID.course,
-  title: "Python Foundations — Lập trình Python cho ML",
+  title: "Python Foundations — Python Coding for ML",
   description:
-    "Khóa độc lập, không cần học NumPy trước. Bắt đầu từ biến, số và rẽ nhánh, rồi đến list, vòng lặp và hàm; tiếp theo là cắt lát, dictionary, comprehension, hàm chấm nhiều trường hợp, sửa lỗi và một mini-project JSON; cuối cùng là NumPy thật chạy trong trình duyệt.",
-  worldIds: [ID.world, ID.worldCollections, ID.worldNumpy],
+    "Khóa độc lập, không cần học NumPy trước. Bắt đầu từ biến, số và rẽ nhánh, rồi đến list, vòng lặp và hàm; tiếp theo là cắt lát, dictionary, comprehension, hàm chấm nhiều trường hợp, sửa lỗi và một mini-project JSON; sau đó là NumPy, pandas và Matplotlib thật chạy trong trình duyệt, kết thúc bằng quy trình chuẩn bị dữ liệu từ file CSV.",
+  worldIds: [
+    ID.world,
+    ID.worldCollections,
+    ID.worldNumpy,
+    ID.worldNumpyAdvanced,
+    ID.worldPandas,
+    ID.worldVisualization,
+    ID.worldWorkflows,
+  ],
 });
 
 export const PYTHON_FOUNDATIONS_WORLD: World = WorldSchema.parse({
@@ -448,11 +457,12 @@ export const PYTHON_FOUNDATIONS_CONTENT = {
   packs: [PYTHON_FOUNDATIONS_PACK],
   concepts: PYTHON_FOUNDATIONS_CONCEPTS,
   courses: [PYTHON_FOUNDATIONS_COURSE],
-  worlds: [PYTHON_FOUNDATIONS_WORLD, ...M9.worlds],
+  worlds: [PYTHON_FOUNDATIONS_WORLD, ...M9.worlds, ...M10.worlds],
   lessons: [
     PYTHON_FOUNDATIONS_LESSON_VALUES_DECISIONS,
     PYTHON_FOUNDATIONS_LESSON_COLLECTIONS_FUNCTIONS,
     ...M9.lessons,
+    ...M10.lessons,
   ],
   activities: [
     PYTHON_FOUNDATIONS_ACTIVITY_PF01,
@@ -463,6 +473,7 @@ export const PYTHON_FOUNDATIONS_CONTENT = {
     PYTHON_FOUNDATIONS_ACTIVITY_PF06,
     PYTHON_FOUNDATIONS_ACTIVITY_PF07,
     ...M9.activities,
+    ...M10.activities,
   ],
   missionTemplates: [
     PYTHON_FOUNDATIONS_TEMPLATE_PF01,
@@ -473,5 +484,6 @@ export const PYTHON_FOUNDATIONS_CONTENT = {
     PYTHON_FOUNDATIONS_TEMPLATE_PF06,
     PYTHON_FOUNDATIONS_TEMPLATE_PF07,
     ...M9.missionTemplates,
+    ...M10.missionTemplates,
   ],
 } satisfies ContentDefinitionSet;

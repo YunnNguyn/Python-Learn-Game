@@ -3,6 +3,7 @@ import type { MissionGenerator } from "../../core/generators";
 import { GeneratorRegistry } from "../../core/generators";
 import type { SeededRng } from "../../core/random";
 import { registerPythonFoundationsM9Generators } from "./generators-m9";
+import { registerPythonFoundationsM10Generators } from "./generators-m10";
 
 /**
  * Generators of the Python Foundations missions (PHASE-06 / M8).
@@ -432,4 +433,6 @@ export function registerPythonFoundationsGenerators(registry: GeneratorRegistry)
   registry.registerGenerator(PYTHON_FOUNDATIONS_GENERATOR_ID.PF07, pf07Generator);
   // M9 (PHASE-07): PF-08..PF-15 are part of the same course, registered with it.
   registerPythonFoundationsM9Generators(registry);
+  // M10 (PHASE-08): PF-16..PF-26.
+  registerPythonFoundationsM10Generators(registry);
 }

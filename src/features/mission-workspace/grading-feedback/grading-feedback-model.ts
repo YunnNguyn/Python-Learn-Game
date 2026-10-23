@@ -82,6 +82,9 @@ function toFeedbackItem(
   if (check.type === DeclarativeGraderCheckType.FUNCTION_CASES) {
     return functionFeedback(check, result);
   }
+  if (check.type === DeclarativeGraderCheckType.TYPED_VALUE) {
+    return typedValueFeedback(check, result);
+  }
 
   switch (check.category as string | undefined) {
     case GraderFailureCategory.RUNTIME_ERROR:
@@ -153,21 +156,64 @@ function functionFeedback(
   };
 }
 
-function functionCaseDetail(item: GraderFunctionCaseResult): string {
-  const where = `Ca “${item.label}”${item.call ? ` — ${item.call}` : ""}. `;
+/**
+ * M10: a TYPED_VALUE check (a DataFrame, Series, ndarray or figure held by a variable).
+ * The message comes from the comparison and never contains expected row values.
+ */
+function typedValueFeedback(
+  check: GraderCheckResult,
+  result: GraderResult,
+): GradingFeedbackItem {
+  const name = check.variable ?? "";
+  const quoted = name ? `“${name}”` : "cần kiểm tra";
+  const first = check.cases?.find((item) => !item.passed);
+
+  if (first === undefined) {
+    if (check.category === GraderFailureCategory.MISSING_VARIABLE) {
+      return { kind: "missing-variable", title: `Chưa tìm thấy biến ${quoted}.` };
+    }
+    return runtimeFeedback(result);
+  }
+
+  const kind: GradingFeedbackItemKind =
+    first.category === GraderFailureCategory.TYPE_ERROR
+      ? "type"
+      : first.category === GraderFailureCategory.SHAPE_ERROR
+        ? "shape"
+        : "value";
+  return {
+    kind,
+    title: `Biến ${quoted} chưa khớp yêu cầu.`,
+    detail: functionCaseDetail(first, false),
+    ...(first.expectedText !== undefined ? { expected: first.expectedText } : {}),
+    ...(first.actualText !== undefined ? { actual: first.actualText } : {}),
+  };
+}
+
+function functionCaseDetail(item: GraderFunctionCaseResult, withCaseLabel = true): string {
+  const where = withCaseLabel ? `Ca “${item.label}”${item.call ? ` — ${item.call}` : ""}. ` : "";
+  const note = item.message ? ` ${item.message}` : "";
   switch (item.outcome) {
     case FunctionCaseOutcome.RAISED: {
       const message = item.message ? `: ${item.message}` : "";
       return `${where}Hàm gặp lỗi ${item.exceptionType ?? "Exception"}${message}.`;
     }
     case FunctionCaseOutcome.WRONG_VALUE:
-      return `${where}Hàm trả về kết quả chưa khớp yêu cầu.`;
+      return `${where}${withCaseLabel ? "Hàm trả về" : "Giá trị là"} kết quả chưa khớp yêu cầu.${note}`;
+    case FunctionCaseOutcome.WRONG_COLUMNS:
+      return `${where}Tên hoặc thứ tự cột chưa đúng.${note}`;
+    case FunctionCaseOutcome.WRONG_INDEX:
+      return `${where}Chỉ số hàng (index) chưa đúng.${note}`;
+    case FunctionCaseOutcome.WRONG_DTYPE:
+      return `${where}Kiểu dữ liệu (dtype) chưa đúng.${note}`;
+    case FunctionCaseOutcome.WRONG_FIGURE:
+      return `${where}Biểu đồ chưa đúng yêu cầu.${note}`;
     case FunctionCaseOutcome.WRONG_TYPE:
       return `${where}Kiểu dữ liệu trả về chưa đúng${
         item.actualType ? ` (nhận được ${item.actualType}${item.message ? `, ${item.message}` : ""})` : ""
       }.`;
     case FunctionCaseOutcome.WRONG_SHAPE:
-      return `${where}Kích thước của mảng trả về chưa đúng.`;
+      return `${where}Kích thước của kết quả chưa đúng.${note}`;
     case FunctionCaseOutcome.NO_EXCEPTION_RAISED:
       return `${where}Hàm cần báo lỗi nhưng đã trả về một giá trị.`;
     case FunctionCaseOutcome.WRONG_EXCEPTION:

@@ -2,11 +2,12 @@ import type { JsonValue } from "../domain";
 import type { FunctionProbeCaseObservation } from "../runtime/function-probes";
 
 import {
-  comparePyValues,
+  diffPyValues,
   formatPyValue,
   type FunctionCase,
   type FunctionCasesCheck,
 } from "./function-cases";
+import type { TypedValueCheck } from "./grader-config";
 import type { GraderExecutionSnapshot } from "./grader-execution-snapshot";
 import {
   FunctionCaseOutcome,
@@ -94,6 +95,70 @@ export function evaluateFunctionCases(
   };
 }
 
+/**
+ * M10: grades a TYPED_VALUE check - the typed value of one learner variable against the
+ * expected value - with exactly the comparison and the wording of a function case.
+ */
+export function evaluateTypedValue(
+  check: TypedValueCheck,
+  execution: GraderExecutionSnapshot,
+  probeIndex: number,
+): GraderCheckResult {
+  const observation = execution.functions?.[probeIndex];
+  const base = { type: "TYPED_VALUE" as const, variable: check.variable };
+
+  if (observation === undefined) {
+    if (execution.exception !== undefined) {
+      return {
+        ...base,
+        passed: false,
+        category: GraderFailureCategory.RUNTIME_ERROR,
+        message: `Chưa kiểm tra được biến '${check.variable}' vì chương trình dừng do lỗi.`,
+      };
+    }
+    throw new Error(`No value observation for check #${probeIndex} (${check.variable}).`);
+  }
+  if (observation.function !== check.variable) {
+    throw new Error(`Value observation mismatch: ${observation.function} != ${check.variable}.`);
+  }
+  if (observation.status !== "OK") {
+    return {
+      ...base,
+      passed: false,
+      category: GraderFailureCategory.MISSING_VARIABLE,
+      message: `Variable '${check.variable}' does not exist.`,
+    };
+  }
+  if (observation.cases.length !== 1) {
+    throw new Error(`Value observation for ${check.variable} must have exactly one case.`);
+  }
+
+  const asCase: FunctionCase = {
+    id: "value",
+    label: `Giá trị của biến ${check.variable}`,
+    visibility: check.reveal === true ? "example" : "hidden",
+    args: [],
+    expect: {
+      kind: "RETURNS",
+      value: check.expected,
+      ...(check.tolerance !== undefined ? { tolerance: check.tolerance } : {}),
+      ...(check.returnType !== undefined ? { returnType: check.returnType } : {}),
+    },
+  };
+  const outcome = evaluateCase(check.variable, asCase, observation.cases[0]!);
+  return {
+    ...base,
+    passed: outcome.passed,
+    cases: [outcome],
+    ...(!outcome.passed
+      ? {
+          category: outcome.category ?? GraderFailureCategory.VALUE_ERROR,
+          message: `Biến '${check.variable}' chưa khớp yêu cầu.`,
+        }
+      : {}),
+  };
+}
+
 function evaluateCase(
   functionName: string,
   testCase: FunctionCase,
@@ -101,7 +166,7 @@ function evaluateCase(
 ): GraderFunctionCaseResult {
   const visibility = testCase.visibility ?? "hidden";
   const base = { id: testCase.id, label: testCase.label, visibility } as const;
-  const call = describeCall(functionName, testCase);
+  const call = testCase.id === "value" && testCase.args.length === 0 ? undefined : describeCall(functionName, testCase);
   const fail = (
     outcome: GraderFunctionCaseResult["outcome"],
     category: GraderFailureCategory,
@@ -111,7 +176,7 @@ function evaluateCase(
     passed: false,
     outcome,
     category,
-    call,
+    ...(call !== undefined ? { call } : {}),
     ...extra,
   });
   const exposeExpected = (): Partial<GraderFunctionCaseResult> =>
@@ -175,27 +240,26 @@ function evaluateCase(
     });
   }
 
-  const mismatch = comparePyValues(actual, testCase.expect.value, testCase.expect.tolerance ?? 0);
-  if (mismatch === "TYPE" || mismatch === "DTYPE") {
-    return fail(FunctionCaseOutcome.WRONG_TYPE, GraderFailureCategory.TYPE_ERROR, {
-      actualText,
-      actualType: observed.pythonType,
-      ...exposeExpected(),
-    });
-  }
-  if (mismatch === "SHAPE") {
-    return fail(FunctionCaseOutcome.WRONG_SHAPE, GraderFailureCategory.SHAPE_ERROR, {
-      actualText,
-      actualType: observed.pythonType,
-      ...exposeExpected(),
-    });
-  }
-  if (mismatch === "VALUE") {
-    return fail(FunctionCaseOutcome.WRONG_VALUE, GraderFailureCategory.VALUE_ERROR, {
-      actualText,
-      actualType: observed.pythonType,
-      ...exposeExpected(),
-    });
+  const difference = diffPyValues(actual, testCase.expect.value, testCase.expect.tolerance ?? 0);
+  if (difference !== null) {
+    const detail = difference.detail !== undefined ? { message: difference.detail } : {};
+    const shown = { actualText, actualType: observed.pythonType, ...detail };
+    switch (difference.mismatch) {
+      case "TYPE":
+        return fail(FunctionCaseOutcome.WRONG_TYPE, GraderFailureCategory.TYPE_ERROR, { ...shown, ...exposeExpected() });
+      case "DTYPE":
+        return fail(FunctionCaseOutcome.WRONG_DTYPE, GraderFailureCategory.TYPE_ERROR, { ...shown, ...exposeExpected() });
+      case "SHAPE":
+        return fail(FunctionCaseOutcome.WRONG_SHAPE, GraderFailureCategory.SHAPE_ERROR, { ...shown, ...exposeExpected() });
+      case "COLUMNS":
+        return fail(FunctionCaseOutcome.WRONG_COLUMNS, GraderFailureCategory.SHAPE_ERROR, { ...shown, ...exposeExpected() });
+      case "INDEX":
+        return fail(FunctionCaseOutcome.WRONG_INDEX, GraderFailureCategory.VALUE_ERROR, { ...shown, ...exposeExpected() });
+      case "FIGURE":
+        return fail(FunctionCaseOutcome.WRONG_FIGURE, GraderFailureCategory.VALUE_ERROR, { ...shown, ...exposeExpected() });
+      default:
+        return fail(FunctionCaseOutcome.WRONG_VALUE, GraderFailureCategory.VALUE_ERROR, { ...shown, ...exposeExpected() });
+    }
   }
 
   if (mutated) {

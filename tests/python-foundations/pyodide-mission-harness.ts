@@ -5,6 +5,7 @@ import {
   PYTHON_FOUNDATIONS_CONTENT,
   PYTHON_FOUNDATIONS_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS,
+  PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS,
   registerPythonFoundationsGenerators,
 } from "../../src/content/python-foundations";
 import { ContentRegistry } from "../../src/core/content";
@@ -142,3 +143,5 @@ function summarize(execution: RuntimeExecutionResult, grading: GraderResult | un
 export const ACTIVITY_IDS: readonly LearningActivityId[] = PYTHON_FOUNDATIONS_ACTIVITY_IDS as unknown as readonly LearningActivityId[];
 /** PF-08..PF-15 (M9-01..M9-08). */
 export const M9_ACTIVITY_IDS: readonly LearningActivityId[] = PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS as unknown as readonly LearningActivityId[];
+/** PF-16..PF-26 (PHASE-08 / M10). */
+export const M10_ACTIVITY_IDS: readonly LearningActivityId[] = PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS as unknown as readonly LearningActivityId[];

@@ -24,6 +24,14 @@ export const FunctionCaseOutcome = {
   WRONG_EXCEPTION: "WRONG_EXCEPTION",
   UNSUPPORTED_RESULT: "UNSUPPORTED_RESULT",
   ARGS_MUTATED: "ARGS_MUTATED",
+  /** M10: a DataFrame / Series has the wrong column names, order or Series name. */
+  WRONG_COLUMNS: "WRONG_COLUMNS",
+  /** M10: right values but the wrong row labels (index) or index name. */
+  WRONG_INDEX: "WRONG_INDEX",
+  /** M10: a column / Series has the wrong dtype (or an ndarray the wrong dtype). */
+  WRONG_DTYPE: "WRONG_DTYPE",
+  /** M10: a Matplotlib figure differs in title, labels, legend, kind or plotted data. */
+  WRONG_FIGURE: "WRONG_FIGURE",
 } as const;
 
 export type FunctionCaseOutcome = (typeof FunctionCaseOutcome)[keyof typeof FunctionCaseOutcome];

@@ -43,6 +43,18 @@ export const PYTHON_FOUNDATIONS_CONCEPT_IDS = {
   numpyIndexing: "python.numpy-indexing",
   numpyVectorization: "python.numpy-vectorization",
   numpyMasksAxis: "python.numpy-masks-axis",
+  // M10 (PHASE-08)
+  numpyBroadcasting: "python.numpy-broadcasting",
+  numpyReductions: "python.numpy-reductions",
+  numpyPreprocessing: "python.numpy-preprocessing",
+  pandasFrames: "python.pandas-frames",
+  pandasFiltering: "python.pandas-filtering",
+  pandasMissing: "python.pandas-missing-values",
+  pandasGroupby: "python.pandas-groupby",
+  matplotlibCharts: "python.matplotlib-charts",
+  chartDebugging: "python.chart-debugging",
+  csvLoading: "python.csv-loading",
+  dataPipeline: "python.data-pipeline",
 } as const;
 
 const ID = PYTHON_FOUNDATIONS_CONCEPT_IDS;
@@ -72,4 +84,16 @@ export const PYTHON_FOUNDATIONS_CONCEPTS: readonly Concept[] = [
   concept(ID.numpyIndexing, "Chỉ số và cắt lát trên ndarray", KnowledgeClassification.MUST_RECALL, [ID.numpyArrays, ID.slicing]),
   concept(ID.numpyVectorization, "Vector hóa: phép toán theo từng phần tử", KnowledgeClassification.MUST_UNDERSTAND, [ID.numpyArrays]),
   concept(ID.numpyMasksAxis, "Mặt nạ Boolean và phép toán theo axis", KnowledgeClassification.MUST_UNDERSTAND, [ID.numpyVectorization, ID.numpyIndexing]),
+  // --- M10: Data Science Toolkit ---
+  concept(ID.numpyBroadcasting, "Broadcasting và shape của mảng", KnowledgeClassification.MUST_UNDERSTAND, [ID.numpyVectorization]),
+  concept(ID.numpyReductions, "Phép gộp theo axis, keepdims và mặt nạ", KnowledgeClassification.MUST_UNDERSTAND, [ID.numpyMasksAxis, ID.numpyBroadcasting]),
+  concept(ID.numpyPreprocessing, "Tiền xử lý ma trận đặc trưng bằng vector hóa", KnowledgeClassification.MUST_UNDERSTAND, [ID.numpyReductions]),
+  concept(ID.pandasFrames, "DataFrame: cột, dtype, loc và iloc", KnowledgeClassification.MUST_RECALL, [ID.dicts, ID.numpyArrays]),
+  concept(ID.pandasFiltering, "Lọc hàng và tạo cột tính toán trong pandas", KnowledgeClassification.MUST_UNDERSTAND, [ID.pandasFrames, ID.booleans]),
+  concept(ID.pandasMissing, "Giá trị thiếu và chuyển đổi kiểu trong pandas", KnowledgeClassification.MUST_UNDERSTAND, [ID.pandasFrames, ID.typeConversion]),
+  concept(ID.pandasGroupby, "groupby và tổng hợp theo nhóm", KnowledgeClassification.MUST_UNDERSTAND, [ID.pandasFiltering, ID.aggregation]),
+  concept(ID.matplotlibCharts, "Vẽ biểu đồ đường, cột và phân tán bằng Matplotlib", KnowledgeClassification.MUST_UNDERSTAND, [ID.lists, ID.numpyArrays]),
+  concept(ID.chartDebugging, "Phát hiện và sửa biểu đồ gây hiểu lầm", KnowledgeClassification.MUST_UNDERSTAND, [ID.matplotlibCharts, ID.pandasGroupby]),
+  concept(ID.csvLoading, "Đọc CSV, kiểm tra cột và ghép bảng", KnowledgeClassification.MUST_UNDERSTAND, [ID.pandasMissing, ID.pandasGroupby]),
+  concept(ID.dataPipeline, "Pipeline chuẩn bị dữ liệu từ thô đến ma trận sạch", KnowledgeClassification.MUST_UNDERSTAND, [ID.csvLoading, ID.numpyPreprocessing, ID.matplotlibCharts]),
 ];

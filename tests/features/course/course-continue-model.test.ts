@@ -74,8 +74,8 @@ describe("getCourseContinue", () => {
     const all = Object.fromEntries(PF.map((id) => [id, done]));
     const next = getCourseContinue(content(), progress(all), PYTHON);
 
-    // The closing REVIEW-stage mission is the PF-13 mini-project (PF-07 is no longer the end of the course).
-    expect(next).toMatchObject({ activityId: PF[12], reason: "COMPLETE_REVIEW" });
+    // The closing REVIEW-stage mission is the PF-26 mini-project (PF-07 and PF-13 are no longer the end of the course).
+    expect(next).toMatchObject({ activityId: PF[25], reason: "COMPLETE_REVIEW" });
     expect(next?.label.startsWith("Ôn tập:")).toBe(true);
   });
 

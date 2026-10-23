@@ -21,7 +21,12 @@ export {
   FUNCTION_DTYPES,
   FunctionCaseVisibility,
   FunctionCasesCheckSchema,
+  PyValueSchema,
+  TABLE_DTYPES,
+  type TableDtype,
+  FIGURE_SERIES_KINDS,
   comparePyValues,
+  diffPyValues,
   formatPyValue,
   findPyValueIssue,
   pyKindOf,
@@ -32,6 +37,7 @@ export type {
   ApproxNumericValue,
   DeclarativeGraderCheck,
   DeclarativeGraderConfig,
+  TypedValueCheck,
 } from "./grader-config";
 export type {
   GraderExecutionException,
@@ -42,6 +48,7 @@ export type {
   FunctionCase,
   FunctionCaseExpectation,
   FunctionCasesCheck,
+  PyDifference,
   PyMismatch,
   PyValue,
 } from "./function-cases";

@@ -18,6 +18,16 @@ export const PYTHON_FOUNDATIONS_IDS = {
   lessonSequencesRecords: "python-foundations.sequences-records",
   lessonFunctionsProjects: "python-foundations.functions-projects",
   lessonNumpyArrays: "python-foundations.numpy-arrays",
+  // M10 (PHASE-08): Data Science Toolkit - four more worlds in the SAME course.
+  worldNumpyAdvanced: "python-foundations.numpy-advanced",
+  worldPandas: "python-foundations.pandas",
+  worldVisualization: "python-foundations.visualization",
+  worldWorkflows: "python-foundations.workflows",
+  lessonNumpyShapesAxes: "python-foundations.numpy-shapes-axes",
+  lessonPandasFrames: "python-foundations.pandas-frames",
+  lessonPandasCleaning: "python-foundations.pandas-cleaning",
+  lessonMatplotlibCharts: "python-foundations.matplotlib-charts",
+  lessonDataWorkflows: "python-foundations.data-workflows",
   activityPf01: "python-foundations.pf01",
   activityPf02: "python-foundations.pf02",
   activityPf03: "python-foundations.pf03",
@@ -33,6 +43,17 @@ export const PYTHON_FOUNDATIONS_IDS = {
   activityPf13: "python-foundations.pf13",
   activityPf14: "python-foundations.pf14",
   activityPf15: "python-foundations.pf15",
+  activityPf16: "python-foundations.pf16",
+  activityPf17: "python-foundations.pf17",
+  activityPf18: "python-foundations.pf18",
+  activityPf19: "python-foundations.pf19",
+  activityPf20: "python-foundations.pf20",
+  activityPf21: "python-foundations.pf21",
+  activityPf22: "python-foundations.pf22",
+  activityPf23: "python-foundations.pf23",
+  activityPf24: "python-foundations.pf24",
+  activityPf25: "python-foundations.pf25",
+  activityPf26: "python-foundations.pf26",
   templatePf01: "python-foundations.pf01",
   templatePf02: "python-foundations.pf02",
   templatePf03: "python-foundations.pf03",
@@ -48,9 +69,20 @@ export const PYTHON_FOUNDATIONS_IDS = {
   templatePf13: "python-foundations.pf13",
   templatePf14: "python-foundations.pf14",
   templatePf15: "python-foundations.pf15",
+  templatePf16: "python-foundations.pf16",
+  templatePf17: "python-foundations.pf17",
+  templatePf18: "python-foundations.pf18",
+  templatePf19: "python-foundations.pf19",
+  templatePf20: "python-foundations.pf20",
+  templatePf21: "python-foundations.pf21",
+  templatePf22: "python-foundations.pf22",
+  templatePf23: "python-foundations.pf23",
+  templatePf24: "python-foundations.pf24",
+  templatePf25: "python-foundations.pf25",
+  templatePf26: "python-foundations.pf26",
 } as const;
 
-/** The seven activity ids in course order. */
+/** The seven M8 activity ids in course order. */
 export const PYTHON_FOUNDATIONS_ACTIVITY_IDS = [
   PYTHON_FOUNDATIONS_IDS.activityPf01,
   PYTHON_FOUNDATIONS_IDS.activityPf02,
@@ -76,8 +108,27 @@ export const PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS = [
   PYTHON_FOUNDATIONS_IDS.activityPf15,
 ] as const;
 
-/** Every activity of the course, PF-01..PF-15, in course order. */
+/**
+ * The eleven M10 activity ids in course order (M10-01..M10-11 = PF-16..PF-26). They continue
+ * the same course after PF-15; nothing about PF-01..PF-15 changes.
+ */
+export const PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS = [
+  PYTHON_FOUNDATIONS_IDS.activityPf16,
+  PYTHON_FOUNDATIONS_IDS.activityPf17,
+  PYTHON_FOUNDATIONS_IDS.activityPf18,
+  PYTHON_FOUNDATIONS_IDS.activityPf19,
+  PYTHON_FOUNDATIONS_IDS.activityPf20,
+  PYTHON_FOUNDATIONS_IDS.activityPf21,
+  PYTHON_FOUNDATIONS_IDS.activityPf22,
+  PYTHON_FOUNDATIONS_IDS.activityPf23,
+  PYTHON_FOUNDATIONS_IDS.activityPf24,
+  PYTHON_FOUNDATIONS_IDS.activityPf25,
+  PYTHON_FOUNDATIONS_IDS.activityPf26,
+] as const;
+
+/** Every activity of the course, PF-01..PF-26, in course order. */
 export const PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS = [
   ...PYTHON_FOUNDATIONS_ACTIVITY_IDS,
   ...PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS,
+  ...PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS,
 ] as const;

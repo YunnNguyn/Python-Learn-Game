@@ -34,6 +34,11 @@ export function getDeclarativeFunctionProbes(
   const probes: FunctionProbeSpec[] = [];
 
   for (const check of parsed.checks) {
+    if (check.type === "TYPED_VALUE") {
+      // M10: a probe that reads (does not call) the variable; the expectation stays here.
+      probes.push({ function: check.variable, mode: "value", cases: [{ args: [] }] });
+      continue;
+    }
     if (check.type !== "FUNCTION_CASES") {
       continue;
     }
