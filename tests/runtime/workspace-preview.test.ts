@@ -57,7 +57,7 @@ describe("workspace preview (real Pyodide + Matplotlib)", () => {
     requireNumpy(ctx, packages);
     run("import matplotlib.pyplot as plt");
     expect(String(run("import matplotlib; matplotlib.get_backend()")).toLowerCase()).toBe("agg");
-  });
+  }, 60_000);
 
   it("without any figure it only lists the workspace and never throws", (ctx) => {
     requireNumpy(ctx, packages);

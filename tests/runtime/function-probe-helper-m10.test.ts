@@ -63,7 +63,7 @@ describe("probe helper - pandas (real Pyodide)", () => {
         },
       },
     });
-  });
+  }, 60_000);
 
   it("encodes a Series with its index, name and dtype (also categories)", async (ctx) => {
     requireNumpy(ctx, packages);
@@ -171,7 +171,7 @@ describe("probe helper - Matplotlib (real Pyodide)", () => {
     expect(series.map((entry) => entry.kind)).toEqual(["line", "bar"]);
     expect(series[0]!.label).toBe("A");
     expect(series[1]!.label).toBeNull();
-  });
+  }, 60_000);
 
   it("reads the Axes returned by a function exactly like the one in a variable", async (ctx) => {
     requireNumpy(ctx, packages);

@@ -17,6 +17,7 @@ import {
   PYTHON_FOUNDATIONS_IDS,
   PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS,
+  PYTHON_FOUNDATIONS_M11_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_M9_CONTENT,
   PYTHON_FOUNDATIONS_M9_HINT_SETS,
   PYTHON_FOUNDATIONS_M9_STARTER_CODE,
@@ -58,6 +59,7 @@ import { M9_SOLUTIONS } from "./m9-solutions";
 const M8_IDS = PYTHON_FOUNDATIONS_ACTIVITY_IDS as readonly string[];
 const M9_IDS = PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS as readonly string[];
 const M10_IDS = PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS as readonly string[];
+const M11_IDS = PYTHON_FOUNDATIONS_M11_ACTIVITY_IDS as readonly string[];
 
 const merged = (): ContentDefinitionSet => ({
   packs: [...CS116_PRODUCTION_CONTENT.packs, ...PYTHON_FOUNDATIONS_CONTENT.packs],
@@ -169,10 +171,11 @@ describe("M9 continues the same course after PF-07 (no reset, stable M8 ids)", (
     expect(M8_IDS).toEqual([1, 2, 3, 4, 5, 6, 7].map((n) => `python-foundations.pf0${n}`));
     expect(M9_IDS).toEqual([8, 9, 10, 11, 12, 13, 14, 15].map((n) => `python-foundations.pf${String(n).padStart(2, "0")}`));
     // PHASE-08 / M10 appends PF-16..PF-26 after M9 without touching either earlier id list.
-    expect(PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS).toEqual([...M8_IDS, ...M9_IDS, ...M10_IDS]);
+    // PHASE-09 / M11 appends PF-27 after M10; none of the earlier id lists changes.
+    expect(PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS).toEqual([...M8_IDS, ...M9_IDS, ...M10_IDS, ...M11_IDS]);
     const course = content.getCourse(PYTHON_FOUNDATIONS_IDS.course as never)!;
     expect(course.id).toBe(PYTHON_FOUNDATIONS_IDS.course);
-    expect(getCourseActivityIds(content, course.id)).toEqual([...M8_IDS, ...M9_IDS, ...M10_IDS]);
+    expect(getCourseActivityIds(content, course.id)).toEqual([...M8_IDS, ...M9_IDS, ...M10_IDS, ...M11_IDS]);
   });
 
   it("has the M8 world first and two new worlds after it, with the lessons the brief asks for", () => {

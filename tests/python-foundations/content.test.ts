@@ -9,6 +9,7 @@ import {
   PYTHON_FOUNDATIONS_IDS,
   PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS,
+  PYTHON_FOUNDATIONS_M11_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_STARTER_CODE,
   registerPythonFoundationsContent,
   registerPythonFoundationsGenerators,
@@ -198,7 +199,7 @@ describe("structure the brief asks for", () => {
     expect(lesson2.title).toContain("Collections & Functions");
     expect(lesson1.activityIds).toEqual(ACTIVITY_IDS.slice(0, 3));
     expect(lesson2.activityIds).toEqual(ACTIVITY_IDS.slice(3));
-    expect(getCourseActivityIds(content, course.id)).toEqual([...ACTIVITY_IDS, ...PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS, ...PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS]);
+    expect(getCourseActivityIds(content, course.id)).toEqual([...ACTIVITY_IDS, ...PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS, ...PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS, ...PYTHON_FOUNDATIONS_M11_ACTIVITY_IDS]);
   });
 
   it("has the kind and learning stage of each mission", () => {

@@ -4,6 +4,7 @@ import { GeneratorRegistry } from "../../core/generators";
 import type { SeededRng } from "../../core/random";
 import { registerPythonFoundationsM9Generators } from "./generators-m9";
 import { registerPythonFoundationsM10Generators } from "./generators-m10";
+import { registerPythonFoundationsM11Generators } from "./generators-m11";
 
 /**
  * Generators of the Python Foundations missions (PHASE-06 / M8).
@@ -435,4 +436,6 @@ export function registerPythonFoundationsGenerators(registry: GeneratorRegistry)
   registerPythonFoundationsM9Generators(registry);
   // M10 (PHASE-08): PF-16..PF-26.
   registerPythonFoundationsM10Generators(registry);
+  // M11 (PHASE-09): PF-27.
+  registerPythonFoundationsM11Generators(registry);
 }

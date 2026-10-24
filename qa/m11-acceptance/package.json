@@ -1,0 +1,1 @@
+{"name":"m11-edge-acceptance","private":true,"version":"1.0.0","type":"module","scripts":{"acceptance":"node runner.mjs"},"dependencies":{"playwright-core":"^1.56.0"}}

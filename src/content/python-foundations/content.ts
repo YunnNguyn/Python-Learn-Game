@@ -33,6 +33,7 @@ import {
 } from "./content-helpers";
 import { PYTHON_FOUNDATIONS_M9_CONTENT as M9 } from "./content-m9";
 import { PYTHON_FOUNDATIONS_M10_CONTENT as M10 } from "./content-m10";
+import { PYTHON_FOUNDATIONS_M11_CONTENT as M11 } from "./content-m11";
 import { PYTHON_FOUNDATIONS_IDS as ID } from "./ids";
 
 /**
@@ -47,7 +48,7 @@ import { PYTHON_FOUNDATIONS_IDS as ID } from "./ids";
 
 export const PYTHON_FOUNDATIONS_PACK: ContentPackManifest = ContentPackManifestSchema.parse({
   id: ID.pack,
-  version: "0.3.0",
+  version: "0.4.0",
   schemaVersion: 1,
   title: "Python Foundations",
   description:
@@ -60,7 +61,7 @@ export const PYTHON_FOUNDATIONS_COURSE: Course = CourseSchema.parse({
   id: ID.course,
   title: "Python Foundations — Python Coding for ML",
   description:
-    "Khóa độc lập, không cần học NumPy trước. Bắt đầu từ biến, số và rẽ nhánh, rồi đến list, vòng lặp và hàm; tiếp theo là cắt lát, dictionary, comprehension, hàm chấm nhiều trường hợp, sửa lỗi và một mini-project JSON; sau đó là NumPy, pandas và Matplotlib thật chạy trong trình duyệt, kết thúc bằng quy trình chuẩn bị dữ liệu từ file CSV.",
+    "Khóa độc lập, không cần học NumPy trước. Bắt đầu từ biến, số và rẽ nhánh, rồi đến list, vòng lặp và hàm; tiếp theo là cắt lát, dictionary, comprehension, hàm chấm nhiều trường hợp, sửa lỗi và một mini-project JSON; sau đó là NumPy, pandas và Matplotlib thật chạy trong trình duyệt, rồi quy trình chuẩn bị dữ liệu từ file CSV; kết thúc bằng một capstone tự lập kiểm tra annotation ảnh.",
   worldIds: [
     ID.world,
     ID.worldCollections,
@@ -69,6 +70,7 @@ export const PYTHON_FOUNDATIONS_COURSE: Course = CourseSchema.parse({
     ID.worldPandas,
     ID.worldVisualization,
     ID.worldWorkflows,
+    ID.worldCapstone,
   ],
 });
 
@@ -457,12 +459,13 @@ export const PYTHON_FOUNDATIONS_CONTENT = {
   packs: [PYTHON_FOUNDATIONS_PACK],
   concepts: PYTHON_FOUNDATIONS_CONCEPTS,
   courses: [PYTHON_FOUNDATIONS_COURSE],
-  worlds: [PYTHON_FOUNDATIONS_WORLD, ...M9.worlds, ...M10.worlds],
+  worlds: [PYTHON_FOUNDATIONS_WORLD, ...M9.worlds, ...M10.worlds, ...M11.worlds],
   lessons: [
     PYTHON_FOUNDATIONS_LESSON_VALUES_DECISIONS,
     PYTHON_FOUNDATIONS_LESSON_COLLECTIONS_FUNCTIONS,
     ...M9.lessons,
     ...M10.lessons,
+    ...M11.lessons,
   ],
   activities: [
     PYTHON_FOUNDATIONS_ACTIVITY_PF01,
@@ -474,6 +477,7 @@ export const PYTHON_FOUNDATIONS_CONTENT = {
     PYTHON_FOUNDATIONS_ACTIVITY_PF07,
     ...M9.activities,
     ...M10.activities,
+    ...M11.activities,
   ],
   missionTemplates: [
     PYTHON_FOUNDATIONS_TEMPLATE_PF01,
@@ -485,5 +489,6 @@ export const PYTHON_FOUNDATIONS_CONTENT = {
     PYTHON_FOUNDATIONS_TEMPLATE_PF07,
     ...M9.missionTemplates,
     ...M10.missionTemplates,
+    ...M11.missionTemplates,
   ],
 } satisfies ContentDefinitionSet;

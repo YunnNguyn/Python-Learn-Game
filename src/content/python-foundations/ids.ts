@@ -28,6 +28,9 @@ export const PYTHON_FOUNDATIONS_IDS = {
   lessonPandasCleaning: "python-foundations.pandas-cleaning",
   lessonMatplotlibCharts: "python-foundations.matplotlib-charts",
   lessonDataWorkflows: "python-foundations.data-workflows",
+  // M11 (PHASE-09): the final capstone - one world and one lesson at the end of the SAME course.
+  worldCapstone: "python-foundations.capstone",
+  lessonCapstoneAnnotations: "python-foundations.capstone-annotations",
   activityPf01: "python-foundations.pf01",
   activityPf02: "python-foundations.pf02",
   activityPf03: "python-foundations.pf03",
@@ -54,6 +57,7 @@ export const PYTHON_FOUNDATIONS_IDS = {
   activityPf24: "python-foundations.pf24",
   activityPf25: "python-foundations.pf25",
   activityPf26: "python-foundations.pf26",
+  activityPf27: "python-foundations.pf27",
   templatePf01: "python-foundations.pf01",
   templatePf02: "python-foundations.pf02",
   templatePf03: "python-foundations.pf03",
@@ -80,6 +84,7 @@ export const PYTHON_FOUNDATIONS_IDS = {
   templatePf24: "python-foundations.pf24",
   templatePf25: "python-foundations.pf25",
   templatePf26: "python-foundations.pf26",
+  templatePf27: "python-foundations.pf27",
 } as const;
 
 /** The seven M8 activity ids in course order. */
@@ -126,9 +131,16 @@ export const PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS = [
   PYTHON_FOUNDATIONS_IDS.activityPf26,
 ] as const;
 
-/** Every activity of the course, PF-01..PF-26, in course order. */
+/**
+ * The final capstone (M11 / PHASE-09): PF-27, after PF-26 in the same course. Nothing about
+ * PF-01..PF-26 changes.
+ */
+export const PYTHON_FOUNDATIONS_M11_ACTIVITY_IDS = [PYTHON_FOUNDATIONS_IDS.activityPf27] as const;
+
+/** Every activity of the course, PF-01..PF-27, in course order. */
 export const PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS = [
   ...PYTHON_FOUNDATIONS_ACTIVITY_IDS,
   ...PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS,
   ...PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS,
+  ...PYTHON_FOUNDATIONS_M11_ACTIVITY_IDS,
 ] as const;

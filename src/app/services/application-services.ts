@@ -93,6 +93,13 @@ export interface CreateMissionSessionOptions {
   readonly variantIndex?: number;
   readonly resumeDraft?: boolean;
   readonly resetCode?: boolean;
+  /**
+   * Open exactly this variant (PHASE-09 / M11: "retry with a fresh capstone variant"). A stored
+   * draft is resumed only when it belongs to this variant, so a reload of the same URL keeps the
+   * learner's code, while a different variant starts from the starter code. A value that is not a
+   * non-negative safe integer is ignored. Explicit `seed` / `variantIndex` still take precedence.
+   */
+  readonly requestedVariantIndex?: number;
 }
 
 // Defined next to the opening phase that produces them (PHASE-05-M7.0); re-exported
@@ -434,12 +441,28 @@ export function createApplicationServices(
 
     // Read-your-writes: a draft write accepted earlier for this activity (typically
     // the final save of the session the learner just left) lands before the read.
-    const draft =
+    const requestedVariantIndex =
+      options.requestedVariantIndex !== undefined &&
+      Number.isSafeInteger(options.requestedVariantIndex) &&
+      options.requestedVariantIndex >= 0
+        ? options.requestedVariantIndex
+        : undefined;
+    const storedDraft =
       options.seed === undefined && options.resumeDraft !== false
         ? await readMissionDraft(activity.id)
         : null;
     if (!lifecycle.isActive()) return retiredFailure();
-    const variantIndex = options.variantIndex ?? draft?.variantIndex ?? 0;
+    // A draft that belongs to another variant than the requested one is left alone here (it is
+    // replaced by the first save of the requested variant), never resumed under the wrong seed.
+    const draft =
+      storedDraft !== null &&
+      requestedVariantIndex !== undefined &&
+      options.variantIndex === undefined &&
+      storedDraft.variantIndex !== requestedVariantIndex
+        ? null
+        : storedDraft;
+    const variantIndex =
+      options.variantIndex ?? requestedVariantIndex ?? draft?.variantIndex ?? 0;
     const seed =
       options.seed ??
       draft?.seed ??

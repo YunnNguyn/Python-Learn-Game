@@ -10,10 +10,10 @@ import {
 import { CS116_PRODUCTION_IDS, registerCs116ProductionContent } from "../../src/content/cs116";
 import {
   PYTHON_FOUNDATIONS_ACTIVITY_IDS,
-  PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_IDS,
   PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS,
+  PYTHON_FOUNDATIONS_M11_ACTIVITY_IDS,
 } from "../../src/content/python-foundations";
 import {
   AttemptRecordSchema,
@@ -54,7 +54,9 @@ vi.mock("../../src/core/runtime/local-python", () => ({ createLocalPythonRuntime
 const M8 = PYTHON_FOUNDATIONS_ACTIVITY_IDS as readonly string[];
 const M9 = PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS as readonly string[];
 const M10 = PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS as readonly string[];
-const ALL = PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS as readonly string[];
+const M11 = PYTHON_FOUNDATIONS_M11_ACTIVITY_IDS as readonly string[];
+// These tests describe the 26-activity M8 + M9 + M10 course; PF-27 (M11) is covered by python-foundations-m11-services.
+const ALL = [...PYTHON_FOUNDATIONS_ACTIVITY_IDS, ...PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS, ...M10] as readonly string[];
 const PF_1_TO_15 = [...M8, ...M9];
 const [PF16, PF17, PF18] = M10 as [string, string, string, ...string[]];
 const PF15 = M9[M9.length - 1]!;
@@ -169,14 +171,14 @@ describe("M10 course structure", () => {
 
     expect(M10).toHaveLength(11);
     expect(M10).toEqual(Array.from({ length: 11 }, (_, index) => `python-foundations.pf${16 + index}`));
-    expect(getCourseActivityIds(services.content, PYTHON)).toEqual([...PF_1_TO_15, ...M10]);
+    expect(getCourseActivityIds(services.content, PYTHON)).toEqual([...PF_1_TO_15, ...M10, ...M11]);
     expect(ALL).toEqual([...PF_1_TO_15, ...M10]);
     expect(services.content.getCourses().map((course) => course.id)).toEqual([
       CS116_PRODUCTION_IDS.course,
       PYTHON_FOUNDATIONS_IDS.course,
     ]);
     expect(getNextActivityInCourse(services.content, PF15 as LearningActivityId)).toBe(PF16);
-    expect(getNextActivityInCourse(services.content, PF26 as LearningActivityId)).toBeUndefined();
+    expect(getNextActivityInCourse(services.content, PF26 as LearningActivityId)).toBe(M11[0]);
     await services.dispose();
   });
 });
@@ -208,7 +210,7 @@ describe("M10 continuation - a learner who finished M9 continues, nothing is res
     await services.dispose();
   });
 
-  it("each pass opens exactly the next M10 mission; the course ends only after PF-26, whose review is recommended", async () => {
+  it("each pass opens exactly the next M10 mission; PF-26 hands over to the PF-27 capstone, not to a finished course", async () => {
     const factory = useFactory();
     await seedAttempts(factory, PF_1_TO_15.map((id) => [id] as const));
     const services = await start();
@@ -226,10 +228,10 @@ describe("M10 continuation - a learner who finished M9 continues, nothing is res
     for (const activityId of ALL) {
       expect(services.learning.getActivityProgress(activityId as LearningActivityId).completed, activityId).toBe(true);
     }
-    // A finished course recommends its closing REVIEW-stage mission: the PF-26 data-prep mini-project.
+    // Since M11 the course is not finished after PF-26: its capstone is the next step.
     expect(getNextStudyActivity(services.content, services.learning, PYTHON)).toEqual({
-      activityId: PF26,
-      reason: "COMPLETE_REVIEW",
+      activityId: M11[0],
+      reason: "NEXT",
     });
     await services.dispose();
   });

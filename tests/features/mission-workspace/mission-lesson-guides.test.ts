@@ -48,12 +48,18 @@ describe("mission lesson guides", () => {
     }
   });
 
-  it("covers PF-01..PF-26 with a guide each, and PF-08..PF-26 (M9, M10) with a quick check each", () => {
+  it("covers PF-01..PF-27 with a guide each, and PF-08..PF-27 (M9, M10, M11) with a quick check each", () => {
     for (const [index, activityId] of PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS.entries()) {
       const guide = getMissionLessonGuide(activityId);
       expect(guide, activityId).not.toBeNull();
-      if (index >= 15) {
+      if (index >= 15 && index < 26) {
         expect(guide!.newTopics.length, activityId).toBeGreaterThanOrEqual(2);
+        expect(guide!.workflow.length, activityId).toBeGreaterThanOrEqual(3);
+      }
+      if (index === 26) {
+        // The capstone introduces nothing new: it revises what PF-16..PF-26 taught.
+        expect(guide!.newTopics, activityId).toEqual([]);
+        expect(guide!.reviewTopics?.length ?? 0, activityId).toBeGreaterThanOrEqual(3);
         expect(guide!.workflow.length, activityId).toBeGreaterThanOrEqual(3);
       }
       if (index < 7) continue; // the seven M8 missions keep the quick checks they already had

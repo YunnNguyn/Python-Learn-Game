@@ -55,6 +55,8 @@ export const PYTHON_FOUNDATIONS_CONCEPT_IDS = {
   chartDebugging: "python.chart-debugging",
   csvLoading: "python.csv-loading",
   dataPipeline: "python.data-pipeline",
+  // M11 (PHASE-09)
+  annotationQa: "python.annotation-qa",
 } as const;
 
 const ID = PYTHON_FOUNDATIONS_CONCEPT_IDS;
@@ -96,4 +98,6 @@ export const PYTHON_FOUNDATIONS_CONCEPTS: readonly Concept[] = [
   concept(ID.chartDebugging, "Phát hiện và sửa biểu đồ gây hiểu lầm", KnowledgeClassification.MUST_UNDERSTAND, [ID.matplotlibCharts, ID.pandasGroupby]),
   concept(ID.csvLoading, "Đọc CSV, kiểm tra cột và ghép bảng", KnowledgeClassification.MUST_UNDERSTAND, [ID.pandasMissing, ID.pandasGroupby]),
   concept(ID.dataPipeline, "Pipeline chuẩn bị dữ liệu từ thô đến ma trận sạch", KnowledgeClassification.MUST_UNDERSTAND, [ID.csvLoading, ID.numpyPreprocessing, ID.matplotlibCharts]),
+  // --- M11: capstone ---
+  concept(ID.annotationQa, "Kiểm tra annotation ảnh: hộp hợp lệ, chuẩn hóa tọa độ và phân bố lớp", KnowledgeClassification.MUST_UNDERSTAND, [ID.dataPipeline]),
 ];

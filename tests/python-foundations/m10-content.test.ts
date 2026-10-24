@@ -17,6 +17,7 @@ import {
   PYTHON_FOUNDATIONS_IDS,
   PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS,
+  PYTHON_FOUNDATIONS_M11_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_M10_CONTENT,
   PYTHON_FOUNDATIONS_M10_HINT_SETS,
   PYTHON_FOUNDATIONS_M10_STARTER_CODE,
@@ -52,6 +53,7 @@ import { M10_SOLUTIONS } from "./m10-solutions";
 const M8_IDS = PYTHON_FOUNDATIONS_ACTIVITY_IDS as readonly string[];
 const M9_IDS = PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS as readonly string[];
 const M10_IDS = PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS as readonly string[];
+const M11_IDS = PYTHON_FOUNDATIONS_M11_ACTIVITY_IDS as readonly string[];
 
 const merged = (): ContentDefinitionSet => ({
   packs: [...CS116_PRODUCTION_CONTENT.packs, ...PYTHON_FOUNDATIONS_CONTENT.packs],
@@ -170,11 +172,13 @@ describe("M10 continues the same course after PF-15 (no reset, stable earlier id
     expect(M9_IDS).toEqual([8, 9, 10, 11, 12, 13, 14, 15].map((n) => `python-foundations.pf${String(n).padStart(2, "0")}`));
     expect(M10_IDS).toEqual(Array.from({ length: 11 }, (_, index) => `python-foundations.pf${16 + index}`));
     const course = content.getCourse(PYTHON_FOUNDATIONS_IDS.course as never)!;
-    expect(getCourseActivityIds(content, course.id)).toEqual([...M8_IDS, ...M9_IDS, ...M10_IDS]);
-    expect(PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS).toEqual([...M8_IDS, ...M9_IDS, ...M10_IDS]);
+    // PHASE-09 / M11 appends the PF-27 capstone after them; the 26 earlier ids are unchanged and in order.
+    expect(getCourseActivityIds(content, course.id)).toEqual([...M8_IDS, ...M9_IDS, ...M10_IDS, ...M11_IDS]);
+    expect(PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS).toEqual([...M8_IDS, ...M9_IDS, ...M10_IDS, ...M11_IDS]);
+    expect(getCourseActivityIds(content, course.id).slice(0, 26)).toEqual([...M8_IDS, ...M9_IDS, ...M10_IDS]);
   });
 
-  it("appends four worlds after the three earlier ones, with the lessons the brief asks for", () => {
+  it("appends four worlds after the three earlier ones (M11 adds the capstone world last), with the lessons the brief asks for", () => {
     const course = content.getCourse(PYTHON_FOUNDATIONS_IDS.course as never)!;
     expect(course.worldIds).toEqual([
       PYTHON_FOUNDATIONS_IDS.world,
@@ -184,6 +188,7 @@ describe("M10 continues the same course after PF-15 (no reset, stable earlier id
       PYTHON_FOUNDATIONS_IDS.worldPandas,
       PYTHON_FOUNDATIONS_IDS.worldVisualization,
       PYTHON_FOUNDATIONS_IDS.worldWorkflows,
+      PYTHON_FOUNDATIONS_IDS.worldCapstone,
     ]);
     const lessonsOf = (worldId: string) => content.getWorld(worldId as never)!.lessonIds;
     expect(lessonsOf(PYTHON_FOUNDATIONS_IDS.worldNumpyAdvanced)).toEqual([PYTHON_FOUNDATIONS_IDS.lessonNumpyShapesAxes]);

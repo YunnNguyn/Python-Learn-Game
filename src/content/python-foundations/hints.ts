@@ -2,6 +2,7 @@ import { HintLevel, type HintSetId } from "../../core/domain";
 import type { HintRegistry, HintSet } from "../../core/hints";
 import { registerPythonFoundationsM9Hints } from "./hints-m9";
 import { registerPythonFoundationsM10Hints } from "./hints-m10";
+import { registerPythonFoundationsM11Hints } from "./hints-m11";
 
 /**
  * H1-H4 hint sets of the Python Foundations missions.
@@ -100,4 +101,6 @@ export function registerPythonFoundationsHints(registry: HintRegistry): void {
   registerPythonFoundationsM9Hints(registry);
   // M10 (PHASE-08): PF-16..PF-26.
   registerPythonFoundationsM10Hints(registry);
+  // M11 (PHASE-09): PF-27.
+  registerPythonFoundationsM11Hints(registry);
 }

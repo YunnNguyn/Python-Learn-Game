@@ -10,6 +10,10 @@ import {
   PYTHON_FOUNDATIONS_M10_LESSON_GUIDES,
   PYTHON_FOUNDATIONS_M10_QUICK_CHECKS,
 } from "./python-foundations-m10-lesson-guides";
+import {
+  PYTHON_FOUNDATIONS_M11_LESSON_GUIDES,
+  PYTHON_FOUNDATIONS_M11_QUICK_CHECKS,
+} from "./python-foundations-m11-lesson-guides";
 
 export interface MissionLessonTopic {
   readonly label: string;
@@ -731,6 +735,7 @@ export function getMissionLessonGuide(activityId: string): MissionLessonGuide | 
     PYTHON_FOUNDATIONS_LESSON_GUIDES[activityId] ??
     PYTHON_FOUNDATIONS_M9_LESSON_GUIDES[activityId] ??
     PYTHON_FOUNDATIONS_M10_LESSON_GUIDES[activityId] ??
+    PYTHON_FOUNDATIONS_M11_LESSON_GUIDES[activityId] ??
     null
   );
 }
@@ -983,6 +988,7 @@ export function getMissionQuickCheck(activityId: string): MissionQuickCheckDefin
     PYTHON_FOUNDATIONS_QUICK_CHECKS[activityId] ??
     PYTHON_FOUNDATIONS_M9_QUICK_CHECKS[activityId] ??
     PYTHON_FOUNDATIONS_M10_QUICK_CHECKS[activityId] ??
+    PYTHON_FOUNDATIONS_M11_QUICK_CHECKS[activityId] ??
     null
   );
 }

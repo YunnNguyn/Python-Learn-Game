@@ -10,10 +10,10 @@ import {
 import { CS116_PRODUCTION_IDS, registerCs116ProductionContent } from "../../src/content/cs116";
 import {
   PYTHON_FOUNDATIONS_ACTIVITY_IDS,
-  PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_IDS,
   PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS,
   PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS,
+  PYTHON_FOUNDATIONS_M11_ACTIVITY_IDS,
 } from "../../src/content/python-foundations";
 import {
   AttemptRecordSchema,
@@ -55,7 +55,9 @@ vi.mock("../../src/core/runtime/local-python", () => ({ createLocalPythonRuntime
 const M8 = PYTHON_FOUNDATIONS_ACTIVITY_IDS as readonly string[];
 const M9 = PYTHON_FOUNDATIONS_M9_ACTIVITY_IDS as readonly string[];
 const M10 = PYTHON_FOUNDATIONS_M10_ACTIVITY_IDS as readonly string[];
-const ALL = PYTHON_FOUNDATIONS_ALL_ACTIVITY_IDS as readonly string[];
+const M11 = PYTHON_FOUNDATIONS_M11_ACTIVITY_IDS as readonly string[];
+// The M9 tests describe the M8 + M9 + M10 course; PF-27 (M11) is covered by python-foundations-m11-services.
+const ALL = [...M8, ...M9, ...M10] as readonly string[];
 const PF_1_TO_15 = [...M8, ...M9];
 const [PF08, PF09, PF10, PF11, PF12] = M9 as [string, string, string, string, string, ...string[]];
 const PF15 = M9[M9.length - 1]!;
@@ -169,7 +171,7 @@ describe("M9 course structure", () => {
 
     expect(M8).toHaveLength(7);
     expect(M9).toHaveLength(8);
-    expect(getCourseActivityIds(services.content, PYTHON)).toEqual([...M8, ...M9, ...M10]);
+    expect(getCourseActivityIds(services.content, PYTHON)).toEqual([...M8, ...M9, ...M10, ...M11]);
     expect(getCourseActivityIds(services.content, PYTHON).slice(0, 15)).toEqual(PF_1_TO_15);
     expect(ALL).toEqual([...M8, ...M9, ...M10]);
     expect(services.content.getCourses().map((course) => course.id)).toEqual([
@@ -179,7 +181,7 @@ describe("M9 course structure", () => {
     // Neither PF-07 nor PF-15 is the end of the course any more; PF-26 is.
     expect(getNextActivityInCourse(services.content, M8[6] as LearningActivityId)).toBe(PF08);
     expect(getNextActivityInCourse(services.content, PF15 as LearningActivityId)).toBe(M10[0]);
-    expect(getNextActivityInCourse(services.content, M10[M10.length - 1] as LearningActivityId)).toBeUndefined();
+    expect(getNextActivityInCourse(services.content, M10[M10.length - 1] as LearningActivityId)).toBe(M11[0]);
     await services.dispose();
   });
 });
