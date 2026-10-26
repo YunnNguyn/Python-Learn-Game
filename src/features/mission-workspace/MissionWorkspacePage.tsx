@@ -1,12 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import {
+  CapstoneEvidence,
+  CourseGraduationStatus,
+  getCourseGraduation,
+} from "../../app/course-graduation";
+import {
+  getCourseOfActivity,
+  getLessonOfActivity,
+  getNextActivityInCourse,
+} from "../../app/learning-path";
+import {
   useApplicationServices,
+  useLearningProgress,
   type CreateMissionSessionOptions,
+  type CreateMissionSessionResult,
+  type MissionDraftStatus,
   type PlayableMissionSession,
 } from "../../app/services";
-import { LearningStage, type AttemptRecord } from "../../core/domain";
+import { LearningStage, type AttemptRecord, type LearningActivityId } from "../../core/domain";
 import type { GraderResult } from "../../core/grading";
 import type { RevealedHint } from "../../core/hints";
 import type { MissionAttemptSession } from "../../core/learning";
@@ -16,7 +29,8 @@ import {
   type RuntimeSystemError,
   type RuntimeWorkspaceInfo,
 } from "../../core/runtime";
-import { MissionControls } from "./MissionControls";
+import { missionVariantPath, parseVariantParam } from "../course/course-completion-model";
+import { MissionControls, SUBMIT_VS_RUN_NOTE } from "./MissionControls";
 import { MissionDataPanel } from "./MissionDataPanel";
 import { MissionHintPanel } from "./MissionHintPanel";
 import { MissionLessonPanel } from "./MissionLessonPanel";
@@ -24,6 +38,7 @@ import { MissionQuickCheck } from "./MissionQuickCheck";
 import { MissionObjectivePanel } from "./MissionObjectivePanel";
 import { MissionOutputPanel } from "./MissionOutputPanel";
 import { PythonEditor } from "./PythonEditor";
+import { isActiveSession, releaseSession, submitMission } from "./submit-mission";
 import { GradingFeedback } from "./grading-feedback";
 import { getMissionLessonGuide, getMissionQuickCheck } from "./mission-lesson-guides";
 
@@ -31,10 +46,222 @@ type WorkspaceOperation = "run" | "submit" | "reload" | null;
 type RetryMode = "same" | "variant";
 type MissionWorkspaceTab = "lesson" | "prompt" | "data" | "practice";
 
+const SUBMIT_FAILURE_NOTICE =
+  "Không thể lưu lần nộp này. Bằng chứng học tập có thể chưa được ghi lại đầy đủ; hãy thử nộp lại.";
+
+const IDLE_DRAFT_STATUS: MissionDraftStatus = Object.freeze({ kind: "idle" });
+const NO_DRAFT_SUBSCRIPTION = (_listener: () => void): (() => void) => () => undefined;
+
+/**
+ * What the learner is told about the draft - only what is true: "saved" appears
+ * once the write has actually been stored, never when it was merely scheduled.
+ */
+function draftStatusText(status: MissionDraftStatus): string | null {
+  switch (status.kind) {
+    case "scheduled":
+      return "Đang chờ lưu bản nháp...";
+    case "saving":
+      return "Đang lưu bản nháp...";
+    case "saved":
+      return "Đã lưu bản nháp.";
+    case "failed":
+      return "Chưa lưu được bản nháp. Mã của bạn vẫn còn trong trình soạn thảo; hãy tiếp tục làm bài hoặc sửa nhẹ để thử lưu lại.";
+    default:
+      return null;
+  }
+}
+
+/**
+ * What differs between the CS116 course workspace and the practice workspace
+ * (PHASE-05-M7). Everything else - the Monaco editor, Run/Submit, hints, the
+ * draft handle, output and grading panels - is the same code for both.
+ */
+export interface MissionWorkspaceProfile {
+  readonly kind: "course" | "practice";
+  /** Where the heading link and the error screen lead back to. */
+  readonly backTo: string;
+  readonly backLabel: string;
+  /** Practice: replaces "Thực hành · <stage>" in the eyebrow. */
+  readonly eyebrow?: string;
+  /** Practice: the exercise brief shown on the "Đề bài" tab (course uses the mission objective). */
+  readonly renderPrompt?: (session: MissionAttemptSession) => ReactNode;
+  /** Practice: shown above the editor controls (for example the review-before-running notice). */
+  readonly editorNotice?: ReactNode;
+  /** Practice: shown after a Submit with its attempt (feedback, explanation, next exercise). */
+  readonly renderOutcome?: (attempt: AttemptRecord) => ReactNode;
+}
+
+const COURSE_PROFILE: MissionWorkspaceProfile = Object.freeze({
+  kind: "course",
+  backTo: "/learn",
+  backLabel: "Về lộ trình",
+});
+
+/**
+ * The course mission route (CS116 and every other native course). It only supplies the session
+ * opener and a course-aware profile: back to the lesson that lists this activity and, after a
+ * passed Submit, the next activity of the SAME course. An unknown activity keeps the plain
+ * profile - the workspace then reports the failure itself.
+ */
 export function MissionWorkspacePage() {
   const { missionId } = useParams();
   const routeId = missionId?.trim();
   const services = useApplicationServices();
+  const { learning } = useLearningProgress();
+  // `?variant=N` (PHASE-09 / M11) opens exactly that variant: the entry point of "retry with a
+  // fresh variant". A stored draft is resumed only when it belongs to that variant.
+  const [searchParams] = useSearchParams();
+  const requestedVariantIndex = parseVariantParam(searchParams.get("variant"));
+  const keepVariantInUrl = useCallback(
+    (variantIndex: number) => {
+      // Always update the address bar, including when the original link had no variant query.
+      // Reloading must reopen the variant currently displayed in the workspace.
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("variant", String(variantIndex));
+        window.history.replaceState(window.history.state, "", url);
+      } catch {
+        // The address bar is a convenience; the session itself is unaffected.
+      }
+    },
+    [],
+  );
+  const openSession = useCallback(
+    (options: CreateMissionSessionOptions) => services.createMissionSession(routeId ?? "", options),
+    [routeId, services],
+  );
+  const profile = useMemo(
+    () => createCourseProfile(services.content, learning, routeId as LearningActivityId | undefined),
+    [routeId, services.content, learning],
+  );
+  return (
+    <MissionWorkspace
+      routeKey={routeId}
+      openSession={openSession}
+      profile={profile}
+      requestedVariantIndex={requestedVariantIndex}
+      onVariantChange={keepVariantInUrl}
+    />
+  );
+}
+
+function createCourseProfile(
+  content: ReturnType<typeof useApplicationServices>["content"],
+  learning: ReturnType<typeof useLearningProgress>["learning"],
+  activityId: LearningActivityId | undefined,
+): MissionWorkspaceProfile {
+  if (activityId === undefined) return COURSE_PROFILE;
+  const course = getCourseOfActivity(content, activityId);
+  const lesson = getLessonOfActivity(content, activityId);
+  if (course === undefined) return COURSE_PROFILE;
+
+  return {
+    kind: "course",
+    backTo: lesson ? `/lesson/${lesson.id}` : `/course/${course.id}`,
+    backLabel: lesson ? "Về bài học" : "Về khóa học",
+    renderOutcome: (attempt) => {
+      if (!attempt.passed) return null;
+      const nextId = getNextActivityInCourse(content, activityId);
+      const next = nextId ? content.getActivity(nextId) : undefined;
+      // Completion is read from the stored attempts (this Submit is already stored), never from
+      // "there is no next activity": that is true for the last activity even when others are open.
+      const graduation = getCourseGraduation(content, learning, course.id);
+      const courseComplete = graduation?.status === CourseGraduationStatus.COMPLETED;
+      const capstone = graduation?.capstone ?? null;
+      const isCapstone = capstone !== null && capstone.activityId === activityId;
+      const firstOpen =
+        graduation && graduation.remainingActivityIds.length > 0
+          ? content.getActivity(graduation.remainingActivityIds[0]!)
+          : undefined;
+
+      const heading = next
+        ? "Đã mở hoạt động tiếp theo"
+        : courseComplete
+          ? "Bạn đã hoàn thành khóa học này"
+          : "Bạn đã đạt hoạt động cuối của lộ trình";
+      return (
+        <section className="mission-next-step" aria-labelledby="mission-next-step-title">
+          <h2 id="mission-next-step-title">{heading}</h2>
+          {next ? <p>{next.title}</p> : <p>{course.title}</p>}
+          {!next && !courseComplete && graduation ? (
+            <p>
+              Khóa học chưa hoàn thành: đã đạt {graduation.completedCount}/{graduation.totalCount} hoạt động
+              {firstOpen ? `, còn “${firstOpen.title}”.` : "."}
+            </p>
+          ) : null}
+          <p className="mission-next-step__note">
+            Đạt một lần nghĩa là hoàn thành hoạt động này, chưa phải đã thành thạo. Làm lại bằng một đề mới
+            (nút “Tạo đề mới”) để có thêm bằng chứng tự làm.
+          </p>
+          {isCapstone && capstone.evidence === CapstoneEvidence.WITH_SUPPORT ? (
+            <p className="mission-next-step__note">
+              Lần đạt này (và các lần trước) có dùng gợi ý H3/H4. Hãy làm lại capstone với đề mới và không mở
+              H3/H4 để có bằng chứng tự làm cho capstone.
+            </p>
+          ) : null}
+          {isCapstone && capstone.evidence === CapstoneEvidence.INDEPENDENT ? (
+            <p className="mission-next-step__note">
+              Capstone đã có lần đạt không dùng gợi ý mức cao (H3/H4).
+            </p>
+          ) : null}
+          <div className="mission-retry-actions">
+            {next ? (
+              <Link className="primary-action primary-action--link" to={`/mission/${next.id}`}>
+                Làm tiếp
+              </Link>
+            ) : null}
+            {!next && !courseComplete && firstOpen ? (
+              <Link className="primary-action primary-action--link" to={`/mission/${firstOpen.id}`}>
+                Làm hoạt động còn lại
+              </Link>
+            ) : null}
+            {!next && courseComplete ? (
+              <Link
+                className="primary-action primary-action--link"
+                to={`/course/${course.id}#course-completion`}
+              >
+                Xem tổng kết khóa học
+              </Link>
+            ) : null}
+            {!next && courseComplete && capstone ? (
+              <Link
+                className="secondary-action"
+                to={missionVariantPath(capstone.activityId, capstone.freshVariantIndex)}
+              >
+                Làm lại capstone với đề mới
+              </Link>
+            ) : null}
+            <Link className="secondary-action" to={`/course/${course.id}`}>
+              Về khóa học
+            </Link>
+          </div>
+        </section>
+      );
+    },
+  };
+}
+
+export interface MissionWorkspaceProps {
+  /** Identifies the mission; a change reloads the workspace. Undefined/empty = no mission in the route. */
+  readonly routeKey: string | undefined;
+  /** MUST be stable (useCallback): a new identity reloads the workspace. */
+  readonly openSession: (options: CreateMissionSessionOptions) => Promise<CreateMissionSessionResult>;
+  readonly profile: MissionWorkspaceProfile;
+  /** Course route only: open exactly this variant (`?variant=N`). A change reloads the workspace. */
+  readonly requestedVariantIndex?: number;
+  /** Called with the variant on screen after a successful "Tạo đề mới" / "Làm lại cùng đề". */
+  readonly onVariantChange?: (variantIndex: number) => void;
+}
+
+export function MissionWorkspace({
+  routeKey: routeId,
+  openSession,
+  profile,
+  requestedVariantIndex,
+  onVariantChange,
+}: MissionWorkspaceProps) {
+  const isPractice = profile.kind === "practice";
+  const defaultTab: MissionWorkspaceTab = isPractice ? "prompt" : "lesson";
   const sessionRef = useRef<MissionAttemptSession | null>(null);
   const [bundle, setBundle] = useState<PlayableMissionSession | null>(null);
   const [loadError, setLoadError] = useState<RuntimeSystemError | null>(null);
@@ -43,13 +270,15 @@ export function MissionWorkspacePage() {
   const [code, setCode] = useState("");
   const [operation, setOperation] = useState<WorkspaceOperation>(null);
   const operationRef = useRef<WorkspaceOperation>(null);
+  // After "Tạo đề mới" / "Làm lại cùng đề" the page swaps the whole workspace, so keyboard focus
+  // would fall back to <body>; it is moved to the page heading once the new session is on screen.
+  const focusHeadingAfterLoad = useRef(false);
   const [execution, setExecution] = useState<RuntimeExecutionResult | null>(null);
   const [grading, setGrading] = useState<GraderResult | null>(null);
   const [attempt, setAttempt] = useState<AttemptRecord | null>(null);
   const [revealedHints, setRevealedHints] = useState<readonly RevealedHint[]>([]);
-  const [draftSuppressed, setDraftSuppressed] = useState(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<MissionWorkspaceTab>("lesson");
+  const [activeTab, setActiveTab] = useState<MissionWorkspaceTab>(defaultTab);
   const [stopPending, setStopPending] = useState(false);
   const [runtimeActionNotice, setRuntimeActionNotice] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<RuntimeWorkspaceInfo | null>(null);
@@ -64,9 +293,8 @@ export function MissionWorkspacePage() {
     setGrading(null);
     setAttempt(null);
     setRevealedHints([]);
-    setDraftSuppressed(false);
     setDraftNotice(null);
-    setActiveTab("lesson");
+    setActiveTab(defaultTab);
     setStopPending(false);
     setRuntimeActionNotice(null);
     setWorkspace(null);
@@ -77,7 +305,11 @@ export function MissionWorkspacePage() {
       return () => undefined;
     }
 
-    void services.createMissionSession(routeId, { resumeDraft: true }).then((result) => {
+    void openSession(
+      requestedVariantIndex === undefined
+        ? { resumeDraft: true }
+        : { resumeDraft: true, requestedVariantIndex },
+    ).then((result) => {
       if (cancelled) {
         if (result.ok) result.value.session.dispose();
         return;
@@ -96,31 +328,42 @@ export function MissionWorkspacePage() {
 
     return () => {
       cancelled = true;
-      sessionRef.current?.dispose();
-      sessionRef.current = null;
+      // Also invalidates every in-flight handler's isCurrent() check.
+      releaseSession(sessionRef);
     };
-  }, [routeId, services, loadRetryToken]);
+  }, [routeId, openSession, loadRetryToken, defaultTab, requestedVariantIndex]);
+
+  useEffect(() => {
+    if (loading || bundle === null || !focusHeadingAfterLoad.current) return;
+    focusHeadingAfterLoad.current = false;
+    document.getElementById("mission-title")?.focus();
+  }, [loading, bundle]);
 
   const session = bundle?.session ?? null;
   const isLocalRuntime = session?.template.runtime.id === CORE_RUNTIME_ID.LOCAL_PYTHON;
   const canInterrupt = session?.canInterrupt() === true;
   const executionActive = operation === "run" || operation === "submit";
 
+  // The draft belongs to the session: its debounce timer, write ordering and
+  // cleanup live in the service set (see mission-draft-scheduler.ts). The page
+  // only reports the latest editor state - code and revealed hints as one
+  // snapshot - and has no timer to cancel, so React effect cleanup/remount
+  // (StrictMode) cannot drop or duplicate a save.
+  const draft = bundle?.draft ?? null;
   useEffect(() => {
-    if (!bundle || !session || draftSuppressed || loading) return;
+    if (!draft || !session || loading) return;
+    draft.update({ code, hintsUsed: session.getRevealedHints().map((hint) => hint.level) });
+  }, [code, draft, loading, revealedHints, session]);
 
-    const timeout = window.setTimeout(() => {
-      void services.saveMissionDraft({
-        activityId: session.activity.id,
-        seed: session.instance.seed,
-        variantIndex: bundle.variantIndex,
-        code,
-        hintsUsed: session.getRevealedHints().map((hint) => hint.level),
-      });
-    }, 350);
-
-    return () => window.clearTimeout(timeout);
-  }, [bundle, code, draftSuppressed, loading, revealedHints, services, session]);
+  const subscribeDraft = useMemo(
+    () => (draft ? (listener: () => void) => draft.subscribe(listener) : NO_DRAFT_SUBSCRIPTION),
+    [draft],
+  );
+  const draftStatus = useSyncExternalStore(
+    subscribeDraft,
+    () => draft?.getStatus() ?? IDLE_DRAFT_STATUS,
+    () => IDLE_DRAFT_STATUS,
+  );
 
   const runtimeNote = useMemo(() => {
     if (loading || operation === "reload") return "Đang chuẩn bị một môi trường Python sạch...";
@@ -132,7 +375,7 @@ export function MissionWorkspacePage() {
     }
     if (operation === "run") return "Đang chạy mã trong trạng thái thực nghiệm...";
     if (operation === "submit") return "Đang chạy Submit sạch, chấm bài và lưu bằng chứng học tập...";
-    return "Chạy thử dùng để khám phá; Nộp bài luôn chấm trên baseline sạch và lưu tiến độ.";
+    return SUBMIT_VS_RUN_NOTE;
   }, [isLocalRuntime, loading, operation, stopPending]);
 
   useEffect(() => {
@@ -166,14 +409,13 @@ export function MissionWorkspacePage() {
     setExecution(null);
     setGrading(null);
     setAttempt(null);
-    setDraftSuppressed(false);
     setDraftNotice(next.resumedDraft ? "Đã khôi phục bản nháp và đề đang làm trước đó." : null);
     setRuntimeActionNotice(null);
     setStopPending(false);
     setWorkspace(next.initialWorkspace ?? null);
     setLoading(false);
     setOperation(null);
-    setActiveTab("lesson");
+    setActiveTab(defaultTab);
     operationRef.current = null;
   }
 
@@ -199,26 +441,46 @@ export function MissionWorkspacePage() {
 
   async function handleSubmit() {
     if (!session || operationRef.current !== null) return;
+    const submittingSession = session;
+    // False once this session was disposed or replaced (unmount, retry, route
+    // change). Then the page state belongs to someone else: a stale Submit must
+    // not update it, and must not reset the operation lock of a newer session.
+    const isCurrent = () => isActiveSession(sessionRef, submittingSession);
     operationRef.current = "submit";
     setOperation("submit");
     setRuntimeActionNotice(null);
     try {
-      const result = await session.submit(code);
-      setExecution(result.execution);
-      if (result.execution.workspace !== undefined) {
-        setWorkspace(result.execution.workspace);
+      // submitMission never rejects, so `void handleSubmit()` cannot leak an
+      // unhandled rejection from here.
+      const outcome = await submitMission(submittingSession, code);
+      if (outcome.kind === "cancelled") return;
+      if (outcome.kind === "failed") {
+        console.error("Mission submit failed.", outcome.error);
+        if (isCurrent()) setRuntimeActionNotice(SUBMIT_FAILURE_NOTICE);
+        return;
       }
-      setGrading(result.grading ?? null);
-      setAttempt(result.attemptRecord);
-      if (result.attemptRecord.passed) {
-        setDraftSuppressed(true);
-        setDraftNotice(null);
-        await services.deleteMissionDraft(session.activity.id);
+
+      const { result } = outcome;
+      if (isCurrent()) {
+        setExecution(result.execution);
+        if (result.execution.workspace !== undefined) {
+          setWorkspace(result.execution.workspace);
+        }
+        setGrading(result.grading ?? null);
+        setAttempt(result.attemptRecord);
       }
+      if (result.attemptRecord.passed && isCurrent()) setDraftNotice(null);
+      // The draft needs no handling here: a passed attempt discards it inside the
+      // service set, in the same admitted operation that stored the attempt, and
+      // the draft handle ignores every later change. A failed or cancelled Submit
+      // leaves the draft untouched. This also holds for a completion that arrives
+      // after the page left (the old "stale Submit" limit).
     } finally {
-      operationRef.current = null;
-      setOperation(null);
-      setStopPending(false);
+      if (isCurrent()) {
+        operationRef.current = null;
+        setOperation(null);
+        setStopPending(false);
+      }
     }
   }
 
@@ -240,14 +502,10 @@ export function MissionWorkspacePage() {
     if (!hint) return;
     const hints = session.getRevealedHints();
     setRevealedHints(hints);
-    void services.saveMissionDraft({
-      activityId: session.activity.id,
-      seed: session.instance.seed,
-      variantIndex: bundle.variantIndex,
-      code,
-      hintsUsed: hints.map((item) => item.level),
-    });
-    setDraftNotice("Gợi ý vừa mở đã được ghi vào bản nháp và sẽ xuất hiện trong bằng chứng lần nộp.");
+    // Code and hints are saved as one snapshot, now. Whether it is stored is
+    // reported by the draft status below, not claimed here.
+    draft?.update({ code, hintsUsed: hints.map((item) => item.level) }, { immediate: true });
+    setDraftNotice("Gợi ý vừa mở sẽ xuất hiện trong bằng chứng lần nộp.");
   }
 
   async function handleRetry(mode: RetryMode) {
@@ -261,8 +519,7 @@ export function MissionWorkspacePage() {
     const previousSeed = session.instance.seed;
     const previousVariantIndex = bundle.variantIndex;
 
-    session.dispose();
-    sessionRef.current = null;
+    releaseSession(sessionRef);
 
     const options: CreateMissionSessionOptions =
       mode === "same"
@@ -278,7 +535,7 @@ export function MissionWorkspacePage() {
             resetCode: true,
           };
 
-    const result = await services.createMissionSession(routeId, options);
+    const result = await openSession(options);
     if (!result.ok) {
       setLoadError(result.error);
       setBundle(null);
@@ -290,15 +547,17 @@ export function MissionWorkspacePage() {
 
     sessionRef.current = result.value.session;
     applyPlayableSession(result.value);
+    onVariantChange?.(result.value.variantIndex);
+    focusHeadingAfterLoad.current = true;
     setDraftNotice(
       mode === "same"
         ? "Đã đặt lại cùng một đề về trạng thái ban đầu."
-        : `Đã tạo biến thể mới #${result.value.variantIndex + 1} với dữ liệu khác.`,
+        : `Đã tạo biến thể mới #${result.value.variantIndex + 1}. Dữ liệu CSV có thể trùng với một đề trước.`,
     );
   }
 
   if (loadError) {
-    const localRuntimeUnavailable = loadError.code === "LOCAL_RUNTIME_UNAVAILABLE";
+    const localRuntimeUnavailable = !isPractice && loadError.code === "LOCAL_RUNTIME_UNAVAILABLE";
     return (
       <section className="page-card" aria-labelledby="mission-title">
         <p className="eyebrow">Thực hành</p>
@@ -320,8 +579,8 @@ export function MissionWorkspacePage() {
             </button>
           </section>
         ) : null}
-        <Link className="secondary-action mission-error-back-link" to="/learn">
-          Về không gian học
+        <Link className="secondary-action mission-error-back-link" to={profile.backTo}>
+          {isPractice || profile.backTo !== "/learn" ? profile.backLabel : "Về không gian học"}
         </Link>
       </section>
     );
@@ -341,29 +600,40 @@ export function MissionWorkspacePage() {
   }
 
   const data = session.instance.learner.data ?? {};
-  const lessonGuide = getMissionLessonGuide(session.activity.id);
-  const quickCheck = getMissionQuickCheck(session.activity.id);
+  const lessonGuide = isPractice ? null : getMissionLessonGuide(session.activity.id);
+  const quickCheck = isPractice ? null : getMissionQuickCheck(session.activity.id);
 
   return (
     <section className="page-card mission-workspace" aria-labelledby="mission-title">
       <div className="mission-heading-row">
         <div>
           <p className="eyebrow">
-            Thực hành · {stageLabel(session.activity.stage)} · Biến thể #{bundle.variantIndex + 1}
+            {isPractice
+              ? (profile.eyebrow ?? "Luyện tập")
+              : `Thực hành · ${stageLabel(session.activity.stage)} · Biến thể #${bundle.variantIndex + 1}`}
           </p>
-          <h1 id="mission-title">{session.activity.title}</h1>
+          <h1 id="mission-title" tabIndex={-1}>
+            {session.activity.title}
+          </h1>
         </div>
-        <Link className="secondary-action mission-back-link" to="/learn">
-          Về lộ trình
+        <Link className="secondary-action mission-back-link" to={profile.backTo}>
+          {profile.backLabel}
         </Link>
       </div>
       <p className="page-lead">
         Viết mã trực tiếp, dùng Chạy thử để khám phá và Nộp bài khi muốn chấm trên môi trường sạch.
       </p>
       {draftNotice ? <p className="mission-draft-notice">{draftNotice}</p> : null}
+      {draftStatusText(draftStatus) ? (
+        <p className="mission-draft-notice" role="status" aria-live="polite">
+          {draftStatusText(draftStatus)}
+        </p>
+      ) : null}
 
       <nav className="mission-tab-nav" aria-label="Khu vực nội dung của nhiệm vụ">
-        <button className={tabClassName(activeTab === "lesson")} type="button" onClick={() => setActiveTab("lesson")}>Bài học</button>
+        {isPractice ? null : (
+          <button className={tabClassName(activeTab === "lesson")} type="button" onClick={() => setActiveTab("lesson")}>Bài học</button>
+        )}
         <button className={tabClassName(activeTab === "prompt")} type="button" onClick={() => setActiveTab("prompt")}>Đề bài</button>
         <button className={tabClassName(activeTab === "data")} type="button" onClick={() => setActiveTab("data")}>Dữ liệu</button>
         <button className={tabClassName(activeTab === "practice")} type="button" onClick={() => setActiveTab("practice")}>Làm bài</button>
@@ -420,13 +690,17 @@ export function MissionWorkspacePage() {
                           {file.category ? ` · ${file.category}` : ""}
                           {file.extension ? ` · .${file.extension}` : ""}
                         </span>
+                        {file.description ? <p>{file.description}</p> : null}
                         {file.dataUrl ? (
-                          <img
-                            className="mission-workspace-files__image"
-                            src={file.dataUrl}
-                            alt={`Kết quả ${file.filename}`}
-                            loading="lazy"
-                          />
+                          <figure className="mission-workspace-files__figure">
+                            <img
+                              className="mission-workspace-files__image"
+                              src={file.dataUrl}
+                              alt={figurePreviewAlt(file.filename)}
+                              loading="lazy"
+                            />
+                            <figcaption>{figureCaption(file.filename)}</figcaption>
+                          </figure>
                         ) : null}
                       </li>
                     ))}
@@ -439,6 +713,8 @@ export function MissionWorkspacePage() {
           ) : null}
 
           {runtimeActionNotice ? <p className="mission-runtime-notice">{runtimeActionNotice}</p> : null}
+
+          {profile.editorNotice ?? null}
 
           <MissionControls
             runDisabled={operation !== null}
@@ -489,14 +765,18 @@ export function MissionWorkspacePage() {
               </div>
               <div className="mission-retry-actions">
                 <button className="secondary-action secondary-action--button" type="button" onClick={() => void handleRetry("same")}>Làm lại cùng đề</button>
-                <button className="primary-action" type="button" onClick={() => void handleRetry("variant")}>Tạo đề mới</button>
+                {isPractice ? null : (
+                  <button className="primary-action" type="button" onClick={() => void handleRetry("variant")}>Tạo đề mới</button>
+                )}
               </div>
             </section>
           ) : null}
+
+          {attempt && profile.renderOutcome ? profile.renderOutcome(attempt) : null}
         </>
       ) : null}
 
-      {activeTab === "lesson" ? (
+      {activeTab === "lesson" && !isPractice ? (
         <div className="mission-lesson-stack">
           <MissionLessonPanel guide={lessonGuide} />
           <MissionQuickCheck definition={quickCheck} activityId={session.activity.id} />
@@ -505,7 +785,11 @@ export function MissionWorkspacePage() {
 
       {activeTab === "prompt" ? (
         <div className="mission-tab-content mission-tab-content--prompt">
-          <MissionObjectivePanel objective={session.activity.description ?? session.instance.learner.objective} context={session.instance.learner.context} />
+          {profile.renderPrompt ? (
+            profile.renderPrompt(session)
+          ) : (
+            <MissionObjectivePanel objective={session.activity.description ?? session.instance.learner.objective} context={session.instance.learner.context} />
+          )}
         </div>
       ) : null}
 
@@ -537,6 +821,24 @@ function stageLabel(stage: LearningStage): string {
     case LearningStage.RETENTION:
       return "Ghi nhớ";
   }
+}
+
+/** M10: the plots the runtime renders from open Matplotlib figures are named figure-N.png. */
+function figurePreviewAlt(filename: string): string {
+  const match = /^figure-(\d+)\.png$/.exec(filename);
+  return match !== null ? `Biểu đồ ${match[1]} do mã của bạn vẽ` : `Kết quả ${filename}`;
+}
+
+/**
+ * The caption says which figure this is and that it is only a preview: an activity may draw two
+ * charts (PF-23, PF-24), so they are numbered in the order the code created them, and the preview
+ * is redrawn by every Run / Submit - it is never evidence by itself.
+ */
+function figureCaption(filename: string): string {
+  const match = /^figure-(\d+)\.png$/.exec(filename);
+  return match !== null
+    ? `Hình ${match[1]} — xem trước biểu đồ thứ ${match[1]} mà mã của bạn tạo ra (đánh số theo thứ tự tạo). Hình được vẽ lại sau mỗi lần Chạy thử hoặc Nộp bài; chỉ Nộp bài mới được chấm.`
+    : `Xem trước ${filename}`;
 }
 
 function formatWorkspaceBytes(bytes: number): string {

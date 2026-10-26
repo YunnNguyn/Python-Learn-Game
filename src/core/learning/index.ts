@@ -4,7 +4,12 @@ export { deriveConceptProgress, RETENTION_DELAY_MS } from "./mastery";
 export type { ConceptProgress } from "./mastery";
 export { selectReviewRecommendations } from "./review-selection";
 export type { ReviewRecommendation } from "./review-selection";
-export { MissionAttemptSession } from "./mission-attempt-session";
+export {
+  isMissionSubmitCancelledError,
+  MISSION_SUBMIT_CANCELLED,
+  MissionAttemptSession,
+  MissionSubmitCancelledError,
+} from "./mission-attempt-session";
 export type {
   MissionAttemptSessionOptions,
   MissionSubmitWithAttempt,

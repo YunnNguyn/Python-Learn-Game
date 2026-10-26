@@ -1,4 +1,5 @@
-export { MissionWorkspacePage } from "./MissionWorkspacePage";
+export { MissionWorkspace, MissionWorkspacePage } from "./MissionWorkspacePage";
+export type { MissionWorkspaceProfile, MissionWorkspaceProps } from "./MissionWorkspacePage";
 export {
   GradingFeedback,
   toGradingFeedbackModel,

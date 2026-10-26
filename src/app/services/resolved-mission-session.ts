@@ -1,0 +1,254 @@
+import type {
+  AttemptRecord,
+  LearningActivity,
+  MissionInstance,
+  MissionTemplate,
+} from "../../core/domain";
+import type { GraderRegistry } from "../../core/grading";
+import { HintEngine, type HintSet } from "../../core/hints";
+import type { MissionAttemptSession } from "../../core/learning";
+import { MissionEngine } from "../../core/missions";
+import type { MissionDraftRecord } from "../../core/persistence";
+import type { RuntimeManager, RuntimeSystemError, RuntimeWorkspaceInfo } from "../../core/runtime";
+import { APPLICATION_SERVICES_RETIRED, type ApplicationLifecycle } from "./application-lifecycle";
+import type { MissionDraftHandle, MissionDraftScheduler, MissionOpening } from "./mission-draft-scheduler";
+import type { OperationGate } from "./operation-gate";
+import { ServiceOwnedMissionSession, type MissionSessionRegistry } from "./service-owned-resources";
+
+/*
+ * Opening a mission session, second half (PHASE-05-M7.0, Task C).
+ *
+ * `createApplicationServices().createMissionSession()` has two halves:
+ *
+ *  1. RESOLUTION (stays in application-services.ts, CS116-specific): wait for
+ *     startup, find the activity/template, check CS116 access control, read the
+ *     stored draft, generate the instance, find the hint set, create the runtime.
+ *  2. OPENING (this file): everything after the inputs are resolved - the M4 load
+ *     tracking, the engine load, the M5 draft handle, the session with its Submit
+ *     wiring, registration with the service set.
+ *
+ * Extracting (2) changes no behavior. It exists so that a later milestone can open
+ * a PRACTICE session (imported Exercise Pack, its own store) without copying this
+ * lifecycle-sensitive code. Because that is its purpose, every collaborator is a
+ * parameter and NONE is reached through module state or a default:
+ *
+ *  - `lifecycle`  admission, load tracking and drain of the owning service set;
+ *  - `gate`       the OperationGate of the store that Submit writes to (M6);
+ *  - `drafts`     the draft scheduler bound to that same store (M5);
+ *  - `sessions`   the registry that retires the session with its service set (M4);
+ *  - `graders`    declarative grading for the MissionEngine;
+ *  - `recordSubmittedAttempt`  THE Submit callback: the durable steps of a stored
+ *                 attempt (for CS116: attempt, then reward).
+ *
+ * This file imports no learning engine, no meta-progression engine and no
+ * persistence factory. In particular there is no default for
+ * `recordSubmittedAttempt`: a caller that opens a practice session must supply its
+ * own callback and therefore cannot reach the CS116 attempt/reward path by omission.
+ */
+
+export interface PlayableMissionSession {
+  readonly session: MissionAttemptSession;
+  /**
+   * This session's draft (M5): the debounce timer, ordered writes and save status
+   * live here, owned by the service set - not by the page. The session closes it
+   * when it is disposed, and a passed Submit discards it. The page only feeds it
+   * the latest editor state.
+   */
+  readonly draft: MissionDraftHandle;
+  readonly initialCode: string;
+  readonly variantIndex: number;
+  readonly resumedDraft: boolean;
+  readonly initialWorkspace?: RuntimeWorkspaceInfo;
+}
+
+export type CreateMissionSessionResult =
+  | { readonly ok: true; readonly value: PlayableMissionSession }
+  | { readonly ok: false; readonly error: RuntimeSystemError };
+
+export function failure(code: string, message: string): CreateMissionSessionResult {
+  return { ok: false, error: { code, message } };
+}
+
+export function retiredFailure(): CreateMissionSessionResult {
+  return failure(
+    APPLICATION_SERVICES_RETIRED,
+    "Phiên dữ liệu học tập này đã đóng nên không thể mở bài thực hành. Hãy tải lại trang.",
+  );
+}
+
+/** A newer request for the same activity began: this (older) opening hands out no session. */
+export const MISSION_OPEN_SUPERSEDED = "MISSION_OPEN_SUPERSEDED";
+
+export function staleOpeningFailure(): CreateMissionSessionResult {
+  return failure(
+    MISSION_OPEN_SUPERSEDED,
+    "Một yêu cầu mở bài mới hơn đã thay thế yêu cầu này nên phiên cũ không được mở.",
+  );
+}
+
+/** Everything the opening phase needs from the service set that owns the session. */
+export interface MissionSessionOpeningDependencies {
+  readonly lifecycle: ApplicationLifecycle;
+  /** Guards the store the Submit callback writes to. Taken SHARED around every Submit persistence. */
+  readonly gate: OperationGate;
+  /** Bound to the same store as `gate` and `recordSubmittedAttempt`. */
+  readonly drafts: MissionDraftScheduler;
+  readonly sessions: MissionSessionRegistry;
+  readonly graders: GraderRegistry;
+  /**
+   * The durable steps of one stored attempt, in order. Called only once a Submit
+   * crossed the M1 durable-write boundary, from inside an operation that the helper
+   * has already admitted to `lifecycle` and holds SHARED on `gate`; so it must call
+   * the UNGATED base paths (never a method that admits or takes the gate again).
+   * The helper itself invalidates the draft of a PASSED attempt afterwards.
+   */
+  readonly recordSubmittedAttempt: (record: AttemptRecord) => Promise<void>;
+}
+
+/** The resolved inputs: nothing here is looked up or generated by the opening phase. */
+export interface ResolvedMissionSessionInput {
+  readonly activity: LearningActivity;
+  readonly template: MissionTemplate;
+  readonly instance: MissionInstance;
+  readonly seed: string;
+  readonly variantIndex: number;
+  readonly hintSet: HintSet | undefined;
+  /**
+   * A freshly created runtime that the opening phase now OWNS: it is disposed on
+   * every path that does not hand out a session, and by the session otherwise.
+   */
+  readonly runtime: RuntimeManager;
+  /** The stored draft read for this activity (any seed), or null when none was read. */
+  readonly storedDraft: MissionDraftRecord | null;
+  readonly resetCode: boolean;
+  /**
+   * The ticket of THIS request, taken with `drafts.beginOpening(activity.id)` synchronously at the public
+   * request boundary (before the caller's first await). Only the newest request may activate a session:
+   * an older one is refused with `MISSION_OPEN_SUPERSEDED` and its engine and runtime are cleaned up.
+   */
+  readonly opening: MissionOpening;
+}
+
+/**
+ * Loads the mission and builds the service-owned session.
+ *
+ * PRECONDITION: the caller checked `lifecycle.isActive()` and awaited nothing
+ * since. This function is deliberately NOT `async` and awaits nothing before
+ * `lifecycle.trackLoad`, so a load can only start while the set is active.
+ */
+export function openResolvedMissionSession(
+  dependencies: MissionSessionOpeningDependencies,
+  input: ResolvedMissionSessionInput,
+): Promise<CreateMissionSessionResult> {
+  const { lifecycle, gate, drafts, sessions, graders, recordSubmittedAttempt } = dependencies;
+  const { activity, template, instance, seed, variantIndex, hintSet, runtime, resetCode, opening } = input;
+  const draft = input.storedDraft;
+
+  // MissionEngine/MissionAttemptSession mark themselves disposed before they
+  // tear the runtime down, so a retry after a failed teardown goes straight to
+  // the runtime (idempotent by its own contract).
+  const retryRuntimeDispose = () => runtime.dispose();
+  // The load is tracked from the moment its engine exists until the load AND the
+  // cleanup that follows it have settled - not merely while the engine sits in the
+  // registry. Retirement disposes the engine at once, but this continuation still
+  // runs later; `dispose()` waits for it (bounded) before closing persistence or
+  // reporting `disposed`, so a cleanup failure here decides the disposal outcome.
+  if (!opening.isCurrent()) {
+    // No load is needed, but disposal must use the registry: if it fails, M4 retains the
+    // failure for retry and reports an incomplete service disposal instead of losing it.
+    sessions.discardEngine(new MissionEngine(runtime, graders), retryRuntimeDispose);
+    return Promise.resolve(staleOpeningFailure());
+  }
+  return lifecycle.trackLoad(async (): Promise<CreateMissionSessionResult> => {
+    const engine = new MissionEngine(runtime, graders);
+    // Owned while loading: retirement disposes it even before a session exists.
+    sessions.trackLoading(engine, retryRuntimeDispose);
+    let loaded;
+    try {
+      loaded = await engine.loadMission(template, instance);
+    } catch (error) {
+      // A failing cleanup is retained by the registry; it never replaces `error`.
+      sessions.discardEngine(engine, retryRuntimeDispose);
+      throw error;
+    } finally {
+      sessions.untrackLoading(engine);
+    }
+    if (!lifecycle.isActive()) {
+      // Late completion after retirement: never hand out a session.
+      sessions.discardEngine(engine, retryRuntimeDispose);
+      return retiredFailure();
+    }
+    if (!loaded.ok) {
+      sessions.discardEngine(engine, retryRuntimeDispose);
+      return { ok: false, error: loaded.error };
+    }
+
+    if (!opening.isCurrent()) {
+      // A newer request began while this one loaded (a cancelled StrictMode/route-change opening that
+      // finished last): it must not register, supersede the live draft owner or return a usable session.
+      sessions.discardEngine(engine, retryRuntimeDispose);
+      return staleOpeningFailure();
+    }
+
+    const resumedDraft = !resetCode && draft !== null && draft.seed === seed;
+    // Opened here, synchronously with the session, so it is the newest draft
+    // handle of this activity from the moment the session exists.
+    const missionDraft = drafts.open({
+      activityId: activity.id,
+      seed,
+      variantIndex,
+      persisted: resumedDraft ? { code: draft.code, hintsUsed: draft.hintsUsed } : null,
+    });
+    const session = new ServiceOwnedMissionSession(
+      activity,
+      template,
+      instance,
+      engine,
+      {
+        hintEngine: new HintEngine(hintSet ?? null, resumedDraftHintLevels(draft, seed)),
+        // Called only once a Submit crossed the M1 durable-write boundary, i.e.
+        // while this session was not disposed - and retirement disposes every
+        // owned session synchronously first, so the set was still active. The
+        // attempt and its reward are one admitted operation: a retirement that
+        // begins between the two writes cannot split them, and the drain waits.
+        // A PASSED attempt also invalidates the draft, here and only after all
+        // writes succeeded: a failed Submit keeps the learner's draft. The
+        // delete is started inside this operation (so it is drained) but not
+        // awaited, so the Submit result is not held back by it.
+        onAttemptRecord: (record) =>
+          lifecycle.trackAdmitted(() =>
+            // Shared on the OperationGate (M6): a Clear requested earlier finishes
+            // first and this Submit is then stored on the cleared store; a Clear
+            // requested later waits for all of it. The callback runs the ungated
+            // base paths - the gate is taken once, by this outermost operation.
+            gate.runShared(async () => {
+              await recordSubmittedAttempt(record);
+              if (record.passed) void missionDraft.discardWithinAdmittedWork();
+            }),
+          ),
+      },
+      (released) => sessions.release(released),
+      retryRuntimeDispose,
+      missionDraft,
+    );
+    sessions.register(session);
+    const starterCode =
+      instance.learner.starterCode ?? template.starterCode ?? "# Viết mã Python tại đây\n";
+
+    return {
+      ok: true,
+      value: {
+        session,
+        draft: missionDraft,
+        initialCode: resumedDraft ? draft.code : starterCode,
+        variantIndex,
+        resumedDraft,
+        ...(loaded.workspace !== undefined ? { initialWorkspace: loaded.workspace } : {}),
+      },
+    };
+  });
+}
+
+function resumedDraftHintLevels(draft: MissionDraftRecord | null, seed: string) {
+  return draft?.seed === seed ? draft.hintsUsed : [];
+}

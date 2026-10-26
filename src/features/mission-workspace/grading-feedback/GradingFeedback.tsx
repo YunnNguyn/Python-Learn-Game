@@ -50,6 +50,22 @@ function FeedbackItem({ item }: { readonly item: GradingFeedbackItem }) {
       {item.detail ? (
         <p className="grading-feedback__detail">{item.detail}</p>
       ) : null}
+      {item.cases !== undefined && item.cases.length > 0 ? (
+        <ul className="grading-feedback__cases">
+          {item.cases.map((entry, index) => (
+            <li
+              key={`${index}-${entry.label}`}
+              className={`grading-feedback__case grading-feedback__case--${
+                entry.passed ? "passed" : "failed"
+              }`}
+            >
+              <span aria-hidden="true">{entry.passed ? "✓" : "✗"}</span>
+              <span className="visually-hidden">{entry.passed ? "Đạt: " : "Chưa đạt: "}</span>
+              {entry.label}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {item.expected !== undefined || item.actual !== undefined ? (
         <dl className="grading-feedback__metadata">
           {item.expected !== undefined ? (

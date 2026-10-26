@@ -1,3 +1,20 @@
+import {
+  PYTHON_FOUNDATIONS_LESSON_GUIDES,
+  PYTHON_FOUNDATIONS_QUICK_CHECKS,
+} from "./python-foundations-lesson-guides";
+import {
+  PYTHON_FOUNDATIONS_M9_LESSON_GUIDES,
+  PYTHON_FOUNDATIONS_M9_QUICK_CHECKS,
+} from "./python-foundations-m9-lesson-guides";
+import {
+  PYTHON_FOUNDATIONS_M10_LESSON_GUIDES,
+  PYTHON_FOUNDATIONS_M10_QUICK_CHECKS,
+} from "./python-foundations-m10-lesson-guides";
+import {
+  PYTHON_FOUNDATIONS_M11_LESSON_GUIDES,
+  PYTHON_FOUNDATIONS_M11_QUICK_CHECKS,
+} from "./python-foundations-m11-lesson-guides";
+
 export interface MissionLessonTopic {
   readonly label: string;
   readonly explanation: string;
@@ -713,7 +730,14 @@ const GUIDES: Readonly<Record<string, MissionLessonGuide>> = {
 };
 
 export function getMissionLessonGuide(activityId: string): MissionLessonGuide | null {
-  return GUIDES[activityId] ?? null;
+  return (
+    GUIDES[activityId] ??
+    PYTHON_FOUNDATIONS_LESSON_GUIDES[activityId] ??
+    PYTHON_FOUNDATIONS_M9_LESSON_GUIDES[activityId] ??
+    PYTHON_FOUNDATIONS_M10_LESSON_GUIDES[activityId] ??
+    PYTHON_FOUNDATIONS_M11_LESSON_GUIDES[activityId] ??
+    null
+  );
 }
 
 export interface MissionQuickCheckDefinition {
@@ -767,7 +791,7 @@ const QUICK_CHECKS: Readonly<Record<string, MissionQuickCheckDefinition>> = {
     explanation: "Nhận diện nhóm kỹ năng trước giúp bạn chọn đúng mẫu thao tác: tạo ndarray, đọc shape, indexing hay filtering.",
   },
   "cs116.local.numpy.lc01": {
-    question: "Điểm khác quan trọng nhất của Local Python so với Pyodide trong app là gì?",
+    question: "LC-01 chạy bằng Pyodide trong trình duyệt. Điểm khác biệt của Local Python là gì?",
     options: [
       "Local Python chỉ chạy được print",
       "Local Python dùng Python và tài nguyên thật trên máy",
@@ -775,7 +799,7 @@ const QUICK_CHECKS: Readonly<Record<string, MissionQuickCheckDefinition>> = {
       "Local Python bắt buộc phải viết notebook",
     ],
     correctOptionIndex: 1,
-    explanation: "Local Python chạy learner code trong child process của Python cài trên máy, nên có thể dùng package native và tài nguyên local; notebook không phải yêu cầu.",
+    explanation: "LC-01 dùng Pyodide chạy trong trình duyệt với hệ thống tệp ảo. Local Python chạy learner code bằng Python cài trên máy, nên có thể dùng package native và tài nguyên local; notebook không phải yêu cầu.",
   },
   "cs116.local.pandas.lc02": {
     question: "Hàm pandas nào thường dùng để đọc file CSV thành DataFrame?",
@@ -959,5 +983,12 @@ const QUICK_CHECKS: Readonly<Record<string, MissionQuickCheckDefinition>> = {
 };
 
 export function getMissionQuickCheck(activityId: string): MissionQuickCheckDefinition | null {
-  return QUICK_CHECKS[activityId] ?? null;
+  return (
+    QUICK_CHECKS[activityId] ??
+    PYTHON_FOUNDATIONS_QUICK_CHECKS[activityId] ??
+    PYTHON_FOUNDATIONS_M9_QUICK_CHECKS[activityId] ??
+    PYTHON_FOUNDATIONS_M10_QUICK_CHECKS[activityId] ??
+    PYTHON_FOUNDATIONS_M11_QUICK_CHECKS[activityId] ??
+    null
+  );
 }

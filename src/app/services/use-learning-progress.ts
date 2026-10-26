@@ -11,7 +11,9 @@ export function useLearningProgress() {
   );
 
   useEffect(() => {
-    void services.learning.initialize();
+    // Drive the single startup path (reward-safe snapshot first). A failure is
+    // observable through useApplicationInitialization(), so it is not rethrown here.
+    services.initialize().catch(() => undefined);
   }, [services]);
 
   return {

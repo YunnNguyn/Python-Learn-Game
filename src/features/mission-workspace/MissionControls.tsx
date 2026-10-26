@@ -1,3 +1,10 @@
+/**
+ * The one sentence that separates the two buttons: Run is for trying things (no grading, nothing
+ * saved), Submit is the only action that grades and writes learning evidence.
+ */
+export const SUBMIT_VS_RUN_NOTE =
+  "Chạy thử chỉ để thử nghiệm: không chấm bài và không lưu tiến độ. Nộp bài chấm trên môi trường Python sạch và lưu kết quả vào lịch sử học.";
+
 export interface MissionControlsProps {
   readonly runDisabled?: boolean;
   readonly submitDisabled?: boolean;
@@ -19,7 +26,7 @@ export function MissionControls({
   onRun,
   onSubmit,
   onStop,
-  note = "Chạy thử giữ trạng thái thực nghiệm; Nộp bài luôn chấm trên môi trường sạch.",
+  note = SUBMIT_VS_RUN_NOTE,
 }: MissionControlsProps) {
   return (
     <section className="mission-controls" aria-labelledby="mission-actions-title">

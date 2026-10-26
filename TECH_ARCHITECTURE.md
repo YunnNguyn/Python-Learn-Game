@@ -550,6 +550,22 @@ Packs may contribute:
 
 Do not implement remote pack installation, marketplaces, plugin sandboxing, or cloud content repositories for the first product.
 
+### 6.1 Local Exercise Packs (PHASE-05)
+
+Importing a **local, strictly validated, data-only Exercise Pack** is approved as a practice feature. This is a deliberate, narrow exception to the rule above, and it is bounded as follows.
+
+- An Exercise Pack is **not** a `ContentPack`. It has its own schema and adapter, is never registered in the `ContentRegistry`, and takes no part in CS116 unlocks, progression or rewards. Its attempts, drafts and progress live in a separate practice-only IndexedDB database (`python-learn-game-practice`), never in the CS116 learning database.
+- A pack is plain data (JSON) that the learner chooses on their own device. It reuses the existing Mission Engine, Mission Attempt Session, Pyodide Worker and declarative grading; it adds no new grading mode and no executable code of its own.
+- Pyodide packages and dataset file names in a pack must be checked against the same shared rules the Worker enforces (`src/core/runtime/pyodide/runtime-config-rules.ts`), so a pack can never request more than the Worker already accepts. A pack validator may be stricter than those rules, never looser.
+
+This approval does **not** authorize:
+
+- remote pack installation, marketplaces or cloud content repositories;
+- executable JavaScript plugins, or any pack content that is evaluated as JavaScript;
+- running imported Python through Local Python (`core.local_python`). Imported exercises use the Pyodide runtime only.
+
+**Isolation limits.** The Pyodide Worker is same-origin with the application. A same-origin Worker is a convenience for keeping the UI responsive and for cancelling runaway code; it is **not** a complete isolation boundary. Python that runs in it executes with the application's origin and may be able to reach same-origin browser storage (including IndexedDB) and make network requests. A Content Security Policy narrows what can be loaded and contacted, but a CSP alone does not close off same-origin IndexedDB access, so it is not treated as the answer to this problem. For local import the trust model is that the learner chooses to run a file they brought themselves. **Stronger execution isolation is required before untrusted public packs are supported** (for example shared or catalog packs); until then, public distribution of packs must not be built.
+
 ## 7. Mission Data Contracts
 
 ### MissionTemplate

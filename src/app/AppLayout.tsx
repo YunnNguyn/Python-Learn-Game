@@ -1,10 +1,24 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
+
+import { StartupFailurePanel } from "./StartupFailurePanel";
+import { useApplicationInitialization } from "./services";
 
 function navigationClassName({ isActive }: { isActive: boolean }): string {
   return isActive ? "app-nav__link app-nav__link--active" : "app-nav__link";
 }
 
+/**
+ * Practice (imported Exercise Packs) has its own services and storage and never
+ * depends on the CS116 initialization, so a CS116 startup failure must not hide it.
+ */
+function isPracticePath(pathname: string): boolean {
+  return pathname === "/practice" || pathname.startsWith("/practice/");
+}
+
 export function AppLayout() {
+  const initialization = useApplicationInitialization();
+  const practiceRoute = isPracticePath(useLocation().pathname);
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -20,6 +34,9 @@ export function AppLayout() {
             <NavLink className={navigationClassName} to="/learn">
               Học
             </NavLink>
+            <NavLink className={navigationClassName} to="/practice">
+              Luyện tập
+            </NavLink>
             <NavLink className={navigationClassName} to="/workshop">
               Xưởng robot
             </NavLink>
@@ -31,7 +48,17 @@ export function AppLayout() {
       </header>
 
       <main className="app-main">
-        <Outlet />
+        {practiceRoute ? (
+          <Outlet />
+        ) : initialization.status === "pending" ? (
+          <p role="status" aria-live="polite">
+            Đang khởi tạo dữ liệu học tập...
+          </p>
+        ) : initialization.status === "failed" ? (
+          <StartupFailurePanel error={initialization.error} />
+        ) : (
+          <Outlet />
+        )}
       </main>
 
       <footer className="app-footer">

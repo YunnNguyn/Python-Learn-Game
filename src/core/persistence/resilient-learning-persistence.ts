@@ -1,10 +1,32 @@
 import type { AttemptRecord, LearningActivityId } from "../domain";
 import { MemoryLearningPersistence } from "./memory-learning-persistence";
-import type { LearningPersistence, MissionDraftRecord } from "./learning-persistence";
+import type {
+  AddAttemptIfAbsentResult,
+  AttemptImportOrigin,
+  LearningPersistence,
+  LearningPersistenceCloseState,
+  MissionDraftRecord,
+} from "./learning-persistence";
+import {
+  ImportRequiresDurableStorageError,
+  PersistenceClosedError,
+  PersistenceDomainError,
+  PracticePackRequiresDurableStorageError,
+} from "./persistence-errors";
+import {
+  isPracticePackStore,
+  type InstallPracticePackResult,
+  type PracticePackListing,
+  type PracticePackRecord,
+  type PracticePackStore,
+} from "./practice-pack-store";
 
-export class ResilientLearningPersistence implements LearningPersistence {
+export class ResilientLearningPersistence implements LearningPersistence, PracticePackStore {
   private readonly fallback = new MemoryLearningPersistence();
   private failedOver = false;
+  /** Set synchronously by close(); never reset. Checked again on the failover path. */
+  private closed = false;
+  private closing: Promise<void> | null = null;
 
   constructor(private readonly primary: LearningPersistence) {}
 
@@ -16,8 +38,40 @@ export class ResilientLearningPersistence implements LearningPersistence {
     return this.execute((store) => store.addAttempt(record));
   }
 
+  addAttemptIfAbsent(record: AttemptRecord): Promise<AddAttemptIfAbsentResult> {
+    return this.execute((store) => store.addAttemptIfAbsent(record));
+  }
+
+  /**
+   * FAIL CLOSED. An import is reported successful only if it reached durable
+   * storage, so this never writes to the in-memory fallback and never flips
+   * `failedOver`:
+   *  - already failed over            -> ImportRequiresDurableStorageError;
+   *  - domain errors (validation, blocked upgrade, ...) -> rethrown as is;
+   *  - any other primary failure      -> ImportRequiresDurableStorageError
+   *    (cause attached). Ordinary operations decide on failover themselves.
+   */
+  async importAttemptIfAbsent(
+    record: AttemptRecord,
+    origin: AttemptImportOrigin,
+  ): Promise<AddAttemptIfAbsentResult> {
+    if (this.closed) throw new PersistenceClosedError();
+    if (this.failedOver) return this.fallback.importAttemptIfAbsent(record, origin);
+
+    try {
+      return await this.primary.importAttemptIfAbsent(record, origin);
+    } catch (error) {
+      if (error instanceof PersistenceDomainError) throw error;
+      throw new ImportRequiresDurableStorageError({ cause: error });
+    }
+  }
+
   getAttempts(): Promise<readonly AttemptRecord[]> {
     return this.execute((store) => store.getAttempts());
+  }
+
+  getRewardEligibleAttemptsSnapshot(): Promise<readonly AttemptRecord[]> {
+    return this.execute((store) => store.getRewardEligibleAttemptsSnapshot());
   }
 
   clearAttempts(): Promise<void> {
@@ -44,12 +98,71 @@ export class ResilientLearningPersistence implements LearningPersistence {
     return this.execute((store) => store.clearAll());
   }
 
+  /**
+   * Practice packs FAIL CLOSED, install and reads alike, and never touch the memory
+   * fallback or flip `failedOver`: a pack is durable content, and a fallback that
+   * returned an empty list would make installed packs look lost. Domain errors
+   * (invalid record, closed, blocked upgrade, unsupported family) pass through;
+   * any other primary failure - or a primary that has no pack store - is reported
+   * as PracticePackRequiresDurableStorageError with the cause attached.
+   */
+  installPracticePackIfAbsent(record: PracticePackRecord): Promise<InstallPracticePackResult> {
+    return this.practicePackOperation((store) => store.installPracticePackIfAbsent(record));
+  }
+
+  getPracticePack(packId: string): Promise<PracticePackRecord | null> {
+    return this.practicePackOperation((store) => store.getPracticePack(packId));
+  }
+
+  listPracticePacks(): Promise<PracticePackListing> {
+    return this.practicePackOperation((store) => store.listPracticePacks());
+  }
+
+  private async practicePackOperation<T>(operation: (store: PracticePackStore) => Promise<T>): Promise<T> {
+    if (this.closed) throw new PersistenceClosedError();
+    if (!isPracticePackStore(this.primary)) throw new PracticePackRequiresDurableStorageError();
+    try {
+      return await operation(this.primary);
+    } catch (error) {
+      if (error instanceof PersistenceDomainError) throw error;
+      throw new PracticePackRequiresDurableStorageError({ cause: error });
+    }
+  }
+
+  /**
+   * Closes the primary and the memory fallback (idempotent; see
+   * LearningPersistence.close). Nothing is cleared or copied between them.
+   */
+  close(): Promise<void> {
+    if (this.closing !== null) return this.closing;
+    this.closed = true;
+    this.closing = Promise.all([this.primary.close(), this.fallback.close()]).then(
+      () => undefined,
+    );
+    return this.closing;
+  }
+
+  getCloseState(): LearningPersistenceCloseState {
+    if (!this.closed) return "open";
+    // The fallback is memory: it never holds a pending browser request.
+    return this.primary.getCloseState() === "closed-pending-open" ? "closed-pending-open" : "closed";
+  }
+
   private async execute<T>(operation: (store: LearningPersistence) => Promise<T>): Promise<T> {
+    if (this.closed) throw new PersistenceClosedError();
     if (this.failedOver) return operation(this.fallback);
 
     try {
       return await operation(this.primary);
     } catch (error) {
+      // Expected domain outcomes (e.g. duplicate attempt id, and an intentional
+      // close via PersistenceClosedError) are the caller's concern, not a
+      // storage outage: keep the healthy primary and rethrow.
+      if (error instanceof PersistenceDomainError) throw error;
+      // close() ran while this operation was in flight and the primary then
+      // failed for a genuine reason. Report that real error; never retry the
+      // operation in memory and never flip to failover after an intentional close.
+      if (this.closed) throw error;
       console.warn("IndexedDB unavailable; falling back to in-memory learning data.", error);
       this.failedOver = true;
       return operation(this.fallback);

@@ -1,14 +1,46 @@
-import { Link, useParams } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useLocation, useParams } from "react-router-dom";
 
+import { getCourseGraduation, CourseGraduationStatus } from "../../app/course-graduation";
+import { selectCourseReview } from "../../app/course-review";
 import { useApplicationServices, useLearningProgress } from "../../app/services";
 import type { CourseId } from "../../core/domain";
-import { getWorldCompletion } from "../progress";
+import { getLessonCompletion, getWorldCompletion } from "../progress";
+import { getCourseContinue } from "./course-continue-model";
+import { CourseCompletionSummary } from "./CourseCompletionSummary";
+import { CourseReviewPanel } from "./CourseReviewPanel";
 
 export function CoursePage() {
   const { courseId } = useParams();
   const { content } = useApplicationServices();
-  const { learning } = useLearningProgress();
+  const { learning, snapshot } = useLearningProgress();
   const course = courseId ? content.getCourse(courseId as CourseId) : undefined;
+
+  const ready = course !== undefined && snapshot.ready;
+  const graduation = ready ? getCourseGraduation(content, learning, course.id) : null;
+  // A finished course WITH a capstone has a summary instead of a perpetual "continue" button.
+  // A course without a capstone (CS116) keeps its closing-review button exactly as before.
+  const hasCompletionSummary =
+    graduation?.status === CourseGraduationStatus.COMPLETED && graduation.capstone !== null;
+  const resume =
+    ready && !hasCompletionSummary ? getCourseContinue(content, learning, course.id) : null;
+  const review = ready
+    ? selectCourseReview({ content, reader: learning, courseId: course.id, now: new Date() })
+    : null;
+  const capstoneAttempts =
+    graduation?.capstone !== null && graduation?.capstone !== undefined
+      ? learning.getAttemptsByActivity(graduation.capstone.activityId)
+      : [];
+
+  // Links such as /course/<id>#course-completion should land on (and focus) the section.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!ready || hash.length < 2) return;
+    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+    if (target === null) return;
+    target.scrollIntoView({ block: "start" });
+    target.focus({ preventScroll: true });
+  }, [hash, ready]);
 
   if (course === undefined) {
     return (
@@ -29,6 +61,34 @@ export function CoursePage() {
       <h1 id="course-title">{course.title}</h1>
       {course.description ? <p className="page-lead">{course.description}</p> : null}
 
+      {graduation ? (
+        <CourseCompletionSummary
+          graduation={graduation}
+          capstoneAttempts={capstoneAttempts}
+          reviewHref="#course-review-section"
+        />
+      ) : null}
+
+      {resume ? (
+        <section className="today-study-card" aria-labelledby="course-continue-title">
+          <div>
+            <p className="learning-card__meta">Bước tiếp theo trong khóa này</p>
+            <h2 id="course-continue-title">{resume.activityTitle}</h2>
+          </div>
+          <Link
+            className="primary-action primary-action--link"
+            to={`/activity/${resume.activityId}`}
+            data-testid="course-continue"
+          >
+            {resume.label}
+          </Link>
+        </section>
+      ) : null}
+
+      {review ? (
+        <CourseReviewPanel review={review} headingId="course-review" courseTitle={course.title} />
+      ) : null}
+
       <div className="learning-list">
         {course.worldIds.map((worldId) => {
           const world = content.getWorld(worldId);
@@ -45,11 +105,13 @@ export function CoursePage() {
               <div className="learning-card__links">
                 {world.lessonIds.map((lessonId) => {
                   const lesson = content.getLesson(lessonId);
-                  return lesson ? (
+                  if (!lesson) return null;
+                  const lessonProgress = getLessonCompletion(learning, lesson);
+                  return (
                     <Link className="secondary-action" key={lesson.id} to={`/lesson/${lesson.id}`}>
-                      {lesson.title}
+                      {lesson.title} · {lessonProgress.completed}/{lessonProgress.total}
                     </Link>
-                  ) : null;
+                  );
                 })}
               </div>
             </article>

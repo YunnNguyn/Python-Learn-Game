@@ -21,6 +21,18 @@ import {
   type RuntimeSubmitResultWorkerResponse,
 } from "./worker-protocol";
 import { buildObservationExpression } from "./observation-helper";
+import { runFunctionProbes } from "./function-probe-helper";
+import {
+  capturePreviewsAndScan,
+  clearStalePreviews,
+  configureMatplotlib,
+} from "./workspace-preview";
+import type { FunctionProbeSpec } from "../function-probes";
+import {
+  isAllowedRuntimeConfigKey,
+  isAllowedRuntimePackage,
+  isSimpleDatasetFilename,
+} from "./runtime-config-rules";
 import { createPythonSetupNamespace } from "./setup-conversion";
 import { validateSetupKeys } from "./setup-validation";
 
@@ -77,6 +89,7 @@ workerScope.onmessage = (event) => {
       event.data.runtimeConfig,
       event.data.setupData,
       event.data.observeVariables,
+      event.data.functionProbes,
     );
   }
 };
@@ -202,22 +215,6 @@ type MissionNamespaceResult =
       readonly error: RuntimeSystemError;
     };
 
-// Pyodide packages enabled for production content. These all ship in the
-// Pyodide package index, so loadPackage can fetch them in the browser. The
-// Data/ML worlds (pandas, Matplotlib, Pillow, scikit-learn, OpenCV) run fully
-// in-browser through this runtime, which is what makes the app hostable as a
-// static site with no local service.
-const ALLOWED_RUNTIME_PACKAGES = new Set([
-  "numpy",
-  "pandas",
-  "matplotlib",
-  "pillow",
-  "scipy",
-  "scikit-learn",
-  "opencv-python",
-]);
-const ALLOWED_RUNTIME_CONFIG_KEYS = new Set(["packages", "workspace"]);
-
 async function ensureRuntimePackages(
   pyodide: PyodideInterface,
   runtimeConfig: JsonObject | undefined,
@@ -227,7 +224,7 @@ async function ensureRuntimePackages(
   }
 
   const unknownKey = Object.keys(runtimeConfig).find(
-    (key) => !ALLOWED_RUNTIME_CONFIG_KEYS.has(key),
+    (key) => !isAllowedRuntimeConfigKey(key),
   );
   if (unknownKey !== undefined) {
     return {
@@ -255,7 +252,7 @@ async function ensureRuntimePackages(
 
   const requestedPackages = [...new Set(packages as string[])];
   const unsupported = requestedPackages.filter(
-    (packageName) => !ALLOWED_RUNTIME_PACKAGES.has(packageName.toLowerCase()),
+    (packageName) => !isAllowedRuntimePackage(packageName),
   );
   if (unsupported.length > 0) {
     return {
@@ -269,6 +266,11 @@ async function ensureRuntimePackages(
   }
 
   try {
+    // M10: Matplotlib's default backend needs a display; select the headless one before
+    // anything imports it.
+    if (requestedPackages.some((packageName) => packageName.toLowerCase() === "matplotlib")) {
+      configureMatplotlib(pyodide);
+    }
     await pyodide.loadPackage(requestedPackages);
     return null;
   } catch (error) {
@@ -281,8 +283,6 @@ async function ensureRuntimePackages(
     };
   }
 }
-
-const SIMPLE_FILENAME = /^[A-Za-z0-9._-]+$/;
 
 // Stage trusted inline datasets into the Pyodide virtual filesystem and reset
 // artifacts/, mirroring the Local Python workspace contract: before each
@@ -336,7 +336,7 @@ function stageMissionWorkspace(
       };
     }
     const filename = (entry as JsonObject).filename as string;
-    if (!SIMPLE_FILENAME.test(filename)) {
+    if (!isSimpleDatasetFilename(filename)) {
       return {
         code: "INVALID_DATASETS",
         message: `Tên dataset không hợp lệ: ${filename}.`,
@@ -355,6 +355,7 @@ function stageMissionWorkspace(
         'os.makedirs("data", exist_ok=True)\n' +
         'shutil.rmtree("artifacts", ignore_errors=True)\n' +
         'os.makedirs("artifacts", exist_ok=True)\n' +
+        '__entry = None\n' +
         'for __entry in json.loads(__mission_datasets_json):\n' +
         '    (pathlib.Path("data") / __entry["filename"]).write_text(__entry["content"], encoding="utf-8")\n' +
         'del __entry\n',
@@ -460,6 +461,7 @@ async function submitCode(
   runtimeConfig: JsonObject | undefined,
   setupData: JsonObject | undefined,
   observeVariables: readonly string[] | undefined,
+  functionProbes?: readonly FunctionProbeSpec[],
 ): Promise<void> {
   if (runtime === null) {
     postSubmitResult(
@@ -529,7 +531,7 @@ async function submitCode(
     submitNamespace = namespaceResult.namespace;
     postSubmitResult(
       requestId,
-      await executePython(runtime, submitNamespace, code, observeVariables),
+      await executePython(runtime, submitNamespace, code, observeVariables, functionProbes),
     );
   } catch (error) {
     postSubmitResult(
@@ -545,72 +547,13 @@ async function submitCode(
   }
 }
 
-// Scan the data/ and artifacts/ directories in the Pyodide virtual filesystem
-// after execution and return a RuntimeWorkspaceInfo. Small image artifacts are
-// inlined as base64 data URLs so the mission workspace can display the figure
-// or image the learner just produced (the browser can't read the virtual FS
-// directly). This is workspace/presentation metadata, kept separate from the
-// grader's variable observations.
-const WORKSPACE_SCAN_SOURCE = `
-import os, json, base64, pathlib
-
-def __plg_scan(dirname, want_image_data):
-    items = []
-    base = pathlib.Path(dirname)
-    if base.is_dir():
-        for p in sorted(base.iterdir()):
-            if not p.is_file():
-                continue
-            ext = p.suffix.lower().lstrip(".")
-            size = p.stat().st_size
-            category = {
-                "png": "image", "jpg": "image", "jpeg": "image",
-                "gif": "image", "webp": "image", "bmp": "image",
-                "csv": "csv", "json": "json", "txt": "text",
-            }.get(ext, "file")
-            item = {
-                "filename": p.name,
-                "relativePath": dirname + "/" + p.name,
-                "bytes": size,
-                "extension": ext,
-                "category": category,
-            }
-            if want_image_data and category == "image" and 0 < size <= 2_000_000:
-                mime = {
-                    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
-                    "gif": "image/gif", "webp": "image/webp", "bmp": "image/bmp",
-                }.get(ext, "application/octet-stream")
-                encoded = base64.b64encode(p.read_bytes()).decode("ascii")
-                item["dataUrl"] = "data:" + mime + ";base64," + encoded
-            items.append(item)
-    return items
-
-__plg_ws = json.dumps({
-    "datasets": __plg_scan("data", False),
-    "artifacts": __plg_scan("artifacts", True),
-})
-`;
-
+// After every execution the data/ and artifacts/ directories are listed and the figures
+// the learner left open are rendered (M10). Images are inlined as data URLs only when they
+// are validated, bounded PNGs - see workspace-preview.ts for the guarantees.
 function scanWorkspace(
   pyodide: PyodideInterface,
 ): RuntimeWorkspaceInfo | undefined {
-  try {
-    pyodide.runPython(WORKSPACE_SCAN_SOURCE);
-    const raw = pyodide.globals.get("__plg_ws") as unknown;
-    const parsed = typeof raw === "string" ? JSON.parse(raw) : undefined;
-    return parsed as RuntimeWorkspaceInfo | undefined;
-  } catch {
-    return undefined;
-  } finally {
-    try {
-      pyodide.runPython(
-        'for __n in ("__plg_ws", "__plg_scan"):\n'
-          + '    globals().pop(__n, None)\n',
-      );
-    } catch {
-      // best-effort cleanup only
-    }
-  }
+  return capturePreviewsAndScan(pyodide);
 }
 
 function withWorkspace(
@@ -625,6 +568,7 @@ async function executePython(
   globals: PyProxy,
   code: string,
   observeVariables: readonly string[] | undefined,
+  functionProbes?: readonly FunctionProbeSpec[],
 ): Promise<RuntimeExecutionResult> {
   const stdoutCapture = createOutputCapture();
   const stderrCapture = createOutputCapture();
@@ -633,6 +577,8 @@ async function executePython(
 
   pyodide.setStdout(stdoutCapture.writer);
   pyodide.setStderr(stderrCapture.writer);
+  // M10: a plot preview always belongs to the run being shown.
+  clearStalePreviews(pyodide);
 
   try {
     executionValue = await pyodide.runPythonAsync(code, { globals });
@@ -673,20 +619,36 @@ async function executePython(
     result.status === RUNTIME_EXECUTION_STATUS.PYTHON_EXCEPTION;
   const workspace = producedOutput ? scanWorkspace(pyodide) : undefined;
 
+  // M9: functions are exercised ONLY after the learner program ran to completion
+  // (once, never re-executed). A program that raised is reported as a runtime error.
+  const probes =
+    functionProbes !== undefined &&
+    functionProbes.length > 0 &&
+    result.status === RUNTIME_EXECUTION_STATUS.SUCCESS
+      ? functionProbes
+      : undefined;
+
   if (
-    observeVariables !== undefined &&
+    (observeVariables !== undefined || probes !== undefined) &&
     (result.status === RUNTIME_EXECUTION_STATUS.SUCCESS ||
       result.status === RUNTIME_EXECUTION_STATUS.PYTHON_EXCEPTION)
   ) {
     try {
+      const observations: JsonObject =
+        observeVariables !== undefined
+          ? await collectRuntimeObservations(pyodide, globals, observeVariables)
+          : { variables: {} };
+      const functionResults =
+        probes !== undefined
+          ? await runFunctionProbes(pyodide, globals, probes)
+          : undefined;
       return withWorkspace(
         {
           ...result,
-          serialized: await collectRuntimeObservations(
-            pyodide,
-            globals,
-            observeVariables,
-          ),
+          serialized:
+            functionResults === undefined
+              ? observations
+              : { ...observations, functionResults: functionResults as unknown as JsonObject[] },
         },
         workspace,
       );

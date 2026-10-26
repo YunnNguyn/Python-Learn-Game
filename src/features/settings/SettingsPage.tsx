@@ -24,6 +24,11 @@ export function SettingsPage() {
     try {
       await services.clearLearningData();
       setMessage("Đã xóa toàn bộ dữ liệu học tập và phần thưởng cục bộ.");
+    } catch (error) {
+      // Observed (never an unhandled rejection), e.g. storage failure or a
+      // retiring service set (PHASE-04C.3D.5).
+      console.error("Clearing local learning data failed.", error);
+      setMessage("Không thể xóa dữ liệu học tập lúc này. Hãy tải lại trang rồi thử lại.");
     } finally {
       setClearing(false);
     }

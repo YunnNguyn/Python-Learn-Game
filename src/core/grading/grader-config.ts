@@ -4,6 +4,13 @@ import {
   JsonValueSchema,
   type JsonValue,
 } from "../domain";
+import {
+  FUNCTION_CASE_LIMITS,
+  FunctionCasesCheckSchema,
+  PyValueSchema,
+  type FunctionCasesCheck,
+  type PyValue,
+} from "./function-cases";
 
 export const DeclarativeGraderCheckType = {
   NO_EXCEPTION: "NO_EXCEPTION",
@@ -13,10 +20,21 @@ export const DeclarativeGraderCheckType = {
   SHAPE: "SHAPE",
   EXACT_VALUES: "EXACT_VALUES",
   APPROX_VALUES: "APPROX_VALUES",
+  /** M9: call a learner-defined function with controlled argument sets. */
+  FUNCTION_CASES: "FUNCTION_CASES",
+  /**
+   * M10: compare a learner VARIABLE with a typed value (DataFrame, Series, ndarray with
+   * dtype, tuple, set, figure summary...) using the same typed-JSON representation and
+   * comparison as FUNCTION_CASES. Evaluated on Submit only, like the function checks.
+   */
+  TYPED_VALUE: "TYPED_VALUE",
 } as const;
 
 export type DeclarativeGraderCheckType =
   (typeof DeclarativeGraderCheckType)[keyof typeof DeclarativeGraderCheckType];
+
+/** M10: at most this many TYPED_VALUE checks per grader config. */
+export const TYPED_VALUE_MAX_CHECKS = 8;
 
 export type ApproxNumericValue = number | ApproxNumericValue[];
 
@@ -52,7 +70,21 @@ export type DeclarativeGraderCheck =
       readonly variable: string;
       readonly expected: ApproxNumericValue;
       readonly absoluteTolerance: number;
-    };
+    }
+  | FunctionCasesCheck
+  | TypedValueCheck;
+
+export interface TypedValueCheck {
+  readonly type: typeof DeclarativeGraderCheckType.TYPED_VALUE;
+  readonly variable: string;
+  readonly expected: PyValue;
+  /** Absolute tolerance for number leaves (default: exact equality). */
+  readonly tolerance?: number;
+  /** Exact Python type name of the variable, e.g. "DataFrame". */
+  readonly returnType?: string;
+  /** When true the feedback may print the expected value (never for hidden data). */
+  readonly reveal?: boolean;
+}
 
 export interface DeclarativeGraderConfig {
   readonly checks: readonly DeclarativeGraderCheck[];
@@ -127,6 +159,20 @@ const approxValuesCheckSchema = z
   })
   .strict();
 
+const typedValueCheckSchema = z
+  .object({
+    type: z.literal(DeclarativeGraderCheckType.TYPED_VALUE),
+    variable: nonBlankStringSchema.regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/, "Expected a Python identifier"),
+    expected: PyValueSchema,
+    tolerance: z.number().finite().nonnegative().optional(),
+    returnType: z
+      .string()
+      .regex(/^[A-Za-z_][A-Za-z0-9_]{0,31}$/)
+      .optional(),
+    reveal: z.boolean().optional(),
+  })
+  .strict();
+
 export const DeclarativeGraderCheckSchema: z.ZodType<DeclarativeGraderCheck> =
   z.discriminatedUnion("type", [
     noExceptionCheckSchema,
@@ -136,10 +182,48 @@ export const DeclarativeGraderCheckSchema: z.ZodType<DeclarativeGraderCheck> =
     shapeCheckSchema,
     exactValuesCheckSchema,
     approxValuesCheckSchema,
+    FunctionCasesCheckSchema,
+    typedValueCheckSchema,
   ]);
 
 export const DeclarativeGraderConfigSchema: z.ZodType<DeclarativeGraderConfig> = z
   .object({
     checks: z.array(DeclarativeGraderCheckSchema).min(1),
   })
-  .strict();
+  .strict()
+  .superRefine((config, context) => {
+    const functionNames = new Set<string>();
+    let functionChecks = 0;
+    for (const [index, check] of config.checks.entries()) {
+      if (check.type !== DeclarativeGraderCheckType.FUNCTION_CASES) continue;
+      functionChecks += 1;
+      if (functionNames.has(check.function)) {
+        context.addIssue({
+          code: "custom",
+          path: ["checks", index, "function"],
+          message: `Function "${check.function}" has more than one FUNCTION_CASES check`,
+        });
+      }
+      functionNames.add(check.function);
+    }
+    if (functionChecks > FUNCTION_CASE_LIMITS.maxChecksPerConfig) {
+      context.addIssue({ code: "custom", message: "Too many FUNCTION_CASES checks" });
+    }
+    const typedVariables = new Set<string>();
+    let typedChecks = 0;
+    for (const [index, check] of config.checks.entries()) {
+      if (check.type !== DeclarativeGraderCheckType.TYPED_VALUE) continue;
+      typedChecks += 1;
+      if (typedVariables.has(check.variable)) {
+        context.addIssue({
+          code: "custom",
+          path: ["checks", index, "variable"],
+          message: `Variable "${check.variable}" has more than one TYPED_VALUE check`,
+        });
+      }
+      typedVariables.add(check.variable);
+    }
+    if (typedChecks > TYPED_VALUE_MAX_CHECKS) {
+      context.addIssue({ code: "custom", message: "Too many TYPED_VALUE checks" });
+    }
+  });

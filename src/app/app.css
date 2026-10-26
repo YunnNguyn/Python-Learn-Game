@@ -606,6 +606,32 @@ a {
   word-break: break-word;
 }
 
+.grading-feedback__cases {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grading-feedback__case {
+  display: flex;
+  gap: 0.5rem;
+  min-width: 0;
+  align-items: baseline;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+}
+
+.grading-feedback__case--passed {
+  color: var(--color-success-text);
+}
+
+.grading-feedback__case--failed {
+  color: var(--color-danger-text);
+  font-weight: 700;
+}
+
 .primary-action {
   display: inline-flex;
   min-height: 2.75rem;
@@ -2141,4 +2167,283 @@ a {
   .mission-runtime-state {
     align-self: flex-start;
   }
+}
+
+/* ---- Practice (PHASE-05-M7): imported Exercise Packs ------------------------------------ */
+
+.practice-page > section {
+  margin-top: 1.75rem;
+}
+
+.practice-import,
+.practice-preview {
+  border: 1px solid var(--color-border);
+  border-radius: 0.85rem;
+  background: var(--color-surface-1);
+  padding: 1.15rem;
+}
+
+.practice-preview {
+  margin-top: 1rem;
+  border-color: var(--color-accent-border);
+  background: var(--color-surface-2);
+}
+
+.practice-import__file {
+  margin: 0.75rem 0;
+}
+
+.practice-import__label {
+  display: block;
+  margin: 0.75rem 0 0.35rem;
+  font-weight: 700;
+}
+
+.practice-import__textarea {
+  width: 100%;
+  min-height: 9rem;
+  resize: vertical;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.6rem;
+  background: var(--color-editor);
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  padding: 0.7rem;
+}
+
+.practice-import__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.practice-import__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.practice-notice {
+  margin-top: 0.9rem;
+  border-left: 0.25rem solid var(--color-accent);
+  border-radius: 0.55rem;
+  background: var(--color-accent-surface);
+  padding: 0.65rem 0.85rem;
+}
+
+.practice-notice p {
+  margin: 0.3rem 0 0;
+}
+
+.practice-notice--success {
+  border-left-color: var(--color-success);
+  background: var(--color-success-surface);
+}
+
+.practice-notice--error {
+  border-left-color: var(--color-danger);
+  background: var(--color-danger-surface);
+}
+
+.practice-issues {
+  margin-top: 0.9rem;
+}
+
+.practice-issues__list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.practice-issues__path {
+  display: inline-block;
+  margin-right: 0.5rem;
+  color: var(--color-accent-strong);
+  overflow-wrap: anywhere;
+}
+
+.practice-issues__code {
+  margin-left: 0.5rem;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.practice-preview__meta,
+.practice-card__meta {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.practice-preview__facts {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+.practice-preview__exercises {
+  display: grid;
+  gap: 0.4rem;
+  padding-left: 1.25rem;
+}
+
+.practice-security-note {
+  margin-top: 0.9rem;
+  border-left: 0.25rem solid var(--color-danger-border);
+  border-radius: 0.55rem;
+  background: var(--color-surface-3);
+  color: var(--color-text-soft);
+  font-size: 0.88rem;
+  padding: 0.65rem 0.85rem;
+}
+
+.practice-empty {
+  color: var(--color-muted);
+}
+
+.practice-exercises__list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.practice-outcome {
+  margin-top: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.85rem;
+  background: var(--color-surface-1);
+  padding: 1rem;
+}
+
+.practice-outcome__block {
+  margin-top: 0.9rem;
+}
+
+.practice-outcome__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+/* PHASE-06 / M8 - course-scoped next step (course/activity pages and the mission workspace). */
+.activity-next-step,
+.mission-next-step {
+  margin-top: 1rem;
+  border: 1px solid var(--color-accent-border);
+  border-radius: 0.85rem;
+  background: var(--color-surface-1);
+  padding: 1rem;
+}
+
+.activity-next-step h2,
+.mission-next-step h2 {
+  margin-bottom: 0.35rem;
+  font-size: 1.05rem;
+}
+
+.activity-next-step p,
+.mission-next-step p {
+  margin: 0 0 0.75rem;
+}
+
+/* PHASE-09 / M11 - course completion summary, scoped review panel, figure captions. */
+.course-progress-status {
+  margin: 1rem 0 0;
+  border-left: 3px solid var(--color-accent-border);
+  padding: 0.2rem 0.75rem;
+  color: var(--color-text-soft);
+}
+
+.course-completion {
+  margin-top: 1.25rem;
+  border: 1px solid var(--color-success-border);
+  border-radius: 0.9rem;
+  background: var(--color-success-surface);
+  padding: 1rem 1.1rem;
+}
+
+.course-completion:focus-visible,
+.review-recommendations:focus-visible,
+.mission-heading-row h1:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.course-completion h2 {
+  margin-bottom: 0.35rem;
+  font-size: 1.15rem;
+}
+
+.course-completion p {
+  margin: 0.35rem 0;
+}
+
+.course-completion__note {
+  color: var(--color-text-soft);
+  font-size: 0.92rem;
+}
+
+.course-completion__actions {
+  margin-top: 0.9rem;
+}
+
+.course-completion__evidence {
+  margin-top: 0.9rem;
+}
+
+.course-completion__evidence summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.course-completion__evidence table {
+  width: 100%;
+  margin-top: 0.6rem;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.course-completion__evidence th,
+.course-completion__evidence td {
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+}
+
+.course-completion__evidence {
+  overflow-x: auto;
+}
+
+.review-recommendations__list {
+  margin-left: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.review-recommendations__empty {
+  margin: 0.75rem 0 0;
+  color: var(--color-text-soft);
+}
+
+.mission-next-step__note {
+  color: var(--color-text-soft);
+  font-size: 0.92rem;
+}
+
+.mission-workspace-files__figure {
+  grid-column: 1 / -1;
+  margin: 0.4rem 0 0;
+}
+
+.mission-workspace-files__figure .mission-workspace-files__image {
+  margin-top: 0;
+}
+
+.mission-workspace-files__figure figcaption {
+  margin-top: 0.35rem;
+  color: var(--color-muted);
+  font-size: 0.82rem;
 }

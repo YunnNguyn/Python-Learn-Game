@@ -1,6 +1,7 @@
 import type { MissionInstance, MissionTemplate } from "../domain";
 import {
   CORE_GRADER_ID,
+  getDeclarativeFunctionProbes,
   getDeclarativeObservationVariables,
   resolveDeclarativeGraderConfig,
   type GraderRegistry,
@@ -10,8 +11,10 @@ import {
   RUNTIME_EXECUTION_STATUS,
   RuntimeVariableObservationsSchema,
   type RuntimeExecutionResult,
+  type FunctionProbeSpec,
   type RuntimeLifecycleResult,
   type RuntimeManager,
+  type RuntimeVariableObservations,
 } from "../runtime";
 import { toGraderExecutionSnapshot } from "./grader-execution-adapter";
 
@@ -215,6 +218,7 @@ export class MissionEngine {
       const authoredGraderConfig = this.currentMission.grader.config;
       let graderConfig;
       let observeVariables: readonly string[];
+      let functionProbes: readonly FunctionProbeSpec[];
       try {
         if (authoredGraderConfig === undefined) {
           throw new Error("Declarative grader config is required.");
@@ -224,6 +228,7 @@ export class MissionEngine {
           this.currentMission.instance.grading?.data,
         );
         observeVariables = getDeclarativeObservationVariables(graderConfig);
+        functionProbes = getDeclarativeFunctionProbes(graderConfig);
       } catch {
         return {
           execution: executionFailure(
@@ -236,9 +241,10 @@ export class MissionEngine {
       const execution = await this.runtimeManager.submit({
         code,
         observeVariables,
+        ...(functionProbes.length > 0 ? { functionProbes } : {}),
       });
 
-      let observations;
+      let observations: RuntimeVariableObservations | undefined;
       if (
         execution.status === RUNTIME_EXECUTION_STATUS.SUCCESS ||
         execution.status === RUNTIME_EXECUTION_STATUS.PYTHON_EXCEPTION
@@ -257,6 +263,23 @@ export class MissionEngine {
           };
         }
         observations = parsed.data;
+
+        // A runtime that cannot exercise functions must say so loudly: grading a
+        // FUNCTION_CASES mission without the calls having been made would be a pass
+        // (or fail) decided on nothing, so the Submit is rejected instead.
+        if (
+          execution.status === RUNTIME_EXECUTION_STATUS.SUCCESS &&
+          !functionResultsMatchRequest(observations.functionResults, functionProbes)
+        ) {
+          return {
+            execution: executionFailure(
+              "INVALID_RUNTIME_OBSERVATIONS",
+              "Runtime không trả về kết quả kiểm tra hàm khớp với yêu cầu.",
+              execution.stdout,
+              execution.stderr,
+            ),
+          };
+        }
       }
 
       const graderExecution = toGraderExecutionSnapshot(
@@ -328,6 +351,27 @@ export class MissionEngine {
   private isActive(operation: symbol): boolean {
     return !this.disposed && this.activeOperation === operation;
   }
+}
+
+function functionResultsMatchRequest(
+  results: RuntimeVariableObservations["functionResults"],
+  probes: readonly FunctionProbeSpec[],
+): boolean {
+  if (probes.length === 0) {
+    return results === undefined;
+  }
+  if (results === undefined || results.length !== probes.length) {
+    return false;
+  }
+  return probes.every((probe, index) => {
+    const result = results[index]!;
+    return (
+      result.function === probe.function &&
+      (result.status === "OK"
+        ? result.cases.length === probe.cases.length
+        : result.cases.length === 0)
+    );
+  });
 }
 
 function lifecycleFailure(

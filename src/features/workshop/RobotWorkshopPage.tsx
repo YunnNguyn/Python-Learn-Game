@@ -38,6 +38,8 @@ export function RobotWorkshopPage() {
           ? "Đã chế tạo bộ phận và trừ vật liệu khỏi kho."
           : result.message,
       );
+    } catch (error) {
+      reportWorkshopFailure(error, setMessage);
     } finally {
       setBusyPartId(null);
     }
@@ -53,6 +55,8 @@ export function RobotWorkshopPage() {
           ? "Scout-01 đã được lắp ráp hoàn chỉnh."
           : result.message,
       );
+    } catch (error) {
+      reportWorkshopFailure(error, setMessage);
     } finally {
       setAssembling(false);
     }
@@ -281,4 +285,13 @@ function formatRewardTime(value: string): string {
     dateStyle: "short",
     timeStyle: "short",
   }).format(date);
+}
+
+/**
+ * A rejected workshop mutation (storage failure, or a retiring service set,
+ * PHASE-04C.3D.5) stays observed and visible; nothing was spent or built.
+ */
+function reportWorkshopFailure(error: unknown, setMessage: (message: string) => void): void {
+  console.error("Robot workshop change could not be saved.", error);
+  setMessage("Không thể lưu thay đổi trong Xưởng robot. Vật liệu chưa bị trừ; hãy tải lại trang rồi thử lại.");
 }
