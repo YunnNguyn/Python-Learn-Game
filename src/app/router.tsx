@@ -2,6 +2,7 @@ import { createBrowserRouter } from "react-router-dom";
 
 import { ActivityLaunchPage } from "../features/activity";
 import { CoursePage, LearnPage } from "../features/course";
+import { challengeRoute } from "../features/challenge/challenge-routes";
 import { DebugPage } from "../features/debug";
 import { HomePage } from "../features/home";
 import { LessonPage } from "../features/lesson";
@@ -61,6 +62,7 @@ export const appRouter = createBrowserRouter([
           return { Component: PracticeExercisePage };
         },
       },
+      challengeRoute,
       {
         path: "workshop",
         element: <RobotWorkshopPage />,

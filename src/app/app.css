@@ -2447,3 +2447,84 @@ a {
   color: var(--color-muted);
   font-size: 0.82rem;
 }
+
+/* ---- Challenge (M13.3): CSV submission challenges ---------------------------------------- */
+
+.challenge-page > section {
+  margin-top: 1.75rem;
+}
+
+.challenge-columns,
+.challenge-files {
+  display: grid;
+  gap: 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.challenge-files {
+  list-style: none;
+  padding-left: 0;
+}
+
+.challenge-example {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 0.6rem;
+  background: var(--color-editor);
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  padding: 0.7rem;
+}
+
+.challenge-submit__textarea {
+  min-height: 14rem;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+.challenge-submit__result {
+  min-height: 1px;
+}
+
+.challenge-issue__examples code {
+  overflow-wrap: anywhere;
+}
+
+.challenge-best {
+  font-size: 1.05rem;
+}
+
+.challenge-history__list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.challenge-history__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.6rem;
+  background: var(--color-surface-1);
+  padding: 0.55rem 0.8rem;
+}
+
+.challenge-history__row--best {
+  border-color: var(--color-success);
+}
+
+.challenge-history__score {
+  font-weight: 700;
+}
+
+@media (max-width: 480px) {
+  .challenge-submit .practice-import__actions > button {
+    flex: 1 1 100%;
+  }
+}

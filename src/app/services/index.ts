@@ -58,3 +58,18 @@ export type {
   PracticeServices,
 } from "./practice-services";
 export { PracticeServicesProvider, usePracticeServices } from "./PracticeServicesContext";
+
+export { InvalidChallengeCatalogError, createChallengeServices } from "./challenge-services";
+export type {
+  ChallengeCatalogEntry,
+  ChallengeDisposalResult,
+  ChallengeReadError,
+  ChallengeReadErrorCode,
+  ChallengeReadResult,
+  ChallengeServices,
+  ChallengeSubmission,
+  ChallengeSummary,
+  CreateChallengeServicesOptions,
+  SubmitChallengeOutcome,
+} from "./challenge-services";
+export { ChallengeServicesProvider, useChallengeServices } from "./ChallengeServicesContext";
