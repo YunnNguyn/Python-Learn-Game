@@ -33,6 +33,12 @@ export const GUEST_DATABASE_BASE_NAMES = {
    * written to it is ever visible in, or counted by, the `learning` family.
    */
   practice: "python-learn-game-practice",
+  /**
+   * Challenge submissions (M13.2). Served by its own class, `IndexedDbChallengePersistence`
+   * (core/challenge), NOT by `IndexedDbLearningPersistence`: it is deliberately absent from
+   * `LEARNING_DATABASE_BASE_NAMES`, so the learning/practice schema owner can never open it.
+   */
+  challenge: "python-learn-game-challenge",
 } as const;
 
 /**

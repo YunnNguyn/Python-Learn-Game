@@ -1,23 +1,21 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { StartupFailurePanel } from "./StartupFailurePanel";
+import { bypassesStartupGate } from "./startup-gate";
 import { useApplicationInitialization } from "./services";
 
 function navigationClassName({ isActive }: { isActive: boolean }): string {
   return isActive ? "app-nav__link app-nav__link--active" : "app-nav__link";
 }
 
-/**
- * Practice (imported Exercise Packs) has its own services and storage and never
- * depends on the CS116 initialization, so a CS116 startup failure must not hide it.
+/*
+ * Practice (imported Exercise Packs) and Challenge have their own services and storage and
+ * never depend on the CS116 initialization, so a CS116 startup failure must not hide them
+ * (see `bypassesStartupGate`).
  */
-function isPracticePath(pathname: string): boolean {
-  return pathname === "/practice" || pathname.startsWith("/practice/");
-}
-
 export function AppLayout() {
   const initialization = useApplicationInitialization();
-  const practiceRoute = isPracticePath(useLocation().pathname);
+  const practiceRoute = bypassesStartupGate(useLocation().pathname);
 
   return (
     <div className="app-shell">
@@ -36,6 +34,9 @@ export function AppLayout() {
             </NavLink>
             <NavLink className={navigationClassName} to="/practice">
               Luyện tập
+            </NavLink>
+            <NavLink className={navigationClassName} to="/challenge">
+              Thử thách
             </NavLink>
             <NavLink className={navigationClassName} to="/workshop">
               Xưởng robot
